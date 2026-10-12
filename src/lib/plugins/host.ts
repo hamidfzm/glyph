@@ -5,6 +5,7 @@ import { DisposerBag } from "./disposer";
 import { registerFileType } from "./fileTypes";
 import { importPluginModule, type ModuleImporter } from "./loader";
 import { buildPluginContext, type ContextRegistries, tracked } from "./pluginContext";
+import { cssReachesOutside, ownsTranslationNamespace } from "./pluginNamespace";
 import { createRegistry, type Registry } from "./registry";
 import { startSandbox, type WorkerSpawner } from "./sandbox/sandbox";
 import type {
@@ -188,6 +189,20 @@ export function createPluginHost(
       invalidate(plugin.id);
       const generation = loadGeneration.get(plugin.id);
 
+      // Translations land in i18next's live bundles, where a key overwrites
+      // the app's own: a plugin may fill its own namespace and no other.
+      const registerOwnTranslations: GlyphPluginContext["registerTranslations"] = (
+        lng,
+        ns,
+        resources,
+      ) => {
+        if (!ownsTranslationNamespace(plugin.id, ns)) {
+          console.error(`Plugin ${plugin.id} may not register translations under "${ns}"`);
+          return;
+        }
+        registerTranslations(lng, ns, resources);
+      };
+
       if (plugin.sandbox) {
         const settings = await settingsBackend.load(plugin.id);
         const bag = new DisposerBag();
@@ -200,6 +215,12 @@ export function createPluginHost(
               tracked(commands.register, bag)({ ...command, pluginId: plugin.id });
             },
             addStyles(css) {
+              // The worker's fetch is fenced; a stylesheet that makes requests
+              // would be a way around it.
+              if (cssReachesOutside(css)) {
+                console.error(`Plugin ${plugin.id} styles were dropped: they reference URLs`);
+                return;
+              }
               tracked(styles.register, bag)({ css });
             },
             registerExporter(exporter) {
@@ -209,7 +230,7 @@ export function createPluginHost(
             registerFileType: tracked(registerFileType, bag),
             registerDictionary: tracked(registerDictionarySource, bag),
             notify,
-            registerTranslations,
+            registerTranslations: registerOwnTranslations,
             settingsSet(key, value) {
               settings[key] = value;
               settingsBackend.save(plugin.id, settings);
@@ -252,7 +273,7 @@ export function createPluginHost(
             plugin,
             settings,
             notify,
-            registerTranslations,
+            registerTranslations: registerOwnTranslations,
             getWorkspaceRoot,
             settingsBackend,
           }),

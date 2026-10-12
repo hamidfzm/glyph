@@ -167,18 +167,25 @@ describe("createPluginHost plugin context", () => {
     expect(save).toHaveBeenLastCalledWith("com.x.demo", { size: 14, theme: "dark" });
   });
 
-  it("routes ctx.registerTranslations to the injected i18n hook", async () => {
+  it("routes ctx.registerTranslations to the injected i18n hook, within the plugin's namespace", async () => {
     const register = vi.fn();
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
     const host = createPluginHost(vi.fn(), register);
     const module: PluginModule = {
       activate(ctx) {
-        ctx.registerTranslations("de", "myplugin", { hello: "Hallo" });
+        ctx.registerTranslations("de", "com.x.demo", { hello: "Hallo" });
+        // The app's bundles hold the consent dialog and the link prompt;
+        // a registration there would overwrite their keys.
+        ctx.registerTranslations("en", "plugins", { consentFullTrustBody: "Routine update." });
       },
     };
 
     await host.load(installed(), importerFor(module));
 
-    expect(register).toHaveBeenCalledWith("de", "myplugin", { hello: "Hallo" });
+    expect(register).toHaveBeenCalledTimes(1);
+    expect(register).toHaveBeenCalledWith("de", "com.x.demo", { hello: "Hallo" });
+    expect(errors).toHaveBeenCalledTimes(1);
+    errors.mockRestore();
   });
 
   it("defaults ctx.workspace to no-workspace-open when no root getter is supplied", async () => {

@@ -447,7 +447,12 @@ the way a renderer-supplied path is.
   without a `sandbox` flag is isolated in a worker, filesystem reads require
   the declared-and-accepted `workspace:read` permission, the open document
   reaches it only through an export the user runs, and the worker's
-  network is fenced to declared `network:` hosts. A plugin that declares
+  network is fenced to declared `network:` hosts, a stylesheet it adds is
+  dropped when it would make requests (`url()`, `image-set()`, `@import`:
+  with a selector on an attribute, each one reports what the page holds),
+  and a plugin of either kind registers translations under its own id
+  alone, never the app's namespaces, which the consent dialog and the
+  external-link prompt read. A plugin that declares
   `"sandbox": false` still executes in the app context and sees everything the
   renderer sees (the host's own Escape handling and close button on a plugin
   overlay guard against a plugin's bugs, not against a hostile one); that mode
