@@ -17,6 +17,7 @@ The renderer is untrusted after compromise: assume it can call every registered 
 - **A link whose target is missing is not a free name.** `exists()` and `canonicalize()` both follow links, so they report a dangling one as absent, while a write to that name follows the link and creates the target wherever it points. Refuse such a link at the boundary (`canonicalize_lenient` does), and decide a name is free with `symlink_metadata`, never `exists()` (`unique_path`).
 - **Check the path that will be opened, not the path as spelled.** `<link>/` fails to canonicalize even when the link leads to a file, and `<link>:stream` on Windows is not itself a link, yet opening either goes through the link: ask `symlink_metadata` of the rebuilt path. A fixed name joined onto a checked directory (`<out_dir>/.glyph/site-manifest.json`) is a new path and gets its own check, since a link below a checked directory leads anywhere.
 - **Canonicalize symlink sources and refuse those resolving outside the root; refuse symlink entries when copying a tree.** A link inside a workspace can resolve outside it, and copying it materializes the target where `read_file` then serves it. Refuse loudly rather than skip silently (INV-7).
+- **A recursive write grant stops at `.git`.** Git reads its hooks and the `origin` URL from there, so a write below a workspace's or an export folder's `.git` is code the user's next commit runs or a remote a credential is sent to. `ensure_writable` and the file-tree commands refuse the name, in any case.
 - **Grants are minted only from backend-observed events** (CLI args, OS open events, drag-and-drop, Rust pickers, the settings seed at startup, a folder the user allows in an MCP client's elicitation prompt). A command that receives a renderer path checks it; it never grants it. Mirroring a path the registry already allows into the asset scope (`allow_document_asset`) is a check, not a grant.
 - **Every new gated command gets a denial test** driving the command with an ungranted path, plus the applicable rows of the adversarial scenario matrix.
 - Commands return `Result<T, String>`; a gate that cannot fail is not a gate.
@@ -31,6 +32,7 @@ The renderer is untrusted after compromise: assume it can call every registered 
 ## Renderer-side state
 
 - **Nothing security-relevant lives only in renderer-writable state.** Consent, hashes, and allowlists that gate backend behavior are verified in Rust, not read back from `settings.json` or `plugins.json`.
+- **A credential is bound to the host it was entered for.** A token is offered to the remote authority recorded when the user stored it (`BoundToken`), never to whatever host the renderer-writable remote names now.
 - **Secrets never cross IPC unless a command needs the value**; prefer presence checks (`secret_has`). No secret in a URL, log line, error string, or Sentry breadcrumb.
 
 ## Telemetry

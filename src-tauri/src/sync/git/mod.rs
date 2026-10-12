@@ -38,7 +38,7 @@ mod plumbing;
 mod repo;
 
 pub use backend::GitBackend;
-pub use credentials::{make_credentials_callback, select_credentials};
+pub use credentials::{https_authority, make_credentials_callback, select_credentials, BoundToken};
 pub use message::auto_commit_message;
 pub use repo::{clone_repo, init_repo, set_origin};
 
