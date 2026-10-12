@@ -1578,6 +1578,7 @@ dependencies = [
  "http-body-util",
  "hyper",
  "hyper-util",
+ "icu_normalizer",
  "keyring",
  "notify",
  "regex",
