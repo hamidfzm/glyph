@@ -1,11 +1,25 @@
-# Pre-push gate: enforce the branch naming convention (CONTRIBUTING.md,
-# .claude/rules/worktrees.md). Every short-lived branch is <type>/<slug>;
-# anything else (including tool-generated names like claude/<slug>) must be
-# renamed before it reaches origin:
+# Pre-push gate, in two parts.
 #
-#   git branch -m <old> feat/<slug>
+# 1. AI attribution: every commit this push sends that the remote does not
+#    already have goes through scripts/check-ai-attribution.sh, the same check
+#    the commit-msg hook and the "AI attribution" PR check run. This catches
+#    commits made where the commit-msg hook never ran.
 #
-# Tag pushes and detached-HEAD pushes are allowed through (releases push tags).
+# 2. Branch naming (CONTRIBUTING.md, .claude/rules/worktrees.md). Every
+#    short-lived branch is <type>/<slug>; anything else (including
+#    tool-generated names like claude/<slug>) must be renamed before it
+#    reaches origin:
+#
+#      git branch -m <old> feat/<slug>
+#
+#    Tag pushes and detached-HEAD pushes are allowed through (releases push
+#    tags).
+
+while read -r _ local_sha _ _; do
+  # A deletion sends no commits.
+  case "$local_sha" in *[!0]*) ;; *) continue ;; esac
+  sh "$(dirname "$0")/../scripts/check-ai-attribution.sh" commits "$local_sha" --not --remotes || exit 1
+done
 
 branch="$(git symbolic-ref --short -q HEAD)" || exit 0
 

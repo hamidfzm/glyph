@@ -32,7 +32,7 @@ The spec stays current throughout: acceptance-criteria and task checkboxes on th
   ```
   Fix Biome warnings by applying the suggested fix, never by suppressing.
 - **Branches** are cut from `main` as `feat/<slug>` or `fix/<slug>`, each in its own git worktree under `.claude/worktrees/`. See [.claude/rules/worktrees.md](.claude/rules/worktrees.md) for the GitHub Flow worktree workflow and how to clean up merged worktrees (see [CONTRIBUTING.md](CONTRIBUTING.md) for the wider conventions).
-- **No co-authored-by lines** in commits, and no em dashes anywhere in output. No AI attribution of any kind (`Co-Authored-By:`, `Generated with ...`) in a commit message: the `.husky/commit-msg` hook rejects it, and GitHub's squash merge harvests such a trailer from a branch commit straight onto `main`.
+- **No co-authored-by lines** in commits, and no em dashes anywhere in output. No AI attribution of any kind (`Co-Authored-By:`, `Generated with ...`, or an agent as a commit's author or committer) in a commit or PR description: `scripts/check-ai-attribution.sh` rejects it from the commit-msg and pre-push hooks and the AI attribution PR check, and GitHub's squash merge turns a branch commit's trailer or agent author into a co-author on `main`. Commit as the repo's configured user, never an agent identity.
 
 ### Agents
 
