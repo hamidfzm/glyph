@@ -41,6 +41,23 @@ async function newDraft(result: TabsHook, text: string) {
   return tabId;
 }
 
+/** Open the workspace /p/ws, then an untitled buffer holding `text`; return its tab id. */
+async function newDraftInWorkspace(result: TabsHook, text: string) {
+  await waitFor(() => expect(result.current.initializing).toBe(false));
+  await act(async () => {
+    await result.current.openFolder("/p/ws");
+  });
+  act(() => {
+    result.current.newDocument();
+  });
+  const tabId = result.current.tabs.find((t) => t.kind === "file" && t.file.virtual)?.id;
+  if (!tabId) throw new Error("expected a virtual tab");
+  act(() => {
+    result.current.updateEditContent(tabId, text);
+  });
+  return tabId;
+}
+
 describe("useTabs in-memory documents", () => {
   it("newDocument opens a virtual editable buffer", async () => {
     const { result } = renderHook(() => useTabs(defaultOptions()));
@@ -458,19 +475,7 @@ describe("useTabs in-memory documents", () => {
     );
     vi.mocked(pickSave).mockResolvedValue("/p/ws/saved.md");
     const { result } = renderHook(() => useTabs(defaultOptions()));
-    await waitFor(() => expect(result.current.initializing).toBe(false));
-    await act(async () => {
-      await result.current.openFolder("/p/ws");
-    });
-
-    act(() => {
-      result.current.newDocument();
-    });
-    const tabId = result.current.tabs.find((t) => t.kind === "file" && t.file.virtual)?.id;
-    if (!tabId) throw new Error("expected a virtual tab");
-    act(() => {
-      result.current.updateEditContent(tabId, "HELLO");
-    });
+    const tabId = await newDraftInWorkspace(result, "HELLO");
 
     await act(async () => {
       await result.current.saveDocument(tabId);
@@ -480,5 +485,56 @@ describe("useTabs in-memory documents", () => {
       workspaceRoot: "/p/ws",
       filePath: "/p/ws/saved.md",
     });
+  });
+
+  it("saveDocument asks again with no starting folder when the workspace root is refused", async () => {
+    const writeFile = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({ write_file: writeFile as unknown as Invoker }) as typeof invoke,
+    );
+    // The root's folder was renamed under the app, so the backend no longer
+    // resolves it and refuses it as the folder to open the dialog in.
+    expectConsole(/asking again with no starting folder/);
+    vi.mocked(pickSave)
+      .mockRejectedValueOnce("path is outside the allowed workspaces and files: /p/ws")
+      .mockResolvedValueOnce("/elsewhere/saved.md");
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    const tabId = await newDraftInWorkspace(result, "HELLO");
+
+    let ok: boolean | undefined;
+    await act(async () => {
+      ok = await result.current.saveDocument(tabId);
+    });
+
+    expect(ok).toBe(true);
+    expect(vi.mocked(pickSave).mock.calls.map((call) => call[3])).toEqual(["/p/ws", undefined]);
+    expect(writeFile).toHaveBeenCalledWith("write_file", {
+      path: "/elsewhere/saved.md",
+      content: "HELLO",
+    });
+  });
+
+  it("saveDocument keeps the buffer virtual when the second Save As is cancelled", async () => {
+    const writeFile = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({ write_file: writeFile as unknown as Invoker }) as typeof invoke,
+    );
+    expectConsole(/asking again with no starting folder/);
+    vi.mocked(pickSave)
+      .mockRejectedValueOnce("path is outside the allowed workspaces and files: /p/ws")
+      .mockResolvedValueOnce(null);
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    const tabId = await newDraftInWorkspace(result, "HELLO");
+
+    let ok: boolean | undefined;
+    await act(async () => {
+      ok = await result.current.saveDocument(tabId);
+    });
+
+    // False routes a closing window to its unsaved-changes prompt.
+    expect(ok).toBe(false);
+    expect(writeFile).not.toHaveBeenCalled();
+    const tab = result.current.tabs.find((t) => t.id === tabId);
+    expect(tab?.kind === "file" && tab.file.virtual).toBe(true);
   });
 });

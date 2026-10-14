@@ -43,13 +43,25 @@ export function useDocumentSave({
   // ordinary file tab; a cancelled dialog returns false so close can discard.
   const saveVirtualAs = useCallback(
     async (id: string, title: string): Promise<boolean> => {
+      const pick = (dir?: string) =>
+        pickSave(
+          `${title}.md`,
+          t("common:fileDialog.markdown"),
+          MARKDOWN_EXTENSIONS as string[],
+          dir,
+        );
       // Default into the open workspace so a new note lands beside its siblings.
-      const target = await pickSave(
-        `${title}.md`,
-        t("common:fileDialog.markdown"),
-        MARKDOWN_EXTENSIONS as string[],
-        getWorkspaceRoot() ?? undefined,
-      );
+      const startDir = getWorkspaceRoot() ?? undefined;
+      let target: string | null;
+      try {
+        target = await pick(startDir);
+      } catch (err) {
+        // The backend refuses a root it no longer resolves (renamed, or its
+        // drive is gone), and the note must stay saveable: ask again, anywhere.
+        if (!startDir) throw err;
+        console.warn("Save As failed, asking again with no starting folder:", err);
+        target = await pick();
+      }
       // The dialog does not block the editor, so the buffer is read only now.
       // A tab closed while it was open has nothing left to save.
       const latest = stateRef.current.tabs.find((tab) => tab.id === id);
