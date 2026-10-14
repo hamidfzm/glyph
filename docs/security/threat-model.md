@@ -121,7 +121,7 @@ and files: <path>`), which never echoes the grant list.
 
 | Command | Check |
 | ------- | ----- |
-| `read_file`, `get_file_metadata`, `read_directory`, `list_markdown_files` | readable |
+| `read_file`, `check_path_exists`, `read_directory`, `list_markdown_files` | readable |
 | `allow_document_asset` | an existing image, audio, or video file, judged after symlinks resolve, inside the folder of an opened loose file; mirrored into the asset scope only |
 | `vault_snapshot`, `vault_refresh`, `vault_backlinks`, `vault_resolve`, `vault_query`, `vault_paths_with_tag` | granted workspace, not merely readable: the index is per workspace, and a readable check would also accept every directory inside one, letting a caller cache an index per subdirectory. The second path argument is answered from the index in memory, never read from disk, so an ungranted one returns nothing rather than content |
 | `write_file`, `write_binary_file`, `create_dir_all` | writable |
