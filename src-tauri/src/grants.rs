@@ -396,9 +396,11 @@ pub fn allow_asset_file<R: tauri::Runtime>(app: &tauri::AppHandle<R>, file: &Pat
 /// Spellings a command must refuse before it looks its path up. A host under
 /// `.invalid` cannot exist, should a refusal ever come late.
 #[cfg(all(test, windows))]
-pub(crate) const NEVER_LOOKED_UP: [&str; 4] = [
+pub(crate) const NEVER_LOOKED_UP: [&str; 6] = [
     r"\\glyph-test-host.invalid\share\notes",
     r"\\?\UNC\glyph-test-host.invalid\share\notes",
+    r"\??\UNC\glyph-test-host.invalid\share\notes",
+    r"\\glyph-test-host.invalid\\share\notes",
     r"\\.\pipe\glyph",
     "NUL",
 ];
