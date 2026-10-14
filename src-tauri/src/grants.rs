@@ -82,7 +82,16 @@ fn refuse_remote(grants: &Grants, path: &Path) -> Result<(), String> {
     use std::path::{Component, Prefix};
     refuse_legacy_device(path)?;
     let Some(Component::Prefix(prefix)) = path.components().next() else {
-        return Ok(());
+        // Windows resolves these as a share or a device though `Path` finds no
+        // prefix: `\??\` is the namespace holding both, and `\\host\\share`
+        // reaches `\\host\share`.
+        let spelled = path.as_os_str().as_encoded_bytes();
+        let two_separators = matches!(spelled, [b'\\' | b'/', b'\\' | b'/', ..]);
+        return if spelled.starts_with(br"\??\") || two_separators {
+            Err(remote(path))
+        } else {
+            Ok(())
+        };
     };
     let share = match prefix.kind() {
         Prefix::Disk(_) | Prefix::VerbatimDisk(_) => return Ok(()),
@@ -405,21 +414,43 @@ mod tests {
     #[test]
     fn a_network_or_device_path_is_refused_before_it_resolves() {
         let grants = GrantRegistry::default();
+        // Local, so it resolves when looked up: only a refusal keeps it out of the seed.
+        let tmp = TempDir::new().unwrap();
+        fs::write(tmp.path().join("x.md"), "x").unwrap();
+        let nt_local = format!(r"\??\{}", tmp.path().display());
+        // A host under `.invalid` cannot exist, should a refusal ever come late.
         for path in [
-            r"\\attacker\share\x.md",
-            r"\\?\UNC\attacker\share\x.md",
+            r"\\attacker.invalid\share\x.md",
+            r"\\?\UNC\attacker.invalid\share\x.md",
             r"\\.\pipe\glyph",
+            // `Path` finds no prefix in the rest; Windows resolves them all the same.
+            r"\??\UNC\attacker.invalid\share\x.md",
+            r"\??\pipe\glyph",
+            nt_local.as_str(),
+            r"\\attacker.invalid\\share\x.md",
+            r"\/attacker.invalid//share/x.md",
+            "//?//UNC/attacker.invalid/share/x.md",
         ] {
-            let refusal = grants.ensure_readable(path).unwrap_err();
-            assert!(refusal.contains("never looked up"), "{refusal}");
-            assert!(grants.ensure_writable(path).is_err());
-            assert!(grants.ensure_workspace(path).is_err());
-            let asset = grants.ensure_document_asset(path).unwrap_err();
-            assert!(asset.contains("never looked up"), "{asset}");
+            for refusal in [
+                grants.ensure_readable(path),
+                grants.ensure_writable(path),
+                grants.ensure_workspace(path),
+                grants.ensure_document_asset(path),
+            ] {
+                let refusal = refusal.unwrap_err();
+                assert!(refusal.contains("never looked up"), "{refusal}");
+            }
         }
-        let (workspaces, files) = grants.seed_from_settings_json(
-            r#"{"settings":{"behavior":{"openTabs":[{"kind":"folder","path":"\\\\attacker\\share"}],"recentFiles":["\\\\attacker\\share\\x.md"]}}}"#,
-        );
+        let seed = serde_json::json!({
+            "settings": {
+                "behavior": {
+                    "openTabs": [{ "kind": "folder", "path": nt_local }],
+                    "recentFiles": [format!(r"{nt_local}\x.md")],
+                }
+            }
+        })
+        .to_string();
+        let (workspaces, files) = grants.seed_from_settings_json(&seed);
         assert!(workspaces.is_empty() && files.is_empty());
 
         // A share the user already opened stays reachable, and only that one.
@@ -431,7 +462,11 @@ mod tests {
             .unwrap();
         assert!(grants.refuse_remote("//trusted/notes/vault/x.md").is_ok());
         assert!(grants.refuse_remote("//trusted/other/x.md").is_err());
+        // The grant vouches for the share as `Path` parses it, no other spelling.
+        assert!(grants.refuse_remote("//trusted//notes/vault/x.md").is_err());
         assert!(grants.refuse_remote("relative/x.md").is_ok());
+        // One separator stays on the current drive.
+        assert!(grants.refuse_remote(r"\notes\x.md").is_ok());
     }
 
     fn as_str(path: &Path) -> String {

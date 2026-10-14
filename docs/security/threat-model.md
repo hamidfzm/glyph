@@ -122,17 +122,19 @@ webview-typed path.
 
 Every filesystem command validates against the registry before touching disk
 and returns the same denial message (`path is outside the allowed workspaces
-and files: <path>`), which never echoes the grant list.
+and files: <path>`), which never echoes the grant list. On Windows, a path
+refused as a network share or a device says so instead, before anything is
+looked up (see "Network paths" below).
 
 | Command | Check |
 | ------- | ----- |
-| `read_file`, `get_file_metadata`, `read_directory`, `list_markdown_files` | readable |
+| `read_file`, `check_path_exists`, `read_directory`, `list_markdown_files` | readable |
 | `allow_document_asset` | an existing image, audio, or video file, judged after symlinks resolve, inside the folder of an opened loose file; mirrored into the asset scope only |
 | `vault_snapshot`, `vault_refresh`, `vault_backlinks`, `vault_resolve`, `vault_query`, `vault_paths_with_tag` | granted workspace, not merely readable: the index is per workspace, and a readable check would also accept every directory inside one, letting a caller cache an index per subdirectory. The second path argument is answered from the index in memory, never read from disk, so an ungranted one returns nothing rather than content |
 | `vault_forget` | none, because nothing is looked up: the path is compared with the roots the store holds, as their indexes were built with them. It hands nothing back and only drops an index the process already built, so the worst a renderer can do with it is make the next snapshot rebuild from disk. A closing window releases its index the same way, from the paths it reported, and a workspace whose folder is gone is still forgotten |
 | `write_file`, `write_binary_file`, `create_dir_all` | writable |
 | `copy_file` | source readable and destination writable |
-| `prune_export_dir` | the output directory must be writable, and each entry read back from its manifest must be plain path segments whose parent still canonicalizes inside that directory (so a hand-edited manifest cannot delete outside the export). The manifest is neither read nor replaced when it, or the `.glyph` folder holding it, is a link: the output directory is checked, but a link below it leads anywhere. A manifest that cannot be read or parsed is left as it is and nothing is pruned. A new one is written to a staging file of its own beside it, opened only if nothing holds that name, and moved over the old one in one step. The list of files the export failed to replace, like the list of files it wrote, can only spare a manifest entry, never name something else to remove. An entry that differs from a listed name only in case or separators is opened beside that name to see whether the two are one file (the volume decides, not the fold); both paths are confined as above, and nothing but that yes or no comes of it. The reason handed back names the first entry that could not be removed, quoted and escaped, because that name comes from the manifest and ends up in the app's notice and on stderr |
+| `prune_export_dir` | the output directory must be writable, and each entry read back from its manifest must be plain path segments whose parent still canonicalizes inside that directory (so a hand-edited manifest cannot delete outside the export). The manifest is neither read nor replaced when it, or the `.glyph` folder holding it, is a link: the output directory is checked, but a link below it leads anywhere. A manifest that cannot be read or parsed is left as it is and nothing is pruned. A new one is written to a staging file of its own beside it, opened only if nothing holds that name, and moved over the old one in one step. The list of files the export failed to replace, like the list of files it wrote, can only spare a manifest entry, never name something else to remove. An entry that differs from a listed name only in case, Unicode normalization form or separators is opened beside that name to see whether the two are one file (the volume decides, not the fold); both paths are confined as above, and nothing but that yes or no comes of it. The reason handed back names the first entry that could not be removed, quoted and escaped, because that name comes from the manifest and ends up in the app's notice and on stderr |
 | `pick_export_dir` | `root` must be a granted workspace, checked before the dialog opens. It only decides whether the folder the user then picks is refused for resolving inside that workspace; the grant is for the picked folder alone, so naming another root gains a renderer nothing it could not already write |
 | `watch_file`, `watch_directory` | readable (unwatch stays open; it only drops a watcher) |
 | `create_note`, `create_canvas`, `create_folder` | `root` must be a granted workspace and the target directory canonicalizes inside it; a network or device path is refused before that lookup. The entry takes the first default name nothing holds, and a link holds its name even when its target is missing, so creating never writes through one |
@@ -304,7 +306,12 @@ the way a renderer-supplied path is.
   a network share or a device before it resolves anything, whether a tool
   argument, a renderer command, or the settings seed handed it over, unless a
   grant already sits on that share: resolving one connects to the host, which
-  can hand it the user's credentials.
+  can hand it the user's credentials. The check does not stop at the prefix
+  Rust's `Path` parses: the NT prefix `\??\` is refused whole, local folders
+  included, and so is a path opening with two separators that `Path` finds no
+  server and share in (`\\host\\share` still reaches `\\host\share`), even on
+  a share a grant sits on. Neither spelling comes from a picker, a drop, or a
+  launch argument.
 - **Every path goes through the registry.** A note reference that names a
   path, `resolve_link`'s `from`, `read_canvas`'s `path`, `export`'s `out`, a
   note a write tool changes, and the destination of a rename or a move pass

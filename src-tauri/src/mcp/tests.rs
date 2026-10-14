@@ -928,8 +928,8 @@ fn network_and_device_paths_are_never_looked_up() {
     let mut h = Harness::new("mcp_remote");
     let asked = answering(&mut h, Ok(()));
     for place in [
-        r"\\glyph-test-host\share",
-        r"\\?\UNC\glyph-test-host\share",
+        r"\\glyph-test-host.invalid\share",
+        r"\\?\UNC\glyph-test-host.invalid\share",
         r"\\.\pipe\glyph",
     ] {
         let refusals = [
@@ -943,6 +943,15 @@ fn network_and_device_paths_are_never_looked_up() {
         for refusal in refusals {
             assert!(refusal.contains("never looked up"), "{refusal}");
         }
+    }
+    // `Path` finds no prefix in these, so only `vault` hands one over as
+    // spelled: a `ref` or an `out` is joined onto the vault's own drive.
+    for place in [
+        r"\??\UNC\glyph-test-host.invalid\share",
+        r"\\glyph-test-host.invalid\\share",
+    ] {
+        let refusal = h.refused("list_tags", json!({ "vault": place }));
+        assert!(refusal.contains("never looked up"), "{refusal}");
     }
     assert!(asked.borrow().is_empty());
 }
