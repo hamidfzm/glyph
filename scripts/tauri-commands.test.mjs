@@ -42,10 +42,14 @@ for (const source of program.getSourceFiles()) {
   visit(source);
 }
 
-const lib = readFileSync(path.join(ROOT, "src-tauri/src/lib.rs"), "utf8");
+// Comments go first: a commented-out entry is not registered.
+const lib = readFileSync(path.join(ROOT, "src-tauri/src/lib.rs"), "utf8").replace(
+  /\/\/.*|\/\*[\s\S]*?\*\//g,
+  "",
+);
 const registered = new Set(
-  [...lib.matchAll(/generate_handler!\[([\s\S]*?)\]\)/g)]
-    .flatMap(([, entries]) => entries.replace(/#\[[^\]]*\]|\/\/.*|\/\*[\s\S]*?\*\//g, "").split(","))
+  [...lib.matchAll(/generate_handler!\[([\s\S]*?)\]\s*\)/g)]
+    .flatMap(([, entries]) => entries.replace(/#\[[^\]]*\]/g, "").split(","))
     .map((entry) => entry.trim().split("::").pop())
     .filter(Boolean),
 );
