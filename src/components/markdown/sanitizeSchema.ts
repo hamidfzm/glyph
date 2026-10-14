@@ -149,7 +149,8 @@ export const markdownSanitizeSchema = {
   // ids with that prefix (`user-content-fn-1`). The double-prefix breaks
   // footnote `[^1]` navigation because the href stays `#user-content-fn-1`
   // while the target id becomes `#user-content-user-content-fn-1`.
-  // Glyph is a local viewer with no host-page collisions to worry about.
+  // A document's ids therefore share the page with the host's own, so host
+  // code finds its elements by reference or structure, never by a bare id.
   clobberPrefix: "",
   clobber: [],
   // Disallowed elements are unwrapped by default; foreignObject carries

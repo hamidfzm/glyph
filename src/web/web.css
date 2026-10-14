@@ -1,0 +1,61 @@
+/* The web viewer: a toolbar above the document, and an empty state in its
+   place until one opens. Everything here is selected through `body >`, since
+   a document's own ids and classes share the page. */
+
+body {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+body > header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface-secondary);
+}
+
+body > header > [role="status"] {
+  margin-inline-start: 0.5rem;
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+}
+
+body > section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding: 2rem 1rem;
+  text-align: center;
+}
+
+body > section > h1 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+body > section > p {
+  max-width: 28rem;
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+}
+
+/* Same specificity as preview.css's rule, which this overrides. `contain`
+   keeps document CSS (a fixed-position overlay, say) painting inside this
+   box, so it cannot cover the toolbar. */
+body > #preview {
+  flex: 1;
+  min-height: 0;
+  height: auto;
+  contain: layout paint;
+}
+
+body > [hidden] {
+  display: none;
+}

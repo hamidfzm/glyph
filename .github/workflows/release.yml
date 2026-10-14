@@ -359,6 +359,19 @@ jobs:
               --field content="$(base64 -w0 /tmp/glyph.json)"
           fi
 
+  # The web viewer is built from this tag by glyph-md/view's own workflow,
+  # which deploys it to GitHub Pages; this job only starts that run.
+  publish-web-viewer:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Deploy the web viewer from this tag
+        env:
+          GH_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: gh workflow run deploy.yml --repo glyph-md/view --ref main -f ref="$TAG"
+
   publish-winget:
     needs: build
     runs-on: windows-latest

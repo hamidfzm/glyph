@@ -13,7 +13,9 @@ jobs:
     # Renders a real D2 diagram and probes every CSP-dependent render surface
     # in Playwright WebKit under the CSP shipped in tauri.conf.json. WebKit
     # enforces the page CSP inside blob workers (Chromium does not), so only
-    # a WebKit run catches a CSP that breaks rendering on Linux/macOS.
+    # a WebKit run catches a CSP that breaks rendering on Linux/macOS. It also
+    # opens hostile shared documents in the built web viewer, whose meta CSP
+    # is the only network control a browser gives it.
     name: WebKit
     runs-on: ubuntu-latest
     steps:
@@ -22,6 +24,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Install Playwright WebKit
         run: pnpm exec playwright install --with-deps webkit
+      - run: pnpm build:web
       - run: pnpm test:e2e
 
   release-bump:
