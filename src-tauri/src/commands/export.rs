@@ -25,6 +25,20 @@ pub fn get_cli_export(state: State<'_, CliExport>) -> Option<CliExportRequest> {
     state.0.lock().ok()?.clone()
 }
 
+/// The output path of the CLI export in progress, or a refusal when there is
+/// none: `finish_cli_export` ends the process, and a renderer must not be
+/// able to end an interactive session by calling it.
+pub(crate) fn cli_export_output(state: &CliExport) -> Result<String, String> {
+    let request = state
+        .0
+        .lock()
+        .map_err(|e| format!("Lock error: {e}"))?
+        .clone();
+    request
+        .map(|request| request.output)
+        .ok_or_else(|| String::from("no CLI export is in progress"))
+}
+
 /// Split from `finish_cli_export` (in [`super::export_runtime`]) so the stream
 /// routing is unit-testable; the command itself never returns.
 pub(crate) fn write_cli_export_outcome(
@@ -143,6 +157,25 @@ mod tests {
         let app = mock_app();
         app.manage(CliExport(Mutex::new(None)));
         assert!(get_cli_export(app.state::<CliExport>()).is_none());
+    }
+
+    /// `finish_cli_export` ends the process, and is registered in every
+    /// session: without a CLI export in progress it is refused, so a renderer
+    /// cannot end an interactive session with it.
+    #[test]
+    fn finishing_is_refused_without_a_cli_export_in_progress() {
+        let idle = CliExport(Mutex::new(None));
+        assert_eq!(
+            cli_export_output(&idle).unwrap_err(),
+            "no CLI export is in progress"
+        );
+
+        let exporting = CliExport(Mutex::new(Some(CliExportRequest {
+            input: "/ws/notes.md".to_string(),
+            format: "pdf".to_string(),
+            output: "/ws/notes.pdf".to_string(),
+        })));
+        assert_eq!(cli_export_output(&exporting).unwrap(), "/ws/notes.pdf");
     }
 
     #[test]
