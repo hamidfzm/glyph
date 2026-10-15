@@ -623,7 +623,6 @@ fn export_plan(env_args: &[String], cwd: &Path) -> Result<CliLaunch, String> {
 /// path). Both work for a write but read as noise in the paths the CLI
 /// prints, and the UNC form is not even a valid path once the prefix is
 /// dropped naively.
-#[cfg(desktop)]
 pub fn plain_path(path: &str) -> String {
     match path.strip_prefix(r"\\?\UNC\") {
         Some(rest) => format!(r"\\{rest}"),

@@ -271,6 +271,56 @@ it, and `http:default` is scoped to the marketplace hosts.
   There is no CLI plugin: nothing in the renderer needs the launch arguments,
   so there is no command that returns them.
 
+## Git repositories in a workspace
+
+A folder can carry a git repository, and a repository names paths of its own:
+the target of a `.git` file, a `commondir` or `gitdir` file, alternate object
+stores, and paths in its config (`core.worktree`, `core.excludesfile`,
+`core.attributesfile`, an included file, a remote that is a path). libgit2
+resolves them, and on Windows resolving a network path connects to its host,
+which can hand it the user's credentials. This takes no compromised renderer:
+the folder only has to be opened, and a downloaded or unzipped one names any
+host it likes. libgit2 has no switch that forbids it.
+
+- **Opening a folder reads none of it.** `workspace_resolve`, which runs on
+  every folder a window opens, asks only whether the folder or an ancestor
+  holds a `.git` entry. It opens no repository, so nothing a repository points
+  to is looked up.
+- **Cloud Sync judges the repository first.** On Windows every `sync_*`
+  command that hands the workspace to libgit2 first reads those files as text
+  and passes each path they name to the registry's network-path check, which
+  looks nothing up. That is every sync command but the config and token ones
+  and `sync_clone_remote`, whose destination must be empty, and it includes
+  the two that run unprompted when a workspace opens (`sync_repo_present`,
+  `sync_default_author`). A repository naming a network or device path is
+  refused with an error, unless a grant already sits on that share.
+- **Submodules get the same check.** Status, staging and checkout open each
+  submodule, so `sync_status`, `sync_run` and `sync_commit_config` also judge
+  `.gitmodules` and the `.git` of every submodule libgit2 lists, and of
+  theirs, wherever its path leads. Listing them opens none. A repository that
+  merely sits in the working tree, in none of the places libgit2 learns
+  submodules from, is not judged: status does not open it, and staging fails
+  on it before opening it.
+- **The config is judged as text, not parsed.** A value that begins with two
+  path separators is refused under any key, once quotes are dropped and an
+  escaped backslash is read as one. How libgit2 joins a value continued over
+  several lines is not reproduced: the backslash that continues a line counts
+  as a separator itself, so a path split there is refused as well. A config
+  with an `[include]` or `[includeIf]` section is refused outright: the
+  included file would need the same check, and libgit2 resolves the path to
+  it first. A repository that shares settings through `include.path`
+  therefore cannot be synced from Glyph on Windows.
+- **A pointer libgit2 would place differently is refused.** Only an absolute
+  path and a plain relative one are followed to the files behind them. A
+  drive-relative or rooted path, one behind the `\\?\` prefix, an alternate
+  relative to the process's current folder, and a link standing in for `.git`
+  or for one of these files are refused unread.
+
+The files are judged and then read again by libgit2, so the check holds for a
+folder at rest, not against another process rewriting them in between. The
+machine's own git configuration (global, system) is the user's and is not
+judged.
+
 ## MCP server (`glyph mcp`)
 
 `glyph mcp` serves the vault index to an MCP client over stdin and stdout. It
