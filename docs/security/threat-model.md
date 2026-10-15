@@ -457,7 +457,14 @@ the way a renderer-supplied path is.
   without a `sandbox` flag is isolated in a worker, filesystem reads require
   the declared-and-accepted `workspace:read` permission, the open document
   reaches it only through an export the user runs, and the worker's
-  network is fenced to declared `network:` hosts. A plugin that declares
+  network is fenced to declared `network:` hosts: `http` and `https` to the
+  declared host or a subdomain of it, a redirect never followed, and never
+  the webview's own hosts, whatever is declared, since the asset protocol
+  serves every granted file from `asset.localhost` (or `asset://localhost`)
+  and `ipc.localhost` is the command bridge; a plugin that declares
+  `network:localhost` for a local server reaches that server alone. The
+  manifest parser refuses a `network:` host that is empty, not a plain
+  lowercase name, or under `.localhost`. A plugin that declares
   `"sandbox": false` still executes in the app context and sees everything the
   renderer sees (the host's own Escape handling and close button on a plugin
   overlay guard against a plugin's bugs, not against a hostile one); that mode
