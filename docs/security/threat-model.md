@@ -148,6 +148,7 @@ looked up (see "Network paths" below).
 | `create_workspace_file` | `root` must be a granted workspace. The path is workspace-relative (`..`, a drive letter, or a backslash is refused) and must canonicalize strictly inside that workspace, so a symlink resolving outside it, or into another granted workspace, is refused. A hidden name anywhere in the resolved path is refused too, which keeps `.git/hooks` and `.glyph` out of reach. The file is opened with `create_new`: one that already exists is reported back and never written to |
 | `sync_*` | granted workspace (`sync_clone_remote` clones into the workspace path itself); `sync_init_repo`, `sync_clone_remote`, and `sync_set_origin` accept only `https://` without credentials, `ssh://`, or scp-like `user@host:path` remotes, since libgit2 would also take a local path or `file://` (pulling any local repository into a granted workspace) and cleartext `http://`/`git://` |
 | `install_plugin` | consumes the pending picked folder; no path argument |
+| `finish_cli_export` | ends the process, so it is refused unless a CLI export is in progress: the command is registered in every session, and a renderer could otherwise end an interactive one |
 
 Reading no content does not exempt a command. Looking a path up is itself an
 effect on Windows, where it connects to the host a network path names, so a
@@ -320,7 +321,9 @@ the way a renderer-supplied path is.
   index keeps its walk rules: no symlink out of the vault, no hidden folder,
   nothing over 5 MB.
 - **Effects.** `export` writes only inside the vault it reads, to a name
-  carrying the format's extension, so it cannot replace a note.
+  carrying the format's extension, so it cannot replace a note; the name
+  may not be a link either, since the write would follow it to whatever
+  note a cloned vault pointed it at.
   `open_in_glyph` hands the app a path the server can already read, the way a
   file manager would. Five tools change notes: `patch_note`, `set_property`,
   `update_task`, `rename_note` and `move_note`. Every other tool is read-only.
