@@ -1,3 +1,4 @@
+use icu_normalizer::ComposingNormalizerBorrowed;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::ffi::OsString;
@@ -5,19 +6,9 @@ use std::fs::{self, OpenOptions};
 use std::io::{self, ErrorKind, Write};
 use std::path::{Component, Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::UNIX_EPOCH;
 use tauri::{AppHandle, Manager, Runtime, State};
 
 use crate::grants::{self, is_symlink, GrantRegistry};
-
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct FileMetadata {
-    pub name: String,
-    pub path: String,
-    pub size: u64,
-    pub modified: u64,
-}
 
 #[tauri::command]
 pub fn read_file(path: String, grants: State<'_, GrantRegistry>) -> Result<String, String> {
@@ -150,12 +141,15 @@ fn manifest_entry_path(out_dir: &Path, rel: &str) -> io::Result<Option<PathBuf>>
     Ok(parent.starts_with(out_dir).then(|| parent.join(name)))
 }
 
-/// Fold a manifest entry for lookup: separators unified, case ignored. Names
-/// that fold alike are only candidates: a rename that changes nothing but case
-/// rewrites one file on Windows and macOS and leaves two on Linux, which is
-/// the volume's to say (`is_one_file`).
+/// Fold a manifest entry for lookup: separators unified, case and Unicode
+/// normalization form ignored. Names that fold alike are only candidates: a
+/// rename that changes nothing but case rewrites one file on Windows and macOS
+/// and leaves two on Linux, and one that only recomposes an accent rewrites
+/// one file on macOS and leaves two elsewhere, which is the volume's to say
+/// (`is_one_file`).
 fn manifest_entry_key(rel: &str) -> String {
-    rel.replace('\\', "/").to_lowercase()
+    let composed = ComposingNormalizerBorrowed::new_nfc().normalize(rel);
+    composed.replace('\\', "/").to_lowercase()
 }
 
 /// Site-relative paths grouped by what they fold to.
@@ -320,8 +314,8 @@ fn prune_entry(
     let Some(path) = manifest_entry_path(out_dir, rel)? else {
         return Ok(Pruned::Dropped);
     };
-    // The same name in other letters is the page just written where the
-    // volume ignores case, and a stale page beside it where it does not.
+    // The same name spelled another way is the page just written where the
+    // volume reads the two as one, and a stale page beside it where it does not.
     if is_any_of(out_dir, &path, written)? {
         return Ok(Pruned::Dropped);
     }
@@ -431,34 +425,13 @@ pub fn prune_export_dir(
     Ok(PruneReport { removed, error })
 }
 
+/// Refuses a missing or ungranted path for a caller that reads nothing itself. A folder passes.
 #[tauri::command]
-pub fn get_file_metadata(
-    path: String,
-    grants: State<'_, GrantRegistry>,
-) -> Result<FileMetadata, String> {
-    let canonical = grants.ensure_readable(&path)?;
-    let p = Path::new(&path);
-    let metadata = fs::metadata(&canonical).map_err(|e| format!("Failed to get metadata: {e}"))?;
-    let modified = metadata
-        .modified()
-        .map_err(|e| format!("Failed to get modified time: {e}"))?
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs();
-
-    Ok(FileMetadata {
-        name: p
-            .file_name()
-            .map(|n| n.to_string_lossy().to_string())
-            .unwrap_or_default(),
-        path: p
-            .canonicalize()
-            .unwrap_or_else(|_| p.to_path_buf())
-            .to_string_lossy()
-            .to_string(),
-        size: metadata.len(),
-        modified,
-    })
+pub fn check_path_exists(path: String, grants: State<'_, GrantRegistry>) -> Result<(), String> {
+    let path = grants.ensure_readable(&path)?;
+    fs::metadata(&path)
+        .map(|_| ())
+        .map_err(|e| format!("Failed to find path: {e}"))
 }
 
 #[cfg(test)]
@@ -694,87 +667,57 @@ mod tests {
     }
 
     #[test]
-    fn get_metadata_success() {
-        let dir = std::env::temp_dir().join("glyph_test_meta");
+    fn check_path_exists_success() {
+        let dir = std::env::temp_dir().join("glyph_test_exists");
         let _ = fs::create_dir_all(&dir);
-        let file_path = dir.join("meta_test.md");
-        let mut file = fs::File::create(&file_path).unwrap();
-        file.write_all(b"content").unwrap();
+        let file_path = dir.join("there.md");
+        fs::write(&file_path, "content").unwrap();
 
         let app = app_with_workspace(&dir);
-        let result = get_file_metadata(
+        let result = check_path_exists(
             file_path.to_string_lossy().to_string(),
             app.state::<GrantRegistry>(),
         );
-        assert!(result.is_ok());
-
-        let metadata = result.unwrap();
-        assert_eq!(metadata.name, "meta_test.md");
-        assert_eq!(metadata.size, 7);
-        assert!(metadata.modified > 0);
-        assert!(!metadata.path.is_empty());
+        assert_eq!(result, Ok(()));
 
         let _ = fs::remove_file(&file_path);
     }
 
     #[test]
-    fn get_metadata_not_found() {
-        let dir = std::env::temp_dir().join("glyph_test_meta_missing");
+    fn check_path_exists_not_found() {
+        let dir = std::env::temp_dir().join("glyph_test_exists_missing");
         let _ = fs::create_dir_all(&dir);
         let app = app_with_workspace(&dir);
-        let result = get_file_metadata(
+        let result = check_path_exists(
             dir.join("nope.md").to_string_lossy().to_string(),
             app.state::<GrantRegistry>(),
         );
-        assert!(result.is_err());
-        assert!(result.unwrap_err().contains("Failed to get metadata"));
+        assert!(result.unwrap_err().contains("Failed to find path"));
     }
 
     #[test]
-    fn get_metadata_denied_without_a_grant() {
-        let dir = std::env::temp_dir().join("glyph_test_meta_denied");
+    fn check_path_exists_denied_without_a_grant() {
+        let dir = std::env::temp_dir().join("glyph_test_exists_denied");
         let _ = fs::create_dir_all(&dir);
-        let file_path = dir.join("meta.md");
+        let file_path = dir.join("there.md");
         fs::write(&file_path, "x").unwrap();
 
+        // A missing path gets the same answer, so the check runs before the
+        // lookup and says nothing about what is on disk.
         let app = app_with_grants();
-        let result = get_file_metadata(
-            file_path.to_string_lossy().to_string(),
-            app.state::<GrantRegistry>(),
-        );
-        assert!(result.is_err());
+        for path in [file_path.clone(), dir.join("nope.md")] {
+            let result = check_path_exists(
+                path.to_string_lossy().to_string(),
+                app.state::<GrantRegistry>(),
+            );
+            let err = result.expect_err("must be denied");
+            assert!(
+                err.starts_with("path is outside the allowed workspaces and files:"),
+                "got: {err}"
+            );
+        }
 
         let _ = fs::remove_file(&file_path);
-    }
-
-    #[test]
-    fn metadata_serialization() {
-        let metadata = FileMetadata {
-            name: "test.md".to_string(),
-            path: "/path/to/test.md".to_string(),
-            size: 42,
-            modified: 1700000000,
-        };
-
-        let json = serde_json::to_string(&metadata).unwrap();
-        assert!(json.contains("\"name\":\"test.md\""));
-        assert!(json.contains("\"path\":\"/path/to/test.md\""));
-        assert!(json.contains("\"size\":42"));
-        assert!(json.contains("\"modified\":1700000000"));
-    }
-
-    #[test]
-    fn metadata_camel_case_keys() {
-        let metadata = FileMetadata {
-            name: "test.md".to_string(),
-            path: "/test.md".to_string(),
-            size: 0,
-            modified: 0,
-        };
-
-        let json = serde_json::to_string(&metadata).unwrap();
-        assert!(!json.contains("file_name"));
-        assert!(json.contains("name"));
     }
 
     #[test]
@@ -1209,6 +1152,11 @@ mod tests {
         fs::read_to_string(dir.join(SITE_MANIFEST_REL)).unwrap()
     }
 
+    /// One name in both forms Unicode gives an accented letter: the letter
+    /// followed by its accent, and the two as a single character.
+    const DECOMPOSED: &str = "cafe\u{301}.html";
+    const COMPOSED: &str = "caf\u{e9}.html";
+
     #[test]
     fn prune_export_dir_removes_only_files_the_previous_export_wrote() {
         let dir = out_dir_with_manifest("prune_stale", &["index.html", "guide.html"]);
@@ -1485,6 +1433,52 @@ mod tests {
     }
 
     #[test]
+    fn prune_export_dir_keeps_the_page_a_recomposed_name_rewrote() {
+        // macOS opens one file by either form of an accented name, so pruning
+        // the old form would delete the page just written.
+        let dir = out_dir_with_manifest("prune_form", &[DECOMPOSED]);
+        fs::write(dir.join(COMPOSED), "the current page").unwrap();
+
+        assert_eq!(prune(&dir, &[COMPOSED]).unwrap(), clean(0));
+
+        assert_eq!(
+            fs::read_to_string(dir.join(COMPOSED)).unwrap(),
+            "the current page"
+        );
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    // Not macOS: it reads the two forms as one file, which is the test above.
+    #[cfg(any(target_os = "linux", windows))]
+    #[test]
+    fn prune_export_dir_removes_the_old_page_of_a_recomposed_name_where_the_form_tells_files_apart()
+    {
+        let dir = out_dir_with_manifest("prune_form_apart", &[DECOMPOSED]);
+        fs::write(dir.join(DECOMPOSED), "the old page").unwrap();
+        fs::write(dir.join(COMPOSED), "the current page").unwrap();
+        assert_eq!(
+            fs::read_to_string(dir.join(DECOMPOSED)).unwrap(),
+            "the old page",
+            "the temp folder is on a volume that ignores the normalization form"
+        );
+
+        assert_eq!(prune(&dir, &[COMPOSED]).unwrap(), clean(1));
+
+        assert!(!dir.join(DECOMPOSED).exists());
+        assert_eq!(
+            fs::read_to_string(dir.join(COMPOSED)).unwrap(),
+            "the current page"
+        );
+        assert_eq!(
+            manifest_text(&dir),
+            serde_json::to_string(&[COMPOSED]).unwrap()
+        );
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn prune_export_dir_keeps_the_page_an_entry_names_with_the_other_separator() {
         // A manifest edited by hand: the same path on every platform.
         let dir = out_dir_with_manifest("prune_separator", &["guide\\intro.html"]);
@@ -1526,6 +1520,32 @@ mod tests {
             "got: {error}"
         );
         assert_eq!(manifest_text(&dir), r#"["guide.html","Guide.html"]"#);
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn prune_export_dir_leaves_a_page_it_cannot_tell_from_its_recomposed_name() {
+        let dir = out_dir_with_manifest("prune_form_untold", &[DECOMPOSED]);
+        fs::write(dir.join(DECOMPOSED), "the old page, or the current one").unwrap();
+        fs::write(dir.join(COMPOSED), "the current page").unwrap();
+        // The two forms may be one file on any volume, and the old one cannot
+        // be opened to find out.
+        let sealed = seal(&dir.join(DECOMPOSED));
+
+        let report = prune(&dir, &[COMPOSED]).unwrap();
+
+        drop(sealed);
+        assert_eq!(report.removed, 0);
+        assert!(dir.join(DECOMPOSED).exists());
+        let error = report.error.expect("the page is reported");
+        let untold =
+            format!("Failed to remove {DECOMPOSED:?}: cannot tell whether it is {COMPOSED:?}: ");
+        assert!(error.starts_with(&untold), "got: {error}");
+        assert_eq!(
+            manifest_text(&dir),
+            serde_json::to_string(&[COMPOSED, DECOMPOSED]).unwrap()
+        );
 
         let _ = fs::remove_dir_all(&dir);
     }
