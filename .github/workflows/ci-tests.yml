@@ -15,7 +15,7 @@ jobs:
         run: pnpm test:coverage
       - name: Upload coverage report (artifact)
         if: always()
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: frontend-coverage
           path: coverage/
@@ -65,7 +65,7 @@ jobs:
           tool: nextest
       - name: Run Rust tests with coverage
         working-directory: src-tauri
-        run: cargo llvm-cov nextest --workspace --lcov --output-path ../coverage-rust.lcov --profile ci
+        run: cargo llvm-cov nextest --locked --workspace --lcov --output-path ../coverage-rust.lcov --profile ci
       - name: Upload Rust coverage
         if: always()
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
@@ -103,10 +103,10 @@ jobs:
           components: clippy
       - name: Run Rust unit tests
         working-directory: src-tauri
-        run: cargo test --workspace --lib
+        run: cargo test --locked --workspace --lib
       - name: Run Clippy on the Windows-only code
         working-directory: src-tauri
-        run: cargo clippy --workspace --all-targets -- -D warnings
+        run: cargo clippy --locked --workspace --all-targets -- -D warnings
 
   # Checks the host's plugin API against glyph-md/plugin-template's declared
   # types and built plugin, and the marketplace schema and index in
@@ -162,4 +162,4 @@ jobs:
         run: echo "::add-matcher::.github/matchers/rust.json"
       - name: Run Clippy
         working-directory: src-tauri
-        run: cargo clippy --workspace --all-targets -- -D warnings
+        run: cargo clippy --locked --workspace --all-targets -- -D warnings

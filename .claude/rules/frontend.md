@@ -5,7 +5,7 @@ paths:
 
 # Frontend Rules
 
-- Use `invoke` from `@tauri-apps/api/core` for Rust command calls
+- Use `invoke` from `@tauri-apps/api/core` for Rust command calls, naming the command with a string literal or a value typed as a union of literals: `scripts/tauri-commands.test.mjs` checks every name against `generate_handler!`
 - Use `listen` from `@tauri-apps/api/event` for Tauri events
 - Platform detection via `@tauri-apps/plugin-os`, set as CSS `data-platform` attribute
 - Theme (dark/light) via `matchMedia('prefers-color-scheme: dark')`, toggle `.dark` class on `<html>`
