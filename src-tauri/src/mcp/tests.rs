@@ -1457,13 +1457,41 @@ fn export_refuses_an_out_that_is_a_link_to_a_missing_target() {
     // target outside it.
     link_folder(&h.root.with_extension("planted"), &h.root.join("out.html"));
 
+    // The bare name is a link, refused as one; with a separator the lookup
+    // follows the link to nothing, and the grant check refuses that.
     for out in ["out.html", "out.html/"] {
         let refusal = h.refused(
             "export",
             json!({ "ref": "Index", "format": "html", "out": out }),
         );
-        assert!(refusal.contains("outside the allowed"), "{out}: {refusal}");
+        assert!(
+            refusal.contains("must not be a link") || refusal.contains("outside the allowed"),
+            "{out}: {refusal}"
+        );
     }
+}
+
+/// The format check reads the name as spelled, and the write follows a link:
+/// a planted `Plan.pdf -> Plan.md` inside the vault would pass every other
+/// check and replace the note with PDF bytes.
+#[cfg(unix)]
+#[test]
+fn export_refuses_an_out_that_is_a_link_to_a_note() {
+    let h = Harness::new("mcp_export_linked_note");
+    let note = h.root.join("Index.md");
+    let before = fs::read_to_string(&note).unwrap();
+    std::os::unix::fs::symlink(&note, h.root.join("out.html")).unwrap();
+    fs::create_dir(h.root.join("sub")).unwrap();
+    std::os::unix::fs::symlink(&note, h.root.join("sub").join("out.html")).unwrap();
+
+    for out in ["out.html", "sub/out.html"] {
+        let refusal = h.refused(
+            "export",
+            json!({ "ref": "Index", "format": "html", "out": out }),
+        );
+        assert!(refusal.contains("must not be a link"), "{out}: {refusal}");
+    }
+    assert_eq!(fs::read_to_string(&note).unwrap(), before);
 }
 
 #[test]

@@ -175,6 +175,11 @@ fn export_target(
             format.as_str()
         ));
     }
+    // The name was judged as spelled, and the write follows a link: a planted
+    // `Plan.pdf -> Plan.md` would pass the format check and replace the note.
+    if crate::grants::is_symlink(&path) {
+        return Err(format!("out must not be a link: {out}"));
+    }
     let canonical = session.grants.ensure_writable(&path.to_string_lossy())?;
     // Grants outlive the vaults a session serves, so they alone do not keep an
     // export inside this one.
