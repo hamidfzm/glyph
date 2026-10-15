@@ -168,6 +168,23 @@ describe("useWorkspaceIndex", () => {
     errorSpy.mockRestore();
   });
 
+  it("indexes no notes when the vault walk fails, and says why", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.mocked(invoke).mockImplementation(((cmd: string) =>
+      cmd === "vault_refresh"
+        ? Promise.reject(new Error("denied"))
+        : Promise.resolve(files(["/ws/a.md"]))) as unknown as typeof invoke);
+    const { result } = render();
+
+    await act(async () => {
+      await result.current.scanWorkspace("/ws", () => true);
+    });
+    expect(result.current.workspaceFiles).toEqual(["/ws/a.md"]);
+    expect(result.current.snapshot).toEqual(EMPTY_SNAPSHOT);
+    expect(errorSpy).toHaveBeenCalled();
+    errorSpy.mockRestore();
+  });
+
   it("releases nothing when no workspace was open", () => {
     const { result } = render(null);
     act(() => result.current.clearIndexes());
