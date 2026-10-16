@@ -31,12 +31,17 @@ export function createWebChrome(root: HTMLElement): WebChrome {
   const hint = document.createElement("p");
   hint.textContent = i18n.t("preview.dropHint");
   const emptyOpenButton = button(i18n.t("emptyState.openFile"), PRIMARY_BUTTON_CLASS);
-  const emptyState = document.createElement("section");
+  // A second <main>: the viewer shows either it or `root`, never both.
+  const emptyState = document.createElement("main");
   emptyState.append(heading, hint, emptyOpenButton);
 
   for (const opener of [openButton, emptyOpenButton]) {
     opener.addEventListener("click", () => fileInput.click());
   }
+  // html and body do not scroll, so the keyboard reaches the document only
+  // through a focusable scroller.
+  root.tabIndex = 0;
+  root.hidden = true;
   root.before(header, emptyState);
   return { emptyState, fileInput, copyButton, status };
 }

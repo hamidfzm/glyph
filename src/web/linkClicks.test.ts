@@ -107,6 +107,18 @@ describe("handleDocumentClick", () => {
     expect(open).toHaveBeenCalledWith("https://example.com/node", "_blank", "noopener,noreferrer");
   });
 
+  it("ignores a web link with no host instead of throwing", () => {
+    mount('<a href="https://">Nowhere</a>');
+    expect(click(root.querySelector("a")!).defaultPrevented).toBe(true);
+    expect(open).not.toHaveBeenCalled();
+  });
+
+  it("falls back to xlink:href when href is empty", () => {
+    mount('<svg><a href="" xlink:href="https://example.com/svg"><text>Node</text></a></svg>');
+    click(root.querySelector("text")!);
+    expect(open).toHaveBeenCalledWith("https://example.com/svg", "_blank", "noopener,noreferrer");
+  });
+
   it("makes a relative link to another file inert", () => {
     mount('<a href="other.md">Other</a>');
     expect(click(root.querySelector("a")!).defaultPrevented).toBe(true);
@@ -120,7 +132,7 @@ describe("handleDocumentClick", () => {
   });
 
   it("leaves mail links and clicks outside links alone", () => {
-    mount('<a href="mailto:someone@example.com">Mail</a><p>Text</p>');
+    mount('<a href="MAILTO:someone@example.com">Mail</a><p>Text</p>');
     expect(click(root.querySelector("a")!).defaultPrevented).toBe(false);
     expect(click(root.querySelector("p")!).defaultPrevented).toBe(false);
     expect(open).not.toHaveBeenCalled();

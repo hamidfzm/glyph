@@ -31,7 +31,7 @@ async function start(hash = "") {
   root.id = "preview";
   document.body.append(root);
   await startWebViewer({ root, darkQuery: stubDarkQuery(), language: "en" });
-  const emptyState = document.querySelector<HTMLElement>("body > section")!;
+  const emptyState = document.querySelector<HTMLElement>("body > main:not(#preview)")!;
   const fileInput = document.querySelector<HTMLInputElement>("input[type=file]")!;
   const copyButton = screen.getByRole<HTMLButtonElement>("button", {
     name: i18n.t("preview.copyLink", { lng: "en" }),
@@ -127,12 +127,22 @@ describe("startWebViewer", () => {
   it("opens a picked file and clears the picker so the same file can be picked again", async () => {
     const { root, fileInput } = await start();
     const click = vi.spyOn(fileInput, "click").mockImplementation(() => {});
-    document.querySelector<HTMLButtonElement>("section button")?.click();
+    document.querySelector<HTMLButtonElement>("main:not(#preview) button")?.click();
     expect(click).toHaveBeenCalledTimes(1);
 
     pick(fileInput, new File(["# Picked"], "picked.md"));
     expect(fileInput.value).toBe("");
     await vi.waitFor(() => expect(root.textContent).toBe("# Picked"));
+  });
+
+  it("hands keyboard focus to the document that replaces the empty state", async () => {
+    const { root, emptyState, fileInput } = await start();
+    await vi.waitFor(() => expect(root.hidden).toBe(true));
+    emptyState.querySelector("button")?.focus();
+    pick(fileInput, new File(["# Focused"], "focused.md"));
+    await vi.waitFor(() => expect(root.textContent).toBe("# Focused"));
+    expect(document.activeElement).toBe(root);
+    expect(root.tabIndex).toBe(0);
   });
 
   it("offers only markdown files in the picker", async () => {
@@ -227,6 +237,58 @@ describe("startWebViewer", () => {
     expect(copyButton.disabled).toBe(true);
     finish("v1.AAAA");
     await vi.waitFor(() => expect(copyButton.disabled).toBe(false));
+  });
+
+  it("copies the link of the document on screen when an earlier encode finishes last", async () => {
+    let finishFirst: (fragment: string) => void = () => {};
+    vi.mocked(encodeDocument).mockImplementationOnce(
+      () => new Promise((resolve) => (finishFirst = resolve)),
+    );
+    const writeText = vi.fn((_text: string) => Promise.resolve());
+    vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText } });
+    const { root, fileInput, copyButton } = await start();
+    pick(fileInput, new File(["# First"], "first.md"));
+    await vi.waitFor(() => expect(root.textContent).toBe("# First"));
+    pick(fileInput, new File(["# Second"], "second.md"));
+    await vi.waitFor(() => expect(copyButton.disabled).toBe(false));
+
+    finishFirst("v1.STALE");
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    copyButton.click();
+    const url = new URL(writeText.mock.calls[0][0]);
+    expect(await decodeDocument(url.hash.slice(1))).toBe("# Second");
+  });
+
+  it("drops a copy result that settles after another document opened", async () => {
+    let settleCopy: () => void = () => {};
+    const writeText = vi.fn(() => new Promise<void>((resolve) => (settleCopy = resolve)));
+    vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText } });
+    const { root, fileInput, copyButton, status } = await start();
+    pick(fileInput, new File(["# Copied"], "copied.md"));
+    await vi.waitFor(() => expect(copyButton.disabled).toBe(false));
+    copyButton.click();
+
+    pick(fileInput, new File(["# Next"], "next.md"));
+    await vi.waitFor(() => expect(root.textContent).toBe("# Next"));
+    settleCopy();
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(status.textContent).toBe("");
+  });
+
+  it("keeps Copy link disabled when the browser cannot compress", async () => {
+    vi.mocked(encodeDocument).mockRejectedValueOnce(new TypeError("deflate-raw unsupported"));
+    const { root, fileInput, copyButton } = await start();
+    pick(fileInput, new File(["# Old browser"], "old.md"));
+    await vi.waitFor(() => expect(root.textContent).toBe("# Old browser"));
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(copyButton.disabled).toBe(true);
+  });
+
+  it("shows neither the empty state nor a document while a shared link decodes", async () => {
+    const { root, emptyState } = await start(`#${await encodeDocument("# Pending")}`);
+    expect(emptyState.hidden).toBe(true);
+    expect(root.hidden).toBe(true);
+    await vi.waitFor(() => expect(root.textContent).toBe("# Pending"));
   });
 
   it("says when copying fails or the clipboard is unavailable", async () => {

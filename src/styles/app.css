@@ -84,9 +84,10 @@
   --glyph-material-edge: rgba(255, 255, 255, 0.08);
 }
 
+/* `body >` because a rendered document keeps its own ids, so a heading can be `#root`. */
 html,
 body,
-#root {
+body > #root {
   height: 100%;
   margin: 0;
   padding: 0;

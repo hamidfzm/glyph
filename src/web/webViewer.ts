@@ -24,9 +24,12 @@ export async function startWebViewer({ root, darkQuery, language }: WebViewerOpt
   let handledFragment: string | null = null;
 
   function present(message: PreviewMessage | null) {
+    const emptyStateHadFocus = chrome.emptyState.contains(document.activeElement);
     preview.show(message);
     chrome.emptyState.hidden = message !== null;
     root.hidden = message === null;
+    // Hiding the focused Open File button would drop focus to the body.
+    if (emptyStateHadFocus && message) root.focus({ preventScroll: true });
   }
 
   async function load(request: () => Promise<PreviewMessage | null>) {
@@ -39,9 +42,10 @@ export async function startWebViewer({ root, darkQuery, language }: WebViewerOpt
     present(message);
     if (message?.kind !== "document") return;
     // Encoded now so a click can copy synchronously: Safari refuses a clipboard
-    // write that follows an await.
-    const fragment = await encodeDocument(message.content);
-    if (id !== latestRequest) return;
+    // write that follows an await. A browser without deflate-raw keeps the
+    // button disabled.
+    const fragment = await encodeDocument(message.content).catch(() => null);
+    if (id !== latestRequest || fragment === null) return;
     link = `${location.origin}${location.pathname}${location.search}#${fragment}`;
     chrome.copyButton.disabled = false;
   }
@@ -75,13 +79,14 @@ export async function startWebViewer({ root, darkQuery, language }: WebViewerOpt
       chrome.status.textContent = i18n.t("preview.copyFailed");
       return;
     }
+    // A copy that settles after another document opened reports nothing.
+    const id = latestRequest;
+    const report = (key: string) => {
+      if (id === latestRequest) chrome.status.textContent = i18n.t(key);
+    };
     navigator.clipboard.writeText(link).then(
-      () => {
-        chrome.status.textContent = i18n.t("preview.linkCopied");
-      },
-      () => {
-        chrome.status.textContent = i18n.t("preview.copyFailed");
-      },
+      () => report("preview.linkCopied"),
+      () => report("preview.copyFailed"),
     );
   }
 
@@ -102,7 +107,11 @@ export async function startWebViewer({ root, darkQuery, language }: WebViewerOpt
     const file = event.dataTransfer?.files[0];
     if (file) showFile(file);
   });
+  // Back and Forward may report either event; a repeat is ignored.
   window.addEventListener("hashchange", showFragment);
+  window.addEventListener("popstate", showFragment);
+  // A shared link shows nothing while it decodes, not the empty state.
+  chrome.emptyState.hidden = location.hash.length > 1;
   showFragment();
 }
 

@@ -25,5 +25,10 @@ export async function readDocumentFile(file: File): Promise<PreviewMessage> {
   }
   const text = decodeUtf8(new Uint8Array(buffer));
   if (text === null) return { kind: "unreadable" };
-  return { kind: "document", content: adaptMmdContent(file.name, text), baseUrl: null };
+  const content = adaptMmdContent(file.name, text);
+  // Fencing a Mermaid source adds a few bytes, enough to push a file at the
+  // cap past what its shared link may carry.
+  const bytes = new TextEncoder().encode(content).length;
+  if (bytes > MAX_DOCUMENT_BYTES) return { kind: "tooLarge", bytes };
+  return { kind: "document", content, baseUrl: null };
 }

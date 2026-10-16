@@ -3,9 +3,11 @@
     margin: 2cm;
   }
 
+  /* The preview pages scroll inside `#preview` rather than `#root`. */
   html,
   body,
-  #root {
+  body > #root,
+  body > #preview {
     height: auto !important;
     overflow: visible !important;
     background: #ffffff !important;

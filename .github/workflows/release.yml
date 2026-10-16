@@ -89,6 +89,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       changelog: ${{ steps.notes.outputs.changelog }}
+      latest: ${{ steps.latest.outputs.latest }}
     # Edits the release body and links the Announcements discussion.
     permissions:
       contents: write
@@ -144,6 +145,7 @@ jobs:
       # older line is not the newest version, so hand the pointer back: the
       # ecosystem health check and the smoke test both resolve "latest".
       - name: Keep the latest pointer on the highest version
+        id: latest
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -154,6 +156,9 @@ jobs:
           if [ -n "$HIGHEST" ] && [ "$HIGHEST" != "${{ github.ref_name }}" ]; then
             echo "$HIGHEST is newer than ${{ github.ref_name }}; leaving the latest pointer alone."
             gh release edit "${{ github.ref_name }}" --repo "${{ github.repository }}" --latest=false
+            echo "latest=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "latest=true" >> "$GITHUB_OUTPUT"
           fi
 
   publish-homebrew:
@@ -360,9 +365,12 @@ jobs:
           fi
 
   # The web viewer is built from this tag by glyph-md/view's own workflow,
-  # which deploys it to GitHub Pages; this job only starts that run.
+  # which deploys it to GitHub Pages; this job only starts that run. Only the
+  # highest release deploys, so a hotfix cut from an older line cannot roll the
+  # public viewer back, and it skips cleanly until the satellite exists.
   publish-web-viewer:
-    needs: build
+    needs: update-release-notes
+    if: needs.update-release-notes.outputs.latest == 'true'
     runs-on: ubuntu-latest
     permissions: {}
     steps:
@@ -370,7 +378,12 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
           TAG: ${{ github.ref_name }}
-        run: gh workflow run deploy.yml --repo glyph-md/view --ref main -f ref="$TAG"
+        run: |
+          if [ -z "$GH_TOKEN" ] || ! gh api repos/glyph-md/view/actions/workflows/deploy.yml >/dev/null 2>&1; then
+            echo "glyph-md/view has no deploy workflow yet; skipping the web viewer deploy."
+            exit 0
+          fi
+          gh workflow run deploy.yml --repo glyph-md/view --ref main -f ref="$TAG"
 
   publish-winget:
     needs: build

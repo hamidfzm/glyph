@@ -52,9 +52,18 @@ const HOSTILE = `# Hostile
 \`\`\`mermaid
 %%{init: {"themeCSS": ".node rect { fill: url(${REMOTE}/theme.png) }"}}%%
 flowchart LR
-  A@{ img: "${REMOTE}/node.png", label: "Img", pos: "t", h: 40 }
   B --> C
   click B href "${REMOTE}/click"
+\`\`\`
+
+\`\`\`mermaid
+flowchart LR
+  A@{ img: "${REMOTE}/node.png", label: "Img", pos: "t", h: 40 }
+\`\`\`
+
+\`\`\`mermaid
+flowchart LR
+  A -->
 \`\`\`
 
 ## Target
@@ -99,7 +108,9 @@ async function serveViewer(page: Page, { withCsp = true } = {}): Promise<string[
 async function openHostile(page: Page) {
   await page.goto(link(HOSTILE));
   await expect(page.locator("article.markdown-body h1")).toHaveText("Hostile");
-  await expect(page.locator(".mermaid-diagram svg")).toBeVisible();
+  await expect(page.locator(".mermaid-diagram svg").first()).toBeVisible();
+  // The broken diagram and the remote-image one fail to render and keep their source.
+  await expect(page.locator("article.markdown-body pre code.language-mermaid")).toHaveCount(2);
 }
 
 test("a hostile shared document reaches no other origin and runs no script", async ({ page }) => {
@@ -113,9 +124,16 @@ test("a hostile shared document reaches no other origin and runs no script", asy
   await expect(article.locator(".styled")).toHaveCount(1);
 
   expect(await page.evaluate(() => (window as { __pwned?: string }).__pwned)).toBeUndefined();
-  await page.getByRole("link", { name: "Run it" }).click();
+  // The sanitizer drops the javascript: href, leaving plain text to click.
+  await page.getByText("Run it").click();
   expect(await page.evaluate(() => (window as { __pwned?: string }).__pwned)).toBeUndefined();
   expect(offOrigin).toEqual([]);
+
+  // A diagram Mermaid cannot parse leaves nothing outside the viewer's own page.
+  const bodyChildren = await page.evaluate(() =>
+    Array.from(document.body.children, (element) => element.tagName),
+  );
+  expect(bodyChildren).toEqual(["HEADER", "MAIN", "MAIN"]);
 
   expect(await page.evaluate(() => localStorage.length + sessionStorage.length)).toBe(0);
   expect(await page.evaluate(() => document.cookie)).toBe("");
@@ -135,12 +153,65 @@ test("an in-document link scrolls without losing the shared document", async ({ 
   await expect(page.locator("article.markdown-body h1")).toHaveText("Hostile");
 });
 
+test("a link inside a diagram opens a new tab and leaves the viewer in place", async ({ page }) => {
+  const offOrigin = await serveViewer(page);
+  await openHostile(page);
+  const viewerUrl = page.url();
+  const popup = page.context().waitForEvent("page");
+  await page.locator(".mermaid-diagram a").first().click();
+  await popup;
+  // The new tab's navigation is the one request that leaves; the route aborts it.
+  await expect.poll(() => offOrigin).toEqual([`${REMOTE}/click`]);
+  expect(page.url()).toBe(viewerUrl);
+});
+
+// The translations load from lazy chunks whose keys depend on the build's
+// root, which only the built page shows; unit tests run from the repo root.
+test("the viewer follows the browser's language", async ({ browser }) => {
+  const context = await browser.newContext({ locale: "de-DE" });
+  const page = await context.newPage();
+  await serveViewer(page);
+  await page.goto(VIEWER);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Markdown-Datei öffnen");
+  await expect(page.locator("html")).toHaveAttribute("lang", "de");
+  await context.close();
+});
+
+test("Back after opening a file returns to the shared document", async ({ page }) => {
+  await serveViewer(page);
+  await page.goto(link("# Shared"));
+  await expect(page.locator("article.markdown-body h1")).toHaveText("Shared");
+  await page.setInputFiles("header input[type=file]", {
+    name: "local.md",
+    mimeType: "text/markdown",
+    buffer: Buffer.from("# Local"),
+  });
+  await expect(page.locator("article.markdown-body h1")).toHaveText("Local");
+  await page.goBack();
+  await expect(page.locator("article.markdown-body h1")).toHaveText("Shared");
+});
+
+test("prints the document alone, unclipped", async ({ page }) => {
+  await serveViewer(page);
+  await page.goto(link(`# Printed\n\n${"A paragraph long enough to fill pages. ".repeat(400)}`));
+  await expect(page.locator("article.markdown-body h1")).toHaveText("Printed");
+  await page.emulateMedia({ media: "print" });
+  await expect(page.locator("body > header")).toBeHidden();
+  const preview = await page.locator("body > #preview").evaluate((element) => {
+    const style = getComputedStyle(element);
+    return { overflow: style.overflowY, contain: style.contain };
+  });
+  expect(preview).toEqual({ overflow: "visible", contain: "none" });
+});
+
 // Calibration: without the page's CSP the same document does reach the
-// network, so the test above cannot pass vacuously.
+// network, one request per vector, so the test above cannot pass vacuously.
 test("the harness sees the requests once the CSP is gone", async ({ page }) => {
   const offOrigin = await serveViewer(page, { withCsp: false });
   await openHostile(page);
-  await expect.poll(() => offOrigin.some((url) => url.startsWith(REMOTE))).toBe(true);
+  for (const file of ["svg-image.png", "poster.png", "background.png"]) {
+    await expect.poll(() => offOrigin).toContain(`${REMOTE}/${file}`);
+  }
 });
 
 test("a decompression bomb is refused before WebKit inflates all of it", async ({ page }) => {

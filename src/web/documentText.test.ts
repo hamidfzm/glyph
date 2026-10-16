@@ -48,6 +48,13 @@ describe("readDocumentFile", () => {
     expect(await readDocumentFile(file)).toEqual({ kind: "unreadable" });
   });
 
+  it("reports a Mermaid source the fence pushes past the cap as too large", async () => {
+    const source = "graph TD\n  A --> B\n%% ";
+    const file = new File([source + "x".repeat(MAX_DOCUMENT_BYTES - source.length)], "big.mmd");
+    expect(file.size).toBe(MAX_DOCUMENT_BYTES);
+    expect(await readDocumentFile(file)).toMatchObject({ kind: "tooLarge" });
+  });
+
   it("fences a Mermaid .mmd source so it renders as a diagram", async () => {
     const file = new File(["graph TD\n  A --> B\n"], "flow.mmd");
     const message = await readDocumentFile(file);

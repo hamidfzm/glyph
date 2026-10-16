@@ -95,7 +95,8 @@ describe("startPreview", () => {
     await vi.waitFor(() => expect(root.textContent).toBe("newest"));
 
     resolveFirst?.("<p>stale</p>");
-    await Promise.resolve();
+    // A macrotask: the stale write would land several microtasks later.
+    await new Promise((resolve) => setTimeout(resolve, 0));
     expect(root.textContent).toBe("newest");
   });
 
@@ -167,7 +168,7 @@ describe("startPreview without a host", () => {
 
     preview.show(null);
     resolveRender?.("<p>late</p>");
-    await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
     expect(root.childNodes).toHaveLength(0);
   });
 
