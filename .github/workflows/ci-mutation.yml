@@ -54,9 +54,6 @@ jobs:
           tool: cargo-mutants,nextest
       - name: Run targeted mutation tests
         working-directory: src-tauri
-        # Not bash: on the Windows runner Git Bash enables the backup privilege
-        # for everything it starts, which opens a file a test holds sealed, and
-        # the unmutated tests fail before any mutant runs.
         shell: pwsh
         env:
           SELECT: ${{ matrix.select }}
