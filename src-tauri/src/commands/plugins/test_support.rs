@@ -85,43 +85,44 @@ impl LocalServer {
     /// Answer each request from its path until the process ends; a path with
     /// no route gets a 404.
     pub(crate) fn serve(self, routes: Vec<(&'static str, Response)>) {
-        use std::io::{Read, Write};
+        use std::io::{BufRead, BufReader, Write};
+        let not_found = Response {
+            status: 404,
+            location: None,
+            body: Vec::new(),
+        };
         std::thread::spawn(move || {
-            for stream in self.listener.incoming() {
-                let Ok(mut stream) = stream else { continue };
-                let mut request = Vec::new();
-                let mut chunk = [0u8; 1024];
-                while !request.windows(4).any(|w| w == b"\r\n\r\n") {
-                    match stream.read(&mut chunk) {
-                        Ok(0) | Err(_) => break,
-                        Ok(n) => request.extend_from_slice(&chunk[..n]),
-                    }
-                }
-                let line = String::from_utf8_lossy(&request);
+            for stream in self.listener.incoming().flatten() {
+                let mut reader = BufReader::new(&stream);
+                let mut line = String::new();
+                let _ = reader.read_line(&mut line);
                 let path = line.split_whitespace().nth(1).unwrap_or("");
-                let response = routes.iter().find(|(route, _)| *route == path);
-                let (status, reason, location, body): (u16, &str, Option<&str>, &[u8]) =
-                    match response {
-                        Some((_, r)) => {
-                            let reason = match r.status {
-                                200 => "OK",
-                                302 => "Found",
-                                _ => "Not Found",
-                            };
-                            (r.status, reason, r.location.as_deref(), &r.body)
-                        }
-                        None => (404, "Not Found", None, b""),
-                    };
-                let mut head = format!(
-                    "HTTP/1.1 {status} {reason}\r\nContent-Length: {}\r\nConnection: close\r\n",
-                    body.len()
-                );
-                if let Some(to) = location {
-                    head.push_str(&format!("Location: {to}\r\n"));
+                // The headers end at an empty line; nothing in them matters.
+                let mut header = String::new();
+                while reader.read_line(&mut header).unwrap_or(0) > 2 {
+                    header.clear();
                 }
-                head.push_str("\r\n");
+                let response = routes
+                    .iter()
+                    .find(|(route, _)| *route == path)
+                    .map_or(&not_found, |(_, response)| response);
+                let reason = match response.status {
+                    200 => "OK",
+                    302 => "Found",
+                    _ => "Not Found",
+                };
+                let location = response
+                    .location
+                    .as_ref()
+                    .map_or(String::new(), |to| format!("Location: {to}\r\n"));
+                let head = format!(
+                    "HTTP/1.1 {} {reason}\r\nContent-Length: {}\r\nConnection: close\r\n{location}\r\n",
+                    response.status,
+                    response.body.len()
+                );
+                let mut stream = &stream;
                 let _ = stream.write_all(head.as_bytes());
-                let _ = stream.write_all(body);
+                let _ = stream.write_all(&response.body);
                 let _ = stream.flush();
             }
         });

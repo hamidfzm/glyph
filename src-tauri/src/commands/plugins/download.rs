@@ -201,20 +201,13 @@ mod tests {
         let bytes = package();
         let server = LocalServer::bind();
         let cases = [
+            // No route: the server's own 404.
             ("/missing.json", "download failed: 404 Not Found"),
             ("/latin1.json", "the plugin registry is not UTF-8"),
             ("/big.json", "exceeds the size limit"),
         ]
         .map(|(path, expected)| (marketplace(&server, path), path, expected));
         let routes = vec![
-            (
-                "/missing.json",
-                Response {
-                    status: 404,
-                    location: None,
-                    body: Vec::new(),
-                },
-            ),
             ("/latin1.json", ok(vec![0xff, 0xfe])),
             ("/big.json", index_naming(&server, "/big.zip", &bytes)),
             ("/big.zip", ok(vec![0; MAX_PACKAGE_BYTES + 1])),
