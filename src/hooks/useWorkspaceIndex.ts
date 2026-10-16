@@ -18,6 +18,8 @@ interface UseWorkspaceIndexOptions {
   onWorkspaceNotice: (notice: WorkspaceNotice, options?: { persistent?: boolean }) => void;
 }
 
+type VaultWalkCommand = "vault_snapshot" | "vault_refresh";
+
 /**
  * What the window knows about the open workspace, as two different sets.
  * `files` is every document a tab can show (markdown, notebooks, canvases,
@@ -53,14 +55,17 @@ export function useWorkspaceIndex({ workspaceRoot, onWorkspaceNotice }: UseWorks
     }
   }, []);
 
-  const loadVault = useCallback(async (command: string, root: string): Promise<VaultSnapshot> => {
-    try {
-      return await invoke<VaultSnapshot>(command, { path: root });
-    } catch (err) {
-      console.error(`Failed to index ${root}:`, err);
-      return EMPTY_SNAPSHOT;
-    }
-  }, []);
+  const loadVault = useCallback(
+    async (command: VaultWalkCommand, root: string): Promise<VaultSnapshot> => {
+      try {
+        return await invoke<VaultSnapshot>(command, { path: root });
+      } catch (err) {
+        console.error(`Failed to index ${root}:`, err);
+        return EMPTY_SNAPSHOT;
+      }
+    },
+    [],
+  );
 
   // Keep the previous status object identity while the values are unchanged,
   // so the incomplete-index banner effect below doesn't refire on every
@@ -78,7 +83,11 @@ export function useWorkspaceIndex({ workspaceRoot, onWorkspaceNotice }: UseWorks
 
   /** Run both walks and keep the result only if it is still the newest. */
   const walk = useCallback(
-    async (command: string, root: string, isCurrent: () => boolean): Promise<string[]> => {
+    async (
+      command: VaultWalkCommand,
+      root: string,
+      isCurrent: () => boolean,
+    ): Promise<string[]> => {
       const id = ++latestWalk.current;
       const [files, vault] = await Promise.all([loadFiles(root), loadVault(command, root)]);
       if (!isCurrent() || id !== latestWalk.current) return files.files;

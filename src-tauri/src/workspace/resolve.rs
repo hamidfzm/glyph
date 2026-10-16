@@ -6,6 +6,12 @@
 //! Nesting (a folder inside a parent `.git`, or inside another workspace's
 //! `.glyph/`) makes every workspace-wide feature ambiguous, so the frontend
 //! refuses it. A plain non-git folder is a valid workspace.
+//!
+//! The probe runs on every folder a window opens, before anything is known
+//! about it, so it only asks whether a `.git` entry exists and never reads
+//! what one points to. libgit2's discovery resolves the paths a repository
+//! names (the target of a `.git` file, a `commondir` file, its config), and
+//! on Windows resolving a network path connects to its host.
 
 use std::path::Path;
 
@@ -19,7 +25,7 @@ pub struct WorkspaceResolution {
     pub selected: String,
     /// Whether `selected` is inside any git working tree.
     pub is_git_repo: bool,
-    /// The git working-tree top level, if `is_git_repo` and not bare.
+    /// The git working-tree top level, if `is_git_repo`.
     pub git_top_level: Option<String>,
     /// Set when `selected` is a git repo but NOT its top level (i.e. nested
     /// inside a parent `.git`). The value is that parent top level. This is
@@ -53,42 +59,34 @@ fn ancestor_glyph(start: &Path) -> Option<String> {
     None
 }
 
+/// The nearest folder at or above `start` that holds a `.git` entry: the top
+/// level of the working tree `start` sits in. A link named `.git` counts
+/// without being followed. A bare repository holds none, so it stays a plain
+/// folder.
+fn working_tree_top(start: &Path) -> Option<&Path> {
+    start
+        .ancestors()
+        .find(|dir| dir.join(".git").symlink_metadata().is_ok())
+}
+
+/// A canonical Windows path carries a `\\?\` prefix, which reads as noise in
+/// the notice this ends up in.
+fn plain_string(p: &Path) -> String {
+    crate::cli::plain_path(&p.to_string_lossy())
+}
+
 /// Resolve a selected folder for workspace adoption. Pure (no managed state),
-/// so it's unit-testable with tempfile + git2 fixtures.
+/// so it's unit-testable with tempfile fixtures.
 pub fn resolve_workspace(selected: &Path) -> Result<WorkspaceResolution, String> {
     let selected_canon = canonical(selected);
-
-    // git2 is desktop-only (it doesn't cross-compile for mobile); mobile has
-    // no folder workspaces, so every selection resolves as a plain folder.
-    #[cfg(mobile)]
-    let (is_git_repo, git_top_level, nested_under) = (false, None, None);
-
-    #[cfg(desktop)]
-    let (is_git_repo, git_top_level, nested_under) =
-        match git2::Repository::discover(&selected_canon) {
-            Ok(repo) => match repo.workdir() {
-                Some(workdir) => {
-                    let top = path_string(workdir);
-                    if canonical(workdir) == selected_canon {
-                        (true, Some(top), None)
-                    } else {
-                        // Selected sits deeper than the repo top level.
-                        (true, Some(top.clone()), Some(top))
-                    }
-                }
-                // Bare repo: no working tree to nest under; treat as a plain
-                // folder so it isn't adopted as a git workspace.
-                None => (true, None, None),
-            },
-            // Not inside any repo: a plain folder is a valid workspace.
-            Err(_) => (false, None, None),
-        };
+    let top = working_tree_top(&selected_canon);
 
     Ok(WorkspaceResolution {
         selected: path_string(selected),
-        is_git_repo,
-        git_top_level,
-        nested_under,
+        is_git_repo: top.is_some(),
+        git_top_level: top.map(plain_string),
+        // Selected sits deeper than the repo top level.
+        nested_under: top.filter(|top| *top != selected_canon).map(plain_string),
         glyph_conflict: ancestor_glyph(&selected_canon),
     })
 }
@@ -154,7 +152,52 @@ mod tests {
         git2::Repository::init_opts(tmp.path(), &opts).unwrap();
         let r = resolve_workspace(tmp.path()).unwrap();
         // A bare repo has no working tree, so no top level / nesting.
+        assert!(!r.is_git_repo);
         assert!(r.git_top_level.is_none());
         assert!(r.nested_under.is_none());
+    }
+
+    #[test]
+    fn nested_under_names_the_top_level_as_a_plain_path() {
+        let tmp = TempDir::new().unwrap();
+        git2::Repository::init(tmp.path()).unwrap();
+        let sub = tmp.path().join("a").join("b");
+        std::fs::create_dir_all(&sub).unwrap();
+
+        let top = resolve_workspace(&sub).unwrap().nested_under.unwrap();
+
+        assert!(!top.starts_with(r"\\?\"), "{top}");
+        assert_eq!(
+            Path::new(&top).canonicalize().unwrap(),
+            tmp.path().canonicalize().unwrap()
+        );
+    }
+
+    // libgit2 would resolve each of these targets to tell whether the folder
+    // is a repository. A host under `.invalid` cannot exist, should one ever
+    // be looked up again.
+    #[test]
+    fn what_a_repository_points_to_is_never_read() {
+        let tmp = TempDir::new().unwrap();
+        let worktree = tmp.path().join("worktree");
+        let inside = worktree.join("notes");
+        std::fs::create_dir_all(&inside).unwrap();
+        std::fs::write(
+            worktree.join(".git"),
+            "gitdir: //glyph-test-host.invalid/share/x.git\n",
+        )
+        .unwrap();
+        std::fs::write(
+            worktree.join("commondir"),
+            "//glyph-test-host.invalid/share/common\n",
+        )
+        .unwrap();
+
+        // The `.git` file marks the top level whatever it names.
+        let top = resolve_workspace(&worktree).unwrap();
+        assert!(top.is_git_repo);
+        assert!(top.nested_under.is_none());
+        let nested = resolve_workspace(&inside).unwrap();
+        assert!(nested.nested_under.is_some());
     }
 }

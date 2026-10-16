@@ -73,19 +73,46 @@ pub(crate) fn parse_files(value: &serde_json::Value, main: &str) -> Result<Vec<S
     }
 }
 
-/// Optional `permissions` array; when present it must be an array of strings.
+/// Optional `permissions` array; when present it must be an array of strings,
+/// and a `network:` entry must name a host the sandbox fence can judge.
 pub(crate) fn parse_permissions(value: &serde_json::Value) -> Result<Vec<String>, String> {
     match value.get("permissions") {
         None => Ok(Vec::new()),
         Some(serde_json::Value::Array(items)) => items
             .iter()
             .map(|v| {
-                v.as_str()
-                    .map(|s| s.to_string())
-                    .ok_or_else(|| "manifest \"permissions\" must be an array of strings".into())
+                let permission = v
+                    .as_str()
+                    .ok_or("manifest \"permissions\" must be an array of strings")?;
+                if let Some(host) = permission.strip_prefix("network:") {
+                    validate_network_host(host)?;
+                }
+                Ok(permission.to_string())
             })
             .collect(),
         Some(_) => Err("manifest \"permissions\" must be an array of strings".into()),
+    }
+}
+
+/// A `network:` host is lowercase labels of letters, digits and hyphens (an
+/// IPv4 literal included), with no empty label and no trailing dot. The
+/// webview's own hosts (`asset.localhost`, `ipc.localhost`, anything under
+/// `.localhost`) are refused outright: the fence never covers them, so a
+/// declaration naming one could only mislead the consent dialog.
+fn validate_network_host(host: &str) -> Result<(), String> {
+    let well_formed = !host.is_empty()
+        && host.split('.').all(|label| {
+            !label.is_empty()
+                && label
+                    .bytes()
+                    .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
+        });
+    if well_formed && !host.ends_with(".localhost") {
+        Ok(())
+    } else {
+        Err(format!(
+            "invalid manifest permission \"network:{host}\": name a lowercase host such as api.example.com"
+        ))
     }
 }
 
@@ -329,6 +356,41 @@ mod tests {
             parse_manifest(r#"{"id":"a.b","name":"n","version":"1.0.0","apiVersion":"^1.0.0"}"#)
                 .unwrap();
         assert!(info.permissions.is_empty());
+    }
+
+    #[test]
+    fn parse_manifest_judges_network_hosts() {
+        let with_host = |host: &str| {
+            format!(
+                r#"{{"id":"a.b","name":"n","version":"1.0.0","apiVersion":"^1.0.0","permissions":["network:{host}"]}}"#
+            )
+        };
+        for host in ["api.example.com", "localhost", "127.0.0.1", "my-host.lan"] {
+            assert!(parse_manifest(&with_host(host)).is_ok(), "{host}");
+        }
+        for host in [
+            "",
+            "example.com.",
+            ".example.com",
+            "example..com",
+            "Example.com",
+            "asset.localhost",
+            "ipc.localhost",
+            "x.y.localhost",
+            "example.com/path",
+            "example.com:443",
+            "[::1]",
+            "ex ample.com",
+        ] {
+            let err = parse_manifest(&with_host(host)).unwrap_err();
+            assert!(
+                err.contains("invalid manifest permission"),
+                "{host:?}: {err}"
+            );
+        }
+        // Other permissions keep their free form.
+        let other = r#"{"id":"a.b","name":"n","version":"1.0.0","apiVersion":"^1.0.0","permissions":["workspace:read","whatever"]}"#;
+        assert!(parse_manifest(other).is_ok());
     }
 
     #[test]

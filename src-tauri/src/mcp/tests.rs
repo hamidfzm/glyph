@@ -956,6 +956,19 @@ fn network_and_device_paths_are_never_looked_up() {
     assert!(asked.borrow().is_empty());
 }
 
+// `Path` finds no prefix in these, and Win32 opens a device for each.
+#[cfg(windows)]
+#[test]
+fn a_legacy_device_name_is_never_looked_up() {
+    let mut h = Harness::new("mcp_device_name");
+    let asked = answering(&mut h, Ok(()));
+    for place in ["COM3", "NUL", r"C:\notes\NUL"] {
+        let refusal = h.refused("list_tags", json!({ "vault": place }));
+        assert!(refusal.contains("never looked up"), "{refusal}");
+    }
+    assert!(asked.borrow().is_empty());
+}
+
 #[test]
 fn only_an_existing_folder_named_absolutely_is_put_to_the_user() {
     let mut h = Harness::new("mcp_offered");

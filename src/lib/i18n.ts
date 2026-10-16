@@ -1,7 +1,7 @@
 import i18next from "i18next";
 import resourcesToBackend from "i18next-resources-to-backend";
 import { initReactI18next } from "react-i18next";
-import { FALLBACK_LOCALE } from "@/lib/locales";
+import { FALLBACK_LOCALE, NAMESPACES } from "@/lib/locales";
 import enAi from "@/locales/en/ai.json";
 import enCommands from "@/locales/en/commands.json";
 import enCommon from "@/locales/en/common.json";
@@ -11,18 +11,6 @@ import enSettings from "@/locales/en/settings.json";
 import enSync from "@/locales/en/sync.json";
 import enWorkspace from "@/locales/en/workspace.json";
 import enWorkspaceSettings from "@/locales/en/workspaceSettings.json";
-
-export const NAMESPACES = [
-  "common",
-  "settings",
-  "commands",
-  "ai",
-  "workspaceSettings",
-  "sync",
-  "workspace",
-  "menu",
-  "plugins",
-] as const;
 
 // Every non-English locale JSON is code-split into its own chunk (Vite turns
 // each `import()` into a separate file) and fetched only when that locale is
@@ -67,7 +55,9 @@ i18n
     lng: FALLBACK_LOCALE,
     fallbackLng: FALLBACK_LOCALE,
     defaultNS: "common",
-    ns: NAMESPACES,
+    // A copy: i18next appends every namespace it later sees to the array it
+    // is given, and the list stays the app's own (see pluginNamespace.ts).
+    ns: [...NAMESPACES],
     // React already escapes interpolated values, so i18next must not double-escape.
     interpolation: { escapeValue: false },
     // We drive loading ourselves and want synchronous renders in tests.
