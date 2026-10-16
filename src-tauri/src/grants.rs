@@ -47,6 +47,8 @@ fn denied(path: &Path) -> String {
 /// tail: nothing shows where it leads, and the read or write that comes next
 /// would follow it there.
 fn canonicalize_lenient(path: &Path) -> Result<PathBuf, String> {
+    // Asked at every level: the fallback below looks each ancestor up in turn.
+    refuse_legacy_device(path)?;
     if let Ok(canonical) = path.canonicalize() {
         return Ok(canonical);
     }
@@ -78,6 +80,7 @@ pub(crate) fn is_symlink(path: &Path) -> bool {
 #[cfg(windows)]
 fn refuse_remote(grants: &Grants, path: &Path) -> Result<(), String> {
     use std::path::{Component, Prefix};
+    refuse_legacy_device(path)?;
     let Some(Component::Prefix(prefix)) = path.components().next() else {
         // Windows resolves these as a share or a device though `Path` finds no
         // prefix: `\??\` is the namespace holding both, and `\\host\\share`
@@ -115,6 +118,22 @@ fn refuse_remote(grants: &Grants, path: &Path) -> Result<(), String> {
     }
 }
 
+/// Refuse a legacy DOS device name (`NUL`, `COM3`, `x\NUL`), which Win32 opens
+/// as `\\.\<name>` though `Path` finds no prefix in it. Windows is asked how
+/// it would rewrite the path, which looks nothing up: the names that count
+/// changed with Windows 11.
+#[cfg(windows)]
+fn refuse_legacy_device(path: &Path) -> Result<(), String> {
+    use std::path::{Component, Prefix};
+    let rewritten = std::path::absolute(path).unwrap_or_default();
+    match rewritten.components().next() {
+        Some(Component::Prefix(prefix)) if matches!(prefix.kind(), Prefix::DeviceNS(_)) => {
+            Err(remote(path))
+        }
+        _ => Ok(()),
+    }
+}
+
 #[cfg(windows)]
 fn remote(path: &Path) -> String {
     format!(
@@ -126,6 +145,12 @@ fn remote(path: &Path) -> String {
 /// Only Windows resolves a path by connecting to the host it names.
 #[cfg(not(windows))]
 fn refuse_remote(_: &Grants, _: &Path) -> Result<(), String> {
+    Ok(())
+}
+
+/// Only Win32 rewrites a file name into a device.
+#[cfg(not(windows))]
+fn refuse_legacy_device(_: &Path) -> Result<(), String> {
     Ok(())
 }
 
@@ -261,8 +286,8 @@ impl GrantRegistry {
     }
 
     /// See [`refuse_remote`]: for a path a caller resolves itself.
-    pub fn refuse_remote(&self, path: &str) -> Result<(), String> {
-        refuse_remote(&*self.lock()?, Path::new(path))
+    pub fn refuse_remote(&self, path: impl AsRef<Path>) -> Result<(), String> {
+        refuse_remote(&*self.lock()?, path.as_ref())
     }
 
     /// Watching follows the read rule.
@@ -368,6 +393,18 @@ pub fn allow_asset_file<R: tauri::Runtime>(app: &tauri::AppHandle<R>, file: &Pat
     let _ = app.asset_protocol_scope().allow_file(file);
 }
 
+/// Spellings a command must refuse before it looks its path up. A host under
+/// `.invalid` cannot exist, should a refusal ever come late.
+#[cfg(all(test, windows))]
+pub(crate) const NEVER_LOOKED_UP: [&str; 6] = [
+    r"\\glyph-test-host.invalid\share\notes",
+    r"\\?\UNC\glyph-test-host.invalid\share\notes",
+    r"\??\UNC\glyph-test-host.invalid\share\notes",
+    r"\\glyph-test-host.invalid\\share\notes",
+    r"\\.\pipe\glyph",
+    "NUL",
+];
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -436,6 +473,66 @@ mod tests {
 
     fn as_str(path: &Path) -> String {
         path.to_string_lossy().to_string()
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_legacy_device_name_is_refused_before_it_resolves() {
+        let tmp = TempDir::new().unwrap();
+        let grants = GrantRegistry::default();
+        grants.grant_workspace(tmp.path()).unwrap();
+        // A granted folder does not make the name in it a file.
+        let in_workspace = as_str(&tmp.path().join("NUL"));
+        for path in [
+            "NUL",
+            "nul",
+            "CON",
+            "COM3",
+            "AUX",
+            "PRN",
+            "LPT1",
+            "CONIN$",
+            "CONOUT$",
+            "NUL:",
+            r"x\NUL",
+            r"\NUL",
+            "C:NUL",
+            in_workspace.as_str(),
+        ] {
+            for refusal in [
+                grants.ensure_readable(path),
+                grants.ensure_writable(path),
+                grants.ensure_workspace(path),
+                grants.ensure_document_asset(path),
+            ] {
+                let refusal = refusal.unwrap_err();
+                assert!(refusal.contains("never looked up"), "{path}: {refusal}");
+            }
+        }
+
+        // Under a folder named like a device, the fallback for a missing file
+        // would look that folder up.
+        let under_device = as_str(&tmp.path().join("NUL").join("x.md"));
+        for path in [r"COM3\x.md", r"x\NUL\y.md", under_device.as_str()] {
+            for refusal in [grants.ensure_readable(path), grants.ensure_writable(path)] {
+                let refusal = refusal.unwrap_err();
+                assert!(refusal.contains("never looked up"), "{path}: {refusal}");
+            }
+        }
+
+        // A name that only starts like a device's is a file, and so is a
+        // device's own name behind the verbatim prefix, which Win32 leaves alone.
+        for path in [
+            "CONFIG",
+            "nullable.md",
+            r"notes\COMMON.md",
+            r"\\?\C:\notes\NUL",
+        ] {
+            assert!(grants.refuse_remote(path).is_ok(), "{path}");
+        }
+        // Windows rewrites no empty path: the lookup fails it, as before.
+        let empty = grants.ensure_readable("").unwrap_err();
+        assert!(empty.starts_with("path is outside"), "{empty}");
     }
 
     #[test]
