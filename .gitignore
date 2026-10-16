@@ -16,6 +16,8 @@ playwright-report/
 
 # Claude Code local settings (keep .claude/ committed, ignore local overrides)
 .claude/settings.local.json
+# One git worktree per branch, per .claude/rules/worktrees.md; never committed.
+.claude/worktrees/
 
 # Platform-specific Tauri ACL schemas and manifests (regenerated locally
 # per-target by `tauri dev` / `tauri build` / `tauri android dev/build`;
