@@ -40,7 +40,7 @@ export function useDocumentSave({
   onWorkspaceNoticeRef.current = onWorkspaceNotice;
 
   // Save a virtual buffer to a chosen path (Save As): on success it becomes an
-  // ordinary file tab; a cancelled dialog returns false so close can discard.
+  // ordinary file tab; a cancelled or failed dialog returns false so close can discard.
   const saveVirtualAs = useCallback(
     async (id: string, title: string): Promise<boolean> => {
       const pick = (dir?: string) =>
@@ -51,21 +51,38 @@ export function useDocumentSave({
           dir,
         );
       // Default into the open workspace so a new note lands beside its siblings.
-      const startDir = getWorkspaceRoot() ?? undefined;
-      let target: string | null;
+      const pickTarget = async () => {
+        const startDir = getWorkspaceRoot();
+        if (!startDir) return pick();
+        try {
+          return await pick(startDir);
+        } catch (err) {
+          // The backend refuses a root it no longer resolves (renamed, or its
+          // drive is gone), and the note must stay saveable: ask again, anywhere.
+          console.warn("Save As failed, asking again with no starting folder:", err);
+          return pick();
+        }
+      };
+      let target: string | null = null;
+      let pickFailed = false;
       try {
-        target = await pick(startDir);
+        target = await pickTarget();
       } catch (err) {
-        // The backend refuses a root it no longer resolves (renamed, or its
-        // drive is gone), and the note must stay saveable: ask again, anywhere.
-        if (!startDir) throw err;
-        console.warn("Save As failed, asking again with no starting folder:", err);
-        target = await pick();
+        // The backend can also refuse the chosen name, one the grants will not write.
+        console.error("Save As failed:", err);
+        pickFailed = true;
       }
       // The dialog does not block the editor, so the buffer is read only now.
       // A tab closed while it was open has nothing left to save.
       const latest = stateRef.current.tabs.find((tab) => tab.id === id);
       if (latest?.kind !== "file") return true;
+      if (pickFailed) {
+        onWorkspaceNoticeRef.current(
+          { key: "notice.saveFailed", values: { name: title } },
+          { persistent: true },
+        );
+        return false;
+      }
       if (!target) return false;
       // newDocument seeds the edit buffer with "" and nothing resets it to null.
       /* v8 ignore start -- unreachable: a tab that began virtual always has an edit buffer */
@@ -133,7 +150,7 @@ export function useDocumentSave({
   // dirty flag is cleared only when the written revision is still current, so a
   // slow write completing after a newer edit never strands that edit. Resolves
   // true when the document is safely on disk (or there was nothing to save),
-  // false when the write failed — the close coordinator reads this directly
+  // false when the write or Save As failed. The close coordinator reads this directly
   // rather than re-checking dirty state, which may not have re-rendered yet.
   const saveDocument = useCallback(
     (id: string): Promise<boolean> => {
