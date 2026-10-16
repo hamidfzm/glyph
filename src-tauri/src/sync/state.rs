@@ -12,19 +12,34 @@ use std::sync::Mutex;
 use super::backend::SyncBackend;
 use super::config::WorkspaceSyncConfig;
 use super::error::SyncError;
-use super::git::GitBackend;
+use super::git::{https_authority, BoundToken, GitBackend};
 
 /// Keychain account for a workspace's sync token.
 fn keychain_account(workspace_path: &str) -> String {
     format!("sync-token-{workspace_path}")
 }
 
+/// Keychain account for the host a workspace's token is bound to.
+fn keychain_host_account(workspace_path: &str) -> String {
+    format!("sync-token-host-{workspace_path}")
+}
+
+/// The authority of the workspace's configured `https://` remote, or `None`
+/// without a config or with a remote of another scheme.
+fn configured_host(workspace_path: &str) -> Option<String> {
+    crate::workspace::load_sync_config(workspace_path)
+        .ok()
+        .flatten()
+        .and_then(|config| https_authority(&config.remote_url))
+}
+
 #[derive(Default)]
 pub struct SyncState {
-    /// Per-workspace HTTPS PAT / token. The keychain is the durable store;
-    /// this map serves reads and keeps tokens usable when the keychain is
-    /// locked or missing (session-only in that case).
-    tokens: Mutex<HashMap<String, String>>,
+    /// Per-workspace HTTPS PAT / token, each bound to the host it was
+    /// entered for. The keychain is the durable store; this map serves reads
+    /// and keeps tokens usable when the keychain is locked or missing
+    /// (session-only in that case).
+    tokens: Mutex<HashMap<String, BoundToken>>,
 }
 
 impl SyncState {
@@ -32,26 +47,67 @@ impl SyncState {
         Self::default()
     }
 
+    /// Store a token, bound to the remote the workspace is configured with at
+    /// this moment: the one the user entered it for. The binding never moves
+    /// afterwards, so a remote the renderer points `origin` at later is not
+    /// handed the token. A token entered before any remote is configured
+    /// binds to the first `https://` remote it is used against.
     pub fn set_token(&self, workspace_path: String, token: String) {
+        let host = configured_host(&workspace_path).unwrap_or_default();
         // Keychain write is best-effort: a locked keyring degrades to the
         // pre-existing session-only behavior instead of failing the command.
         if let Err(e) = crate::secrets::set(&keychain_account(&workspace_path), &token) {
             eprintln!("sync: failed to store the token in the keychain: {e}");
         }
-        self.tokens.lock().unwrap().insert(workspace_path, token);
-    }
-
-    pub fn get_token(&self, workspace_path: &str) -> Option<String> {
-        if let Some(token) = self.tokens.lock().unwrap().get(workspace_path).cloned() {
-            return Some(token);
+        if let Err(e) = crate::secrets::set(&keychain_host_account(&workspace_path), &host) {
+            eprintln!("sync: failed to store the token's host in the keychain: {e}");
         }
-        // Miss: hydrate from the keychain (first lookup after an app restart).
-        let token = crate::secrets::get(&keychain_account(workspace_path)).ok()??;
         self.tokens
             .lock()
             .unwrap()
-            .insert(workspace_path.to_string(), token.clone());
-        Some(token)
+            .insert(workspace_path, BoundToken { token, host });
+    }
+
+    pub fn get_token(&self, workspace_path: &str) -> Option<BoundToken> {
+        let cached = self.tokens.lock().unwrap().get(workspace_path).cloned();
+        let bound = match cached {
+            Some(bound) => bound,
+            None => {
+                // Miss: hydrate from the keychain (first lookup after an app
+                // restart). A token stored before hosts were recorded has no
+                // host entry and binds below.
+                let token = crate::secrets::get(&keychain_account(workspace_path)).ok()??;
+                let host = crate::secrets::get(&keychain_host_account(workspace_path))
+                    .ok()
+                    .flatten()
+                    .unwrap_or_default();
+                BoundToken { token, host }
+            }
+        };
+        let bound = self.bind_unbound(workspace_path, bound);
+        self.tokens
+            .lock()
+            .unwrap()
+            .insert(workspace_path.to_string(), bound.clone());
+        Some(bound)
+    }
+
+    /// Bind a token that has no host yet to the configured remote, and record
+    /// that so the binding survives a restart. A bound token is returned as is.
+    fn bind_unbound(&self, workspace_path: &str, bound: BoundToken) -> BoundToken {
+        if !bound.host.is_empty() {
+            return bound;
+        }
+        let Some(host) = configured_host(workspace_path) else {
+            return bound;
+        };
+        if let Err(e) = crate::secrets::set(&keychain_host_account(workspace_path), &host) {
+            eprintln!("sync: failed to store the token's host in the keychain: {e}");
+        }
+        BoundToken {
+            token: bound.token,
+            host,
+        }
     }
 
     /// Whether a token is stored for this workspace, without returning it and
@@ -68,6 +124,9 @@ impl SyncState {
     pub fn clear_token(&self, workspace_path: &str) {
         if let Err(e) = crate::secrets::set(&keychain_account(workspace_path), "") {
             eprintln!("sync: failed to clear the token from the keychain: {e}");
+        }
+        if let Err(e) = crate::secrets::set(&keychain_host_account(workspace_path), "") {
+            eprintln!("sync: failed to clear the token's host from the keychain: {e}");
         }
         self.tokens.lock().unwrap().remove(workspace_path);
     }
@@ -88,7 +147,7 @@ impl SyncState {
 /// Dispatch on `BackendKind` to produce a concrete backend. Lives here
 /// (rather than on a trait) so adding new backends is a one-arm change
 /// and the compiler points us at this site when the enum grows.
-fn build_backend(config: WorkspaceSyncConfig, token: Option<String>) -> Box<dyn SyncBackend> {
+fn build_backend(config: WorkspaceSyncConfig, token: Option<BoundToken>) -> Box<dyn SyncBackend> {
     use super::backend::BackendKind;
     match config.backend {
         BackendKind::Git => {
@@ -107,16 +166,24 @@ mod tests {
     use crate::sync::backend::{BackendKind, ConflictPolicy};
     use tempfile::TempDir;
 
-    fn write_config(workspace: &str) {
-        crate::workspace::store_sync_config(&WorkspaceSyncConfig {
+    fn config_for(workspace: &str) -> WorkspaceSyncConfig {
+        WorkspaceSyncConfig {
             workspace_path: workspace.to_string(),
             backend: BackendKind::Git,
             remote_url: "https://example.com/n.git".to_string(),
             remote_branch: "main".to_string(),
             conflict_policy: ConflictPolicy::Prompt,
             author: None,
-        })
-        .unwrap();
+        }
+    }
+
+    fn write_config(workspace: &str) {
+        crate::workspace::store_sync_config(&config_for(workspace)).unwrap();
+    }
+
+    /// The token alone, for tests about storage rather than binding.
+    fn token_of(state: &SyncState, workspace: &str) -> Option<String> {
+        state.get_token(workspace).map(|bound| bound.token)
     }
 
     #[test]
@@ -125,11 +192,98 @@ mod tests {
         let state = SyncState::new();
         state.set_token("/a".into(), "token-a".into());
         state.set_token("/b".into(), "token-b".into());
-        assert_eq!(state.get_token("/a").as_deref(), Some("token-a"));
-        assert_eq!(state.get_token("/b").as_deref(), Some("token-b"));
+        assert_eq!(token_of(&state, "/a").as_deref(), Some("token-a"));
+        assert_eq!(token_of(&state, "/b").as_deref(), Some("token-b"));
         state.clear_token("/a");
         assert!(state.get_token("/a").is_none());
-        assert_eq!(state.get_token("/b").as_deref(), Some("token-b"));
+        assert_eq!(token_of(&state, "/b").as_deref(), Some("token-b"));
+    }
+
+    #[test]
+    fn a_token_is_bound_to_the_remote_configured_when_it_is_entered() {
+        let _guard = crate::secrets::test_store::install();
+        let tmp = TempDir::new().unwrap();
+        let workspace = tmp.path().to_string_lossy().to_string();
+        write_config(&workspace);
+        let state = SyncState::new();
+        state.set_token(workspace.clone(), "tok".into());
+
+        let bound = state.get_token(&workspace).unwrap();
+        assert_eq!(bound.host, "example.com");
+
+        // Pointing the config elsewhere afterwards does not move the binding,
+        // in this session or after a restart.
+        crate::workspace::store_sync_config(&WorkspaceSyncConfig {
+            remote_url: "https://attacker.example/n.git".to_string(),
+            ..config_for(&workspace)
+        })
+        .unwrap();
+        assert_eq!(state.get_token(&workspace).unwrap().host, "example.com");
+        assert_eq!(
+            SyncState::new().get_token(&workspace).unwrap().host,
+            "example.com"
+        );
+    }
+
+    #[test]
+    fn a_token_entered_before_a_remote_binds_to_the_first_one_it_meets() {
+        let _guard = crate::secrets::test_store::install();
+        let tmp = TempDir::new().unwrap();
+        let workspace = tmp.path().to_string_lossy().to_string();
+        let state = SyncState::new();
+        state.set_token(workspace.clone(), "tok".into());
+        // No remote yet: the token is held but offered to no host.
+        assert_eq!(state.get_token(&workspace).unwrap().host, "");
+
+        write_config(&workspace);
+        assert_eq!(state.get_token(&workspace).unwrap().host, "example.com");
+        // The binding is recorded, so a restart does not read the config again.
+        crate::workspace::store_sync_config(&WorkspaceSyncConfig {
+            remote_url: "https://attacker.example/n.git".to_string(),
+            ..config_for(&workspace)
+        })
+        .unwrap();
+        assert_eq!(
+            SyncState::new().get_token(&workspace).unwrap().host,
+            "example.com"
+        );
+    }
+
+    #[test]
+    fn a_token_stored_before_hosts_were_recorded_binds_on_first_use() {
+        let _guard = crate::secrets::test_store::install();
+        let tmp = TempDir::new().unwrap();
+        let workspace = tmp.path().to_string_lossy().to_string();
+        write_config(&workspace);
+        // A keychain entry from a build that recorded no host.
+        crate::secrets::set(&keychain_account(&workspace), "legacy").unwrap();
+
+        let bound = SyncState::new().get_token(&workspace).unwrap();
+        assert_eq!(
+            (bound.token.as_str(), bound.host.as_str()),
+            ("legacy", "example.com")
+        );
+        assert_eq!(
+            crate::secrets::get(&keychain_host_account(&workspace))
+                .unwrap()
+                .as_deref(),
+            Some("example.com")
+        );
+    }
+
+    #[test]
+    fn clearing_a_token_forgets_its_host() {
+        let _guard = crate::secrets::test_store::install();
+        let tmp = TempDir::new().unwrap();
+        let workspace = tmp.path().to_string_lossy().to_string();
+        write_config(&workspace);
+        let state = SyncState::new();
+        state.set_token(workspace.clone(), "tok".into());
+        state.clear_token(&workspace);
+        assert!(crate::secrets::get(&keychain_host_account(&workspace))
+            .unwrap()
+            .is_none());
+        assert!(SyncState::new().get_token(&workspace).is_none());
     }
 
     #[test]
@@ -186,12 +340,12 @@ mod tests {
         // so the first lookup hydrates from the keychain.
         let fresh = SyncState::new();
         assert_eq!(
-            fresh.get_token("/restart").as_deref(),
+            token_of(&fresh, "/restart").as_deref(),
             Some("tok-persisted")
         );
         // And the hydrated copy serves subsequent reads from memory.
         assert_eq!(
-            fresh.get_token("/restart").as_deref(),
+            token_of(&fresh, "/restart").as_deref(),
             Some("tok-persisted")
         );
 
@@ -209,7 +363,7 @@ mod tests {
         let state = SyncState::new();
         state.set_token("/locked".into(), "tok-memory".into());
         // The write failed but the token still works for this session.
-        assert_eq!(state.get_token("/locked").as_deref(), Some("tok-memory"));
+        assert_eq!(token_of(&state, "/locked").as_deref(), Some("tok-memory"));
         // A restart loses it, and the keychain read error maps to a miss.
         assert!(SyncState::new().get_token("/locked").is_none());
 

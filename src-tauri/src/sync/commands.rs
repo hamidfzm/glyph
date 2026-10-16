@@ -450,7 +450,10 @@ mod tests {
         .await
         .unwrap();
         assert_eq!(
-            ws.sync_state().get_token(&ws.workspace_path).as_deref(),
+            ws.sync_state()
+                .get_token(&ws.workspace_path)
+                .map(|t| t.token)
+                .as_deref(),
             Some("tok")
         );
         assert!(

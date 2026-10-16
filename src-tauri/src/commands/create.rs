@@ -37,6 +37,17 @@ fn ensure_dir_within_root(
     if !parent.starts_with(&root) {
         return Err("Refusing to write outside the workspace".to_string());
     }
+    refuse_git_dir(&parent, &root)?;
+    Ok(())
+}
+
+/// The file tree never reaches into the workspace's `.git` directory: a
+/// hook planted there runs at the user's next commit (see
+/// `GrantRegistry::ensure_writable`).
+fn refuse_git_dir(canonical: &Path, root: &Path) -> Result<(), String> {
+    if crate::grants::names_git_dir(canonical.strip_prefix(root).unwrap_or(canonical)) {
+        return Err("Refusing to touch the workspace's .git directory".to_string());
+    }
     Ok(())
 }
 
@@ -59,6 +70,7 @@ fn ensure_entry_inside_root(
     if canonical == root || !canonical.starts_with(&root) {
         return Err("Refusing to write outside the workspace".to_string());
     }
+    refuse_git_dir(&canonical, &root)?;
     Ok(canonical)
 }
 
@@ -425,6 +437,32 @@ mod tests {
         // The root itself is not a deletable entry either.
         assert!(delete_path(root.clone(), root).is_err());
         assert!(ws.exists());
+        let _ = fs::remove_dir_all(&outer);
+    }
+
+    #[test]
+    fn mutating_commands_never_reach_into_the_git_directory() {
+        let outer = unique_tmp("git_dir");
+        let ws = outer.join("ws");
+        let hooks = ws.join(".git").join("hooks");
+        fs::create_dir_all(&hooks).unwrap();
+        fs::write(ws.join("note.md"), "x").unwrap();
+        fs::write(hooks.join("pre-commit"), "#!/bin/sh\n").unwrap();
+        let root = ws.to_string_lossy().to_string();
+        let s = |p: &Path| p.to_string_lossy().to_string();
+
+        // Into it: a note moved under hooks/ runs at the user's next commit.
+        let err = move_path(s(&ws.join("note.md")), s(&hooks), root.clone()).unwrap_err();
+        assert!(err.contains(".git"), "{err}");
+        assert!(ws.join("note.md").exists());
+        assert!(create_note(s(&hooks), root.clone()).is_err());
+        assert!(create_folder(s(&ws.join(".git")), root.clone()).is_err());
+        // Within it: a hook renamed or copied is still a hook.
+        let hook = s(&hooks.join("pre-commit"));
+        assert!(rename_path(hook.clone(), "post-commit".into(), root.clone()).is_err());
+        assert!(duplicate_path(hook.clone(), root.clone()).is_err());
+        assert!(delete_path(hook, root).is_err());
+        assert!(hooks.join("pre-commit").exists());
         let _ = fs::remove_dir_all(&outer);
     }
 

@@ -4,7 +4,7 @@ use git2::{FetchOptions, RemoteCallbacks, Repository};
 
 use crate::sync::SyncError;
 
-use super::{make_credentials_callback, map_remote_error, ORIGIN};
+use super::{https_authority, make_credentials_callback, map_remote_error, BoundToken, ORIGIN};
 
 /// Initialise a new git repository at `path` with the default branch
 /// set to the supplied name. Convenience wrapper around `git2::Repository::init_opts`.
@@ -20,10 +20,17 @@ pub fn init_repo(path: &Path, default_branch: &str) -> Result<PathBuf, SyncError
 /// password with the `x-access-token` username (the GitHub PAT shape,
 /// also accepted by GitLab / Codeberg). Without a token, we fall back
 /// to the SSH agent for `git@` URLs and unauthenticated HTTPS for public
-/// remotes.
+/// remotes. The token is bound to `url`'s own host, so a redirect elsewhere
+/// does not carry it.
 pub fn clone_repo(url: &str, path: &Path, token: Option<&str>) -> Result<PathBuf, SyncError> {
+    let bound = token.and_then(|token| {
+        https_authority(url).map(|host| BoundToken {
+            token: token.to_string(),
+            host,
+        })
+    });
     let mut callbacks = RemoteCallbacks::new();
-    callbacks.credentials(make_credentials_callback(token.map(|t| t.to_string())));
+    callbacks.credentials(make_credentials_callback(bound));
     let mut fo = FetchOptions::new();
     fo.remote_callbacks(callbacks);
     let mut builder = git2::build::RepoBuilder::new();

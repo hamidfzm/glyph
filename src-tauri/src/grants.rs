@@ -34,6 +34,14 @@ struct Grants {
     pending_plugin_dir: Option<PathBuf>,
 }
 
+/// Whether `path` names a `.git` directory or anything below one. Judged by
+/// name, case-insensitively, since git itself finds its directory that way
+/// on a volume that ignores case.
+pub fn names_git_dir(path: &Path) -> bool {
+    path.components()
+        .any(|component| component.as_os_str().eq_ignore_ascii_case(".git"))
+}
+
 /// Denials echo only the requested path, never the grant list.
 fn denied(path: &Path) -> String {
     format!(
@@ -269,20 +277,32 @@ impl GrantRegistry {
         }
     }
 
+    /// A recursive grant never covers a `.git` directory below its root: git
+    /// reads hooks and the remote URL from there, so a write into it is code
+    /// the user's next commit runs, or a remote the sync token is sent to.
     pub fn ensure_writable(&self, path: &str) -> Result<PathBuf, String> {
         let requested = Path::new(path);
         refuse_remote(&*self.lock()?, requested)?;
         let canonical = canonicalize_lenient(requested)?;
         let grants = self.lock()?;
-        if grants.files.contains(&canonical)
-            || grants.export_files.contains(&canonical)
-            || grants.workspaces.iter().any(|w| canonical.starts_with(w))
-            || grants.export_dirs.iter().any(|d| canonical.starts_with(d))
-        {
-            Ok(canonical)
-        } else {
-            Err(denied(requested))
+        if grants.files.contains(&canonical) || grants.export_files.contains(&canonical) {
+            return Ok(canonical);
         }
+        let root = grants
+            .workspaces
+            .iter()
+            .chain(grants.export_dirs.iter())
+            .find(|root| canonical.starts_with(root));
+        let Some(root) = root else {
+            return Err(denied(requested));
+        };
+        if names_git_dir(canonical.strip_prefix(root).unwrap_or(&canonical)) {
+            return Err(format!(
+                "path is inside a .git directory, which is never written: {}",
+                requested.display()
+            ));
+        }
+        Ok(canonical)
     }
 
     /// See [`refuse_remote`]: for a path a caller resolves itself.
@@ -573,6 +593,48 @@ mod tests {
         assert!(grants.ensure_workspace(&as_str(tmp.path())).is_ok());
         // A path nested inside is not the workspace root itself.
         assert!(grants.ensure_workspace(&as_str(&nested)).is_err());
+    }
+
+    #[test]
+    fn a_git_directory_inside_a_grant_is_never_writable() {
+        let tmp = TempDir::new().unwrap();
+        let ws = tmp.path().join("ws");
+        let hooks = ws.join(".git").join("hooks");
+        fs::create_dir_all(&hooks).unwrap();
+        let hook = hooks.join("pre-commit");
+        fs::write(&hook, "#!/bin/sh\n").unwrap();
+        let config = ws.join(".git").join("config");
+        fs::write(&config, "").unwrap();
+        let note = ws.join("note.md");
+        fs::write(&note, "x").unwrap();
+
+        let grants = GrantRegistry::default();
+        grants.grant_workspace(&ws).unwrap();
+
+        assert!(grants.ensure_writable(&as_str(&note)).is_ok());
+        let new_hook = hooks.join("post-commit");
+        let other_case = ws.join(".GIT").join("config");
+        for path in [&hook, &config, &new_hook, &other_case] {
+            let err = grants.ensure_writable(&as_str(path)).unwrap_err();
+            assert!(
+                err.starts_with("path is inside a .git directory"),
+                "{}: {err}",
+                path.display()
+            );
+        }
+        // Reading is as it was: the folder was readable before.
+        assert!(grants.ensure_readable(&as_str(&config)).is_ok());
+
+        // An export folder is held to the same rule.
+        let out = tmp.path().join("out");
+        fs::create_dir_all(out.join(".git")).unwrap();
+        grants.grant_export_dir(&out).unwrap();
+        assert!(grants
+            .ensure_writable(&as_str(&out.join("index.html")))
+            .is_ok());
+        assert!(grants
+            .ensure_writable(&as_str(&out.join(".git").join("config")))
+            .is_err());
     }
 
     #[test]
