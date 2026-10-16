@@ -54,9 +54,14 @@ fn is_sha256_hex(s: &str) -> bool {
     s.len() == 64 && s.bytes().all(|b| b.is_ascii_hexdigit())
 }
 
-/// The registry entry for `id`. One malformed entry does not fail the others:
-/// entries are matched by id first and read in full only then.
-pub(crate) fn find_entry(index_json: &str, id: &str) -> Result<RegistryEntry, String> {
+/// The registry entry for `id`, its package on a host `allows`. One malformed
+/// entry does not fail the others: entries are matched by id first and read
+/// in full only then.
+pub(crate) fn find_entry(
+    index_json: &str,
+    id: &str,
+    allows: fn(&str) -> bool,
+) -> Result<RegistryEntry, String> {
     let index: RegistryIndex = serde_json::from_str(index_json)
         .map_err(|e| format!("the plugin registry is not valid JSON: {e}"))?;
     let entry = index
@@ -71,7 +76,7 @@ pub(crate) fn find_entry(index_json: &str, id: &str) -> Result<RegistryEntry, St
             "the registry entry for \"{id}\" has no valid sha256; refusing to install"
         ));
     }
-    if !is_marketplace_url(&entry.package_url) {
+    if !allows(&entry.package_url) {
         return Err(format!(
             "the registry entry for \"{id}\" names a package outside the marketplace hosts"
         ));
@@ -79,7 +84,7 @@ pub(crate) fn find_entry(index_json: &str, id: &str) -> Result<RegistryEntry, St
     Ok(entry)
 }
 
-fn sha256_hex(bytes: &[u8]) -> String {
+pub(super) fn sha256_hex(bytes: &[u8]) -> String {
     Sha256::digest(bytes)
         .iter()
         .map(|b| format!("{b:02x}"))
@@ -148,22 +153,22 @@ mod tests {
     fn find_entry_reads_the_matching_entry_and_skips_malformed_others() {
         let good = entry_json("com.x.pkg", &"a".repeat(64));
         let index = index_with(&format!(r#"{{"id":"com.x.broken"}},{{"id":5}},{good}"#));
-        let entry = find_entry(&index, "com.x.pkg").unwrap();
+        let entry = find_entry(&index, "com.x.pkg", is_marketplace_url).unwrap();
         assert_eq!(
             entry.package_url,
             "https://github.com/glyph-md/com.x.pkg/releases/download/v1/pkg.zip"
         );
         assert_eq!(entry.sha256, "a".repeat(64));
-        assert!(find_entry(&index, "com.x.broken")
+        assert!(find_entry(&index, "com.x.broken", is_marketplace_url)
             .unwrap_err()
             .contains("malformed"));
-        assert!(find_entry(&index, "com.x.absent")
+        assert!(find_entry(&index, "com.x.absent", is_marketplace_url)
             .unwrap_err()
             .contains("not in the registry"));
-        assert!(find_entry("nope", "com.x.pkg")
+        assert!(find_entry("nope", "com.x.pkg", is_marketplace_url)
             .unwrap_err()
             .contains("not valid JSON"));
-        assert!(find_entry("{}", "com.x.pkg")
+        assert!(find_entry("{}", "com.x.pkg", is_marketplace_url)
             .unwrap_err()
             .contains("not in the registry"));
     }
@@ -173,7 +178,7 @@ mod tests {
         for sha in ["", "abc", &"g".repeat(64), &"a".repeat(63)] {
             let index = index_with(&entry_json("com.x.pkg", sha));
             assert!(
-                find_entry(&index, "com.x.pkg")
+                find_entry(&index, "com.x.pkg", is_marketplace_url)
                     .unwrap_err()
                     .contains("sha256"),
                 "{sha:?}"
@@ -191,7 +196,7 @@ mod tests {
                 url,
             ));
             assert!(
-                find_entry(&index, "com.x.pkg")
+                find_entry(&index, "com.x.pkg", is_marketplace_url)
                     .unwrap_err()
                     .contains("marketplace hosts"),
                 "{url}"

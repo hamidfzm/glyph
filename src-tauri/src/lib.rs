@@ -181,6 +181,7 @@ fn manage_state<R: tauri::Runtime>(builder: tauri::Builder<R>) -> tauri::Builder
         .manage(commands::CliExport(Mutex::new(None)))
         .manage(windows::WindowRegistry::new())
         .manage(grants::GrantRegistry::default())
+        .manage(commands::plugins::Marketplace::default())
         .manage(vault::VaultStore::default())
         .manage(commands::default_app::DefaultAppHost(Box::new(
             commands::default_app::ProcessHost,
