@@ -1,5 +1,5 @@
 # Commit-msg gate: reject AI attribution in the message and an agent author or
-# committer identity. The pre-push hook and the "AI attribution" PR check run
-# the same script over every commit; see scripts/check-ai-attribution.sh.
+# committer identity. The pre-push hook and CI run the same script over every
+# commit; see scripts/check-ai-attribution.sh.
 
 sh "$(dirname "$0")/../scripts/check-ai-attribution.sh" message "$1"

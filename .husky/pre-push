@@ -2,8 +2,8 @@
 #
 # 1. AI attribution: every commit this push sends that the remote does not
 #    already have goes through scripts/check-ai-attribution.sh, the same check
-#    the commit-msg hook and the "AI attribution" PR check run. This catches
-#    commits made where the commit-msg hook never ran.
+#    the commit-msg hook and CI run. This catches commits made where the
+#    commit-msg hook never ran.
 #
 # 2. Branch naming (CONTRIBUTING.md, .claude/rules/worktrees.md). Every
 #    short-lived branch is <type>/<slug>; anything else (including

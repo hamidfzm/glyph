@@ -1,6 +1,7 @@
 #!/bin/sh
-# AI-attribution gate, shared by the commit-msg and pre-push hooks and the
-# "AI attribution" PR check, so the local and CI verdicts never disagree.
+# AI-attribution gate, shared by the commit-msg and pre-push hooks and CI (the
+# Smoke workflow's Release bump job), so the local and CI verdicts never
+# disagree.
 #
 # Glyph credits the humans who ship a change. A commit must not be authored or
 # committed under an agent's identity, and a commit message or PR description
