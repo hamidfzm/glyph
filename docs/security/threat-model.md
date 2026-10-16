@@ -32,7 +32,12 @@ target wherever the link points; or the link leads to a file and the path
 ends in a separator, so a read or a write would reach that file. A cloned or
 synced workspace can ship either. On Windows a name with a `:` in it is
 refused as well, since `name:stream` opens a stream of whatever `name` leads
-to.
+to. So is a legacy DOS device name (`NUL`, `COM3`, `x\NUL`), before anything
+is looked up: Win32 opens the device for it though the path carries no device
+prefix. The same goes for a folder of that name above a file that does not
+exist yet, which the fallback would otherwise look up. Which names count
+changed with Windows 11, so the registry keeps no list of them and asks
+Windows how it would rewrite the path, which touches nothing.
 
 | Grant | Scope | Rights |
 | ----- | ----- | ------ |
@@ -126,15 +131,18 @@ looked up (see "Network paths" below).
 | `read_file`, `check_path_exists`, `read_directory`, `list_markdown_files` | readable |
 | `allow_document_asset` | an existing image, audio, or video file, judged after symlinks resolve, inside the folder of an opened loose file; mirrored into the asset scope only |
 | `vault_snapshot`, `vault_refresh`, `vault_backlinks`, `vault_resolve`, `vault_query`, `vault_paths_with_tag` | granted workspace, not merely readable: the index is per workspace, and a readable check would also accept every directory inside one, letting a caller cache an index per subdirectory. The second path argument is answered from the index in memory, never read from disk, so an ungranted one returns nothing rather than content |
+| `vault_forget` | none, because nothing is looked up: the path is compared with the roots the store holds, as their indexes were built with them. It hands nothing back and only drops an index the process already built, so the worst a renderer can do with it is make the next snapshot rebuild from disk. A closing window releases its index the same way, from the paths it reported, and a workspace whose folder is gone is still forgotten |
 | `write_file`, `write_binary_file`, `create_dir_all` | writable. A recursive grant never covers a `.git` directory below its root: git reads its hooks and the `origin` URL from there, so a write into it is code the user's next commit runs, or a remote the sync token would be sent to. The name is judged without regard to case, as git finds the directory on a volume that ignores case |
 | `copy_file` | source readable and destination writable |
 | `prune_export_dir` | the output directory must be writable, and each entry read back from its manifest must be plain path segments whose parent still canonicalizes inside that directory (so a hand-edited manifest cannot delete outside the export). The manifest is neither read nor replaced when it, or the `.glyph` folder holding it, is a link: the output directory is checked, but a link below it leads anywhere. A manifest that cannot be read or parsed is left as it is and nothing is pruned. A new one is written to a staging file of its own beside it, opened only if nothing holds that name, and moved over the old one in one step. The list of files the export failed to replace, like the list of files it wrote, can only spare a manifest entry, never name something else to remove. An entry that differs from a listed name only in case, Unicode normalization form or separators is opened beside that name to see whether the two are one file (the volume decides, not the fold); both paths are confined as above, and nothing but that yes or no comes of it. The reason handed back names the first entry that could not be removed, quoted and escaped, because that name comes from the manifest and ends up in the app's notice and on stderr |
 | `pick_export_dir` | `root` must be a granted workspace, checked before the dialog opens. It only decides whether the folder the user then picks is refused for resolving inside that workspace; the grant is for the picked folder alone, so naming another root gains a renderer nothing it could not already write |
 | `watch_file`, `watch_directory` | readable (unwatch stays open; it only drops a watcher) |
-| `create_note`, `create_canvas`, `create_folder` | `root` must be a granted workspace and the target directory canonicalizes inside it. The entry takes the first default name nothing holds, and a link holds its name even when its target is missing, so creating never writes through one |
-| `rename_path`, `duplicate_path`, `move_path`, `delete_path` | `root` must be a granted workspace and the entry itself canonicalizes strictly inside it (a trailing `..`, the root itself, or a symlink resolving outside is refused; `duplicate_path` refuses a folder containing a symlink rather than copying its target). `rename_path` and `move_path` also rewrite links in the workspace's own indexed notes and canvases, each write passing `ensure_writable`; a link or canvas card target that resolves outside the workspace is never rewritten or probed on disk, a file changed since the plan read it is left as it is, and `dryRun` reads without writing. The name a copy, a rename, or a move lands on is picked the way a new entry's is, so it is never one a link holds. Neither the entry nor its destination may sit inside the workspace's `.git` directory |
+| `create_note`, `create_canvas`, `create_folder` | `root` must be a granted workspace and the target directory canonicalizes inside it; a network or device path is refused before that lookup. The entry takes the first default name nothing holds, and a link holds its name even when its target is missing, so creating never writes through one |
+| `rename_path`, `duplicate_path`, `move_path`, `delete_path` | `root` must be a granted workspace and the entry itself canonicalizes strictly inside it (a network or device path is refused before that lookup, for a move's destination too; a trailing `..`, the root itself, or a symlink resolving outside is refused; `duplicate_path` refuses a folder containing a symlink rather than copying its target). `rename_path` and `move_path` also rewrite links in the workspace's own indexed notes and canvases, each write passing `ensure_writable`; a link or canvas card target that resolves outside the workspace is never rewritten or probed on disk, a file changed since the plan read it is left as it is, and `dryRun` reads without writing. The name a copy, a rename, or a move lands on is picked the way a new entry's is, so it is never one a link holds. Neither the entry nor its destination may sit inside the workspace's `.git` directory |
 | `request_open` | folders only; the path must already be a granted workspace root |
 | `open_in_new_window` | readable |
+| `reveal_path` | any grant, readable or writable, checked before the file manager is asked to show the path. Nothing is handed back, and a document just saved under a new name holds only a grant to write. It stands in for the opener plugin's `reveal_item_in_dir`, which the capability does not grant (see [Plugin permissions](#plugin-permissions)) |
+| `workspace_resolve` | a network or device path is refused before anything is looked up; a local folder needs no grant. The probe behind the one-folder-one-workspace rule reads no content and writes nothing: it reports whether the folder sits in a git repository and whether an ancestor holds `.glyph`. It does look the folder and each ancestor up, and on Windows looking a network path up connects to its host |
 | `workspace_get_last_file`, `workspace_set_last_file` | granted workspace. `.glyph/state.json`, `.glyph/config.json` (the Cloud Sync settings and the plugin settings below), and the `.gitignore` written beside them are read and written only when neither `.glyph` nor the file itself is a symbolic link, a dangling one included: a cloned workspace can ship either one pointing outside itself. A JSON object behind such a link would parse as a config or a state, and so be replaced, unless a key those formats define holds a value of another type (unknown keys are ignored, and a file that fails to parse is left as it is). `.glyph/site.json` (the Website tab) is not one of these: it is read and written through `read_file` and `write_file`, so the grant check decides |
 | `workspace_get_plugin_settings`, `workspace_set_plugin_settings` | granted workspace, and a well-formed plugin id (it becomes a key in the committed `.glyph/config.json`). The settings are an opaque JSON object capped at 64 KiB per plugin; nothing in the backend treats a value as a path. The symbolic-link refusal in the row above applies |
 | `create_workspace_file` | `root` must be a granted workspace. The path is workspace-relative (`..`, a drive letter, or a backslash is refused) and must canonicalize strictly inside that workspace, so a symlink resolving outside it, or into another granted workspace, is refused. A hidden name anywhere in the resolved path is refused too, which keeps `.git/hooks` and `.glyph` out of reach. The file is opened with `create_new`: one that already exists is reported back and never written to |
@@ -142,14 +150,10 @@ looked up (see "Network paths" below).
 | `install_plugin` | consumes the pending picked folder; no path argument |
 | `finish_cli_export` | ends the process, so it is refused unless a CLI export is in progress: the command is registered in every session, and a renderer could otherwise end an interactive one |
 
-`vault_forget` takes no readable check: it only drops an index the process
-already built, so the worst a renderer can do with it is make the next
-snapshot rebuild from disk.
-
-`workspace_resolve` is deliberately not gated: it is the pre-open probe that
-inspects a folder before it becomes a workspace (the grant is minted when the
-open is routed). It canonicalizes and reports repo/nesting facts only; it
-neither reads document content nor writes.
+Reading no content does not exempt a command. Looking a path up is itself an
+effect on Windows, where it connects to the host a network path names, so a
+command that only inspects a path refuses a network or device path first, and
+one that only needs it as a key compares it and looks nothing up.
 
 ## Content Security Policy
 
@@ -238,11 +242,10 @@ The app and the extension are ad-hoc signed; there is no Developer ID or notariz
 ## Plugin permissions
 
 `capabilities/default.json` grants no permission set whose members resolve
-renderer-supplied paths: the dialog, filesystem, and store plugins get the
-exact commands the frontend calls instead of their `default` sets. The
-remaining default sets (`core`, `os`, `opener`, `http`) reach no file; the
-opener's `reveal_item_in_dir` takes a path but only opens the file manager at
-it, and `http:default` is scoped to the marketplace hosts.
+renderer-supplied paths: the dialog, filesystem, opener, and store plugins get
+the exact commands the frontend calls instead of their `default` sets. The
+remaining default sets (`core`, `os`, `http`) reach no file, and
+`http:default` is scoped to the marketplace hosts.
 
 - **Dialog.** Desktop holds `dialog:allow-message` alone (it backs `ask`).
   The plugin's `open` command adds whatever the user picks to the fs and asset
@@ -261,6 +264,15 @@ it, and `http:default` is scoped to the marketplace hosts.
   sandboxed `content://` URIs the Rust commands cannot open. A unit test in
   `lib.rs` fails if any `fs:` permission returns to the default capability
   (#698).
+- **Opener.** `opener:allow-open-url` with the `allow-default-urls` scope
+  (`mailto:`, `tel:`, `http://`, `https://`), which links and the update
+  notices use. Not `opener:default`: that set also carries
+  `reveal_item_in_dir`, which takes any path the renderer names, under no
+  scope, and checks that it exists before it asks the file manager for it. On
+  Windows that lookup connects to the host a network path names. "Show in
+  system explorer" calls `reveal_path` instead (in the table above), and a
+  unit test in `lib.rs` fails if the capability gains another opener
+  permission.
 - **Store.** No `store:allow-load`: `load` resolves the requested path against
   AppData, and an absolute path replaces the base, so it would read or
   overwrite any JSON file the user can write. The backend opens
@@ -270,6 +282,56 @@ it, and `http:default` is scoped to the marketplace hosts.
 - **Desktop.** `capabilities/desktop.json` holds `window-state:default` alone.
   There is no CLI plugin: nothing in the renderer needs the launch arguments,
   so there is no command that returns them.
+
+## Git repositories in a workspace
+
+A folder can carry a git repository, and a repository names paths of its own:
+the target of a `.git` file, a `commondir` or `gitdir` file, alternate object
+stores, and paths in its config (`core.worktree`, `core.excludesfile`,
+`core.attributesfile`, an included file, a remote that is a path). libgit2
+resolves them, and on Windows resolving a network path connects to its host,
+which can hand it the user's credentials. This takes no compromised renderer:
+the folder only has to be opened, and a downloaded or unzipped one names any
+host it likes. libgit2 has no switch that forbids it.
+
+- **Opening a folder reads none of it.** `workspace_resolve`, which runs on
+  every folder a window opens, asks only whether the folder or an ancestor
+  holds a `.git` entry. It opens no repository, so nothing a repository points
+  to is looked up.
+- **Cloud Sync judges the repository first.** On Windows every `sync_*`
+  command that hands the workspace to libgit2 first reads those files as text
+  and passes each path they name to the registry's network-path check, which
+  looks nothing up. That is every sync command but the config and token ones
+  and `sync_clone_remote`, whose destination must be empty, and it includes
+  the two that run unprompted when a workspace opens (`sync_repo_present`,
+  `sync_default_author`). A repository naming a network or device path is
+  refused with an error, unless a grant already sits on that share.
+- **Submodules get the same check.** Status, staging and checkout open each
+  submodule, so `sync_status`, `sync_run` and `sync_commit_config` also judge
+  `.gitmodules` and the `.git` of every submodule libgit2 lists, and of
+  theirs, wherever its path leads. Listing them opens none. A repository that
+  merely sits in the working tree, in none of the places libgit2 learns
+  submodules from, is not judged: status does not open it, and staging fails
+  on it before opening it.
+- **The config is judged as text, not parsed.** A value that begins with two
+  path separators is refused under any key, once quotes are dropped and an
+  escaped backslash is read as one. How libgit2 joins a value continued over
+  several lines is not reproduced: the backslash that continues a line counts
+  as a separator itself, so a path split there is refused as well. A config
+  with an `[include]` or `[includeIf]` section is refused outright: the
+  included file would need the same check, and libgit2 resolves the path to
+  it first. A repository that shares settings through `include.path`
+  therefore cannot be synced from Glyph on Windows.
+- **A pointer libgit2 would place differently is refused.** Only an absolute
+  path and a plain relative one are followed to the files behind them. A
+  drive-relative or rooted path, one behind the `\\?\` prefix, an alternate
+  relative to the process's current folder, and a link standing in for `.git`
+  or for one of these files are refused unread.
+
+The files are judged and then read again by libgit2, so the check holds for a
+folder at rest, not against another process rewriting them in between. The
+machine's own git configuration (global, system) is the user's and is not
+judged.
 
 ## MCP server (`glyph mcp`)
 
@@ -447,8 +509,12 @@ the way a renderer-supplied path is.
   connections rather than making them. It binds `127.0.0.1` unless `--host`
   says otherwise, answers only to `Host` headers naming itself (so a web page
   cannot reach it by re-pointing its own domain at loopback), refuses hidden
-  paths, and relies on `tower-http`'s `ServeDir` to keep requests inside the
-  output directory. What it serves is still unauthenticated: anyone who can
+  paths (judged on the request path as `ServeDir` reads it, percent-decoded
+  and split on both separators, so `%2eenv` is `.env`), answers every
+  request with `Cross-Origin-Resource-Policy: same-origin`, `X-Frame-Options:
+  DENY` and `X-Content-Type-Options: nosniff` so a page cannot embed what it
+  cannot read, and relies on `tower-http`'s `ServeDir` to keep requests
+  inside the output directory. What it serves is still unauthenticated: anyone who can
   reach the port reads the whole exported site, and `--host 0.0.0.0` extends
   that to the network, which is why it is opt-in and warns. Everything in the
   output directory is published, so the CLI refuses an `--out` that contains,
@@ -463,7 +529,14 @@ the way a renderer-supplied path is.
   without a `sandbox` flag is isolated in a worker, filesystem reads require
   the declared-and-accepted `workspace:read` permission, the open document
   reaches it only through an export the user runs, and the worker's
-  network is fenced to declared `network:` hosts. A plugin that declares
+  network is fenced to declared `network:` hosts: `http` and `https` to the
+  declared host or a subdomain of it, a redirect never followed, and never
+  the webview's own hosts, whatever is declared, since the asset protocol
+  serves every granted file from `asset.localhost` (or `asset://localhost`)
+  and `ipc.localhost` is the command bridge; a plugin that declares
+  `network:localhost` for a local server reaches that server alone. The
+  manifest parser refuses a `network:` host that is empty, not a plain
+  lowercase name, or under `.localhost`. A plugin that declares
   `"sandbox": false` still executes in the app context and sees everything the
   renderer sees (the host's own Escape handling and close button on a plugin
   overlay guard against a plugin's bugs, not against a hostile one); that mode

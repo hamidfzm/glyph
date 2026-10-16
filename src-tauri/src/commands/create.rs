@@ -21,7 +21,13 @@ const EMPTY_CANVAS: &str = "{\n\t\"nodes\": [],\n\t\"edges\": []\n}\n";
 
 /// Ensure `target_parent` resolves to a directory inside `root`. Both are
 /// canonicalized so `..` segments and symlinks can't escape the workspace.
-fn ensure_dir_within_root(target_parent: &Path, root: &Path) -> Result<(), String> {
+/// The registry sees the path first: only `root` has been through it.
+fn ensure_dir_within_root(
+    grants: &GrantRegistry,
+    target_parent: &Path,
+    root: &Path,
+) -> Result<(), String> {
+    grants.refuse_remote(target_parent)?;
     let parent = target_parent
         .canonicalize()
         .map_err(|e| format!("Invalid directory: {e}"))?;
@@ -49,7 +55,12 @@ fn refuse_git_dir(canonical: &Path, root: &Path) -> Result<(), String> {
 /// `root`. Checking only the parent is not enough: `<root>/..` has parent
 /// `<root>` and would pass, and a symlink inside the workspace can resolve to
 /// a path outside it.
-fn ensure_entry_inside_root(target: &Path, root: &Path) -> Result<PathBuf, String> {
+fn ensure_entry_inside_root(
+    grants: &GrantRegistry,
+    target: &Path,
+    root: &Path,
+) -> Result<PathBuf, String> {
+    grants.refuse_remote(target)?;
     let canonical = target
         .canonicalize()
         .map_err(|e| format!("Invalid path: {e}"))?;
@@ -105,7 +116,7 @@ pub fn create_note(
 ) -> Result<String, String> {
     let root = grants.ensure_workspace(&root)?;
     let dir = Path::new(&dir);
-    ensure_dir_within_root(dir, &root)?;
+    ensure_dir_within_root(&grants, dir, &root)?;
     let path = unique_path(dir, DEFAULT_NOTE_STEM, Some("md"));
     fs::write(&path, "").map_err(|e| format!("Failed to create note: {e}"))?;
     Ok(path.to_string_lossy().to_string())
@@ -119,7 +130,7 @@ pub fn create_canvas(
 ) -> Result<String, String> {
     let root = grants.ensure_workspace(&root)?;
     let dir = Path::new(&dir);
-    ensure_dir_within_root(dir, &root)?;
+    ensure_dir_within_root(&grants, dir, &root)?;
     let path = unique_path(dir, DEFAULT_NOTE_STEM, Some("canvas"));
     fs::write(&path, EMPTY_CANVAS).map_err(|e| format!("Failed to create canvas: {e}"))?;
     Ok(path.to_string_lossy().to_string())
@@ -133,7 +144,7 @@ pub fn create_folder(
 ) -> Result<String, String> {
     let root = grants.ensure_workspace(&root)?;
     let dir = Path::new(&dir);
-    ensure_dir_within_root(dir, &root)?;
+    ensure_dir_within_root(&grants, dir, &root)?;
     let path = unique_path(dir, DEFAULT_FOLDER_NAME, None);
     fs::create_dir(&path).map_err(|e| format!("Failed to create folder: {e}"))?;
     Ok(path.to_string_lossy().to_string())
@@ -190,7 +201,7 @@ pub async fn rename_path(
 ) -> Result<Relink, String> {
     let root_dir = grants.ensure_workspace(&root)?;
     let source = Path::new(&path);
-    ensure_entry_inside_root(source, &root_dir)?;
+    ensure_entry_inside_root(&grants, source, &root_dir)?;
     let parent = source
         .parent()
         .ok_or_else(|| "Path has no parent directory".to_string())?;
@@ -255,7 +266,7 @@ pub fn duplicate_path(
 ) -> Result<String, String> {
     let root = grants.ensure_workspace(&root)?;
     let source = Path::new(&path);
-    ensure_entry_inside_root(source, &root)?;
+    ensure_entry_inside_root(&grants, source, &root)?;
     let parent = source
         .parent()
         .ok_or_else(|| "Path has no parent directory".to_string())?;
@@ -297,8 +308,8 @@ pub async fn move_path(
     let root_dir = grants.ensure_workspace(&root)?;
     let source = Path::new(&from);
     let dest_dir = Path::new(&to_dir);
-    let source_abs = ensure_entry_inside_root(source, &root_dir)?;
-    ensure_dir_within_root(dest_dir, &root_dir)?;
+    let source_abs = ensure_entry_inside_root(&grants, source, &root_dir)?;
+    ensure_dir_within_root(&grants, dest_dir, &root_dir)?;
     let parent = source
         .parent()
         .ok_or_else(|| "Path has no parent directory".to_string())?;
@@ -339,7 +350,7 @@ pub fn delete_path(
 ) -> Result<(), String> {
     let root = grants.ensure_workspace(&root)?;
     let target = Path::new(&path);
-    ensure_entry_inside_root(target, &root)?;
+    ensure_entry_inside_root(&grants, target, &root)?;
     if target.is_dir() {
         fs::remove_dir_all(target).map_err(|e| format!("Failed to delete folder: {e}"))
     } else {
@@ -508,6 +519,35 @@ mod tests {
         // No half-copied folder is left behind.
         assert!(!ws.join("Docs copy").exists());
         let _ = fs::remove_dir_all(&outer);
+    }
+
+    // The second path of each command meets the registry before any lookup,
+    // as `root` does.
+    #[cfg(windows)]
+    #[test]
+    fn a_network_or_device_path_is_never_looked_up() {
+        let ws = unique_tmp("remote");
+        fs::write(ws.join("a.md"), "").unwrap();
+        let root = ws.to_string_lossy().to_string();
+        let note = ws.join("a.md").to_string_lossy().to_string();
+
+        for remote in crate::grants::NEVER_LOOKED_UP {
+            let remote = remote.to_string();
+            let refusals = [
+                create_note(remote.clone(), root.clone()).unwrap_err(),
+                create_canvas(remote.clone(), root.clone()).unwrap_err(),
+                create_folder(remote.clone(), root.clone()).unwrap_err(),
+                rename_path(remote.clone(), "x".to_string(), root.clone()).unwrap_err(),
+                duplicate_path(remote.clone(), root.clone()).unwrap_err(),
+                move_path(remote.clone(), root.clone(), root.clone()).unwrap_err(),
+                move_path(note.clone(), remote.clone(), root.clone()).unwrap_err(),
+                delete_path(remote, root.clone()).unwrap_err(),
+            ];
+            for refusal in refusals {
+                assert!(refusal.contains("never looked up"), "{refusal}");
+            }
+        }
+        let _ = fs::remove_dir_all(&ws);
     }
 
     #[cfg(windows)]

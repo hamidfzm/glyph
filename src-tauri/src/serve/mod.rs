@@ -13,8 +13,8 @@ use std::convert::Infallible;
 use std::path::PathBuf;
 
 use http_body_util::{BodyExt, Full, StreamBody};
-use hyper::body::{Bytes, Frame, Incoming};
-use hyper::header::{CACHE_CONTROL, CONTENT_LENGTH, CONTENT_TYPE, HOST};
+use hyper::body::{Bytes, Frame};
+use hyper::header::{HeaderValue, CACHE_CONTROL, CONTENT_LENGTH, CONTENT_TYPE, HOST};
 use hyper::{Method, Request, Response, StatusCode};
 use hyper_util::rt::TokioIo;
 use tokio::sync::broadcast;
@@ -133,19 +133,33 @@ pub async fn run(
 }
 
 /// The whole routing table: the reload stream, or a file from the export.
-async fn route(
-    request: Request<Incoming>,
+async fn route<B: Send + 'static>(
+    request: Request<B>,
     dir: PathBuf,
     host: HostGuard,
     reload: broadcast::Sender<()>,
 ) -> Result<Response<ServeBody>, Infallible> {
-    if !host.allows(request.headers().get(HOST).and_then(|v| v.to_str().ok())) {
-        return Ok(error_response(StatusCode::FORBIDDEN));
-    }
-    if request.uri().path() == RELOAD_PATH {
-        return Ok(reload_stream(reload.subscribe()));
-    }
-    Ok(serve_file(request, dir).await)
+    let mut response = if !host.allows(request.headers().get(HOST).and_then(|v| v.to_str().ok())) {
+        error_response(StatusCode::FORBIDDEN)
+    } else if request.uri().path() == RELOAD_PATH {
+        reload_stream(reload.subscribe())
+    } else {
+        serve_file(request, dir).await
+    };
+    // A page in the user's browser cannot read these responses, but it can
+    // still embed them: an image or script tag answers whether a note exists,
+    // and a script tag runs what the site serves. These close those too.
+    let headers = response.headers_mut();
+    headers.insert(
+        "cross-origin-resource-policy",
+        HeaderValue::from_static("same-origin"),
+    );
+    headers.insert("x-frame-options", HeaderValue::from_static("DENY"));
+    headers.insert(
+        "x-content-type-options",
+        HeaderValue::from_static("nosniff"),
+    );
+    Ok(response)
 }
 
 /// An SSE response that emits one message per rebuild. Nothing is buffered:
@@ -173,6 +187,16 @@ fn reload_stream(receiver: broadcast::Receiver<()>) -> Response<ServeBody> {
         .expect("reload stream response is well-formed")
 }
 
+/// Whether a request path, once decoded the way `ServeDir` decodes it, has a
+/// segment that starts with a dot (other than `.` and `..`, which `ServeDir`
+/// handles itself).
+fn names_hidden_file(raw_path: &str) -> bool {
+    let decoded = percent_encoding::percent_decode_str(raw_path).decode_utf8_lossy();
+    decoded
+        .split(['/', '\\'])
+        .any(|segment| segment.starts_with('.') && segment != "." && segment != "..")
+}
+
 /// Hand back a file from the exported site, injecting the reload script into
 /// HTML on the way past. `ServeDir` resolves `index.html`, guesses the
 /// content type, and refuses to escape `dir`, including through encoded
@@ -181,13 +205,11 @@ async fn serve_file<B: Send + 'static>(request: Request<B>, dir: PathBuf) -> Res
     // The export writes no hidden files, so anything hidden under the output
     // directory was already there. That matters when `--out` points at a
     // directory of the user's own, where `.env` or `.git/config` would
-    // otherwise be readable over the network under `--host`.
-    if request
-        .uri()
-        .path()
-        .split('/')
-        .any(|segment| segment.starts_with('.') && segment != "." && segment != "..")
-    {
+    // otherwise be readable over the network under `--host`. The path is
+    // judged as `ServeDir` will read it: percent-decoded (`%2eenv` is
+    // `.env`) and split on both separators, since on Windows a decoded `\`
+    // starts a segment too.
+    if names_hidden_file(request.uri().path()) {
         return error_response(StatusCode::NOT_FOUND);
     }
 
@@ -380,16 +402,9 @@ mod tests {
         if !host.is_empty() {
             builder = builder.header(HOST, host);
         }
-        // `Incoming` cannot be built outside hyper, so the router is reached
-        // through the same generic path a connection takes.
         let request = builder.body(Full::new(Bytes::new())).expect("well-formed");
-        if !guard.allows(request.headers().get(HOST).and_then(|v| v.to_str().ok())) {
-            return error_response(StatusCode::FORBIDDEN);
-        }
-        if request.uri().path() == RELOAD_PATH {
-            return reload_stream(sender.subscribe());
-        }
-        serve_file(request, dir.to_path_buf()).await
+        let Ok(response) = route(request, dir.to_path_buf(), guard.clone(), sender).await;
+        response
     }
 
     /// Speak HTTP/1.1 down a real socket and read the whole reply. Keeps the
@@ -605,7 +620,19 @@ mod tests {
         std::fs::create_dir(dir.path().join(".git")).unwrap();
         std::fs::write(dir.path().join(".git/config"), b"[core]").unwrap();
 
-        for path in ["/.env", "/.git/config"] {
+        // `ServeDir` percent-decodes before it opens anything, so the encoded
+        // spellings name the same files; on Windows a decoded backslash
+        // starts a segment as well.
+        for path in [
+            "/.env",
+            "/.git/config",
+            "/%2eenv",
+            "/%2Egit/config",
+            "/notes/%2eenv",
+            "/.%2fenv",
+            "/notes%5c.env",
+            "/notes%5C%2Eenv",
+        ] {
             let response = get(dir.path(), path).await;
             assert_eq!(
                 response.status(),
@@ -657,6 +684,33 @@ mod tests {
             response.headers().get(CONTENT_TYPE).unwrap(),
             "text/event-stream"
         );
+    }
+
+    #[tokio::test]
+    async fn every_response_refuses_embedding_and_sniffing() {
+        // A page in the user's browser cannot read a response, but an image or
+        // script tag would still tell it whether a note exists, and a script
+        // tag would run what the site serves.
+        let dir = fixture();
+        let guard = HostGuard::new("127.0.0.1".parse().unwrap());
+        for path in ["/", "/missing.html", RELOAD_PATH] {
+            let response = request(dir.path(), path, "localhost:4173", &guard).await;
+            let headers = response.headers();
+            assert_eq!(
+                headers.get("cross-origin-resource-policy").unwrap(),
+                "same-origin",
+                "{path}"
+            );
+            assert_eq!(headers.get("x-frame-options").unwrap(), "DENY", "{path}");
+            assert_eq!(
+                headers.get("x-content-type-options").unwrap(),
+                "nosniff",
+                "{path}"
+            );
+        }
+        let refused = request(dir.path(), "/", "evil.example", &guard).await;
+        assert_eq!(refused.status(), StatusCode::FORBIDDEN);
+        assert!(refused.headers().contains_key("x-frame-options"));
     }
 
     #[tokio::test]

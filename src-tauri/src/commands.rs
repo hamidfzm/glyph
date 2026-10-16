@@ -8,6 +8,7 @@ pub mod file;
 #[cfg(desktop)]
 pub mod pick;
 pub mod plugins;
+pub mod reveal;
 pub mod search;
 pub mod secrets;
 #[cfg(desktop)]

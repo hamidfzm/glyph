@@ -26,7 +26,7 @@ ARG GLYPH_VERSION
 ARG TARGETARCH
 ADD https://github.com/hamidfzm/glyph/releases/download/v${GLYPH_VERSION}/Glyph_${GLYPH_VERSION}_${TARGETARCH}.deb glyph.deb
 
-FROM debian:bookworm-slim
+FROM debian:bookworm-slim@sha256:7c7b2c966bc9ee8cedfeef67e0e279108992c77681fa595db4a9d65c06ccc587
 
 # WebKit's compositing path has no GPU under Xvfb and crashes without this.
 # The release smoke tests set the same variable on every Linux distro.
