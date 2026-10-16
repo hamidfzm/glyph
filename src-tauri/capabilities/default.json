@@ -22,15 +22,6 @@
     "store:allow-length",
     "store:allow-save",
     "opener:allow-open-url",
-    "opener:allow-default-urls",
-    {
-      "identifier": "http:default",
-      "allow": [
-        { "url": "https://raw.githubusercontent.com/glyph-md/*" },
-        { "url": "https://github.com/glyph-md/*" },
-        { "url": "https://release-assets.githubusercontent.com/*" },
-        { "url": "https://objects.githubusercontent.com/*" }
-      ]
-    }
+    "opener:allow-default-urls"
   ]
 }

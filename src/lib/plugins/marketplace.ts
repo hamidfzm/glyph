@@ -1,5 +1,4 @@
 import { invoke } from "@tauri-apps/api/core";
-import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
 import type { InstalledPlugin } from "./types";
 
 // The marketplace index is generated from per-plugin registrations in the
@@ -89,12 +88,6 @@ function hasValidChecksum(entry: RegistryEntry): boolean {
   return typeof entry.sha256 === "string" && SHA256_HEX.test(entry.sha256);
 }
 
-/** Hex SHA-256 of raw bytes, via WebCrypto (available in the webview and Node). */
-async function sha256Hex(bytes: ArrayBuffer): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", bytes);
-  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
-}
-
 export interface RegistryUpdate {
   entry: RegistryEntry;
   installedVersion: string;
@@ -138,37 +131,14 @@ export function findUpdates(
 }
 
 /**
- * Download a registry entry's package, verify it against the declared sha256,
- * and hand it to Rust, which copies out only the manifest-declared files. The
- * manifest inside the package is the source of truth for what gets installed.
+ * Install a registry entry. Rust fetches the index itself, downloads the
+ * package the entry names, verifies it against the entry's sha256, and checks
+ * the manifest id before anything is written: the renderer hands over an id
+ * and nothing else, so a compromised one cannot supply bytes of its own.
  */
 export async function installFromRegistry(entry: RegistryEntry): Promise<InstalledPlugin> {
   if (!hasValidChecksum(entry)) {
     throw new Error(`registry entry ${entry.id} has no valid sha256; refusing to install`);
   }
-  // Not the webview's fetch: GitHub serves release assets with no CORS
-  // headers, so reading one from the renderer fails with "Failed to fetch"
-  // before the response is ever seen. This goes through Rust instead, scoped
-  // to the registry's hosts by the http capability. The registry index and
-  // README stay on the plain fetch, because raw.githubusercontent.com does
-  // send `Access-Control-Allow-Origin`.
-  const res = await tauriFetch(entry.packageUrl);
-  if (!res.ok) throw new Error(`download failed: ${res.status}`);
-  const buffer = await res.arrayBuffer();
-  const actual = await sha256Hex(buffer);
-  if (actual !== entry.sha256.toLowerCase()) {
-    throw new Error(`checksum mismatch for ${entry.id}: expected ${entry.sha256}, got ${actual}`);
-  }
-  const plugin = await invoke<InstalledPlugin>("install_plugin_package", {
-    bytes: Array.from(new Uint8Array(buffer)),
-  });
-  // The user consented to the reviewed entry's id; a package that identifies
-  // as a different plugin must not stay installed under that consent.
-  if (plugin.id !== entry.id) {
-    await invoke("uninstall_plugin", { id: plugin.id });
-    throw new Error(
-      `package for ${entry.id} declares manifest id ${plugin.id}; refusing to install`,
-    );
-  }
-  return plugin;
+  return invoke<InstalledPlugin>("install_plugin_from_registry", { id: entry.id });
 }

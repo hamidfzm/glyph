@@ -143,10 +143,11 @@ describe("PluginsProvider enable and uninstall", () => {
 
   it("shows an error toast when a marketplace download fails", async () => {
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
-    vi.mocked(invoke).mockImplementation((cmd) =>
-      Promise.resolve(cmd === "list_plugins" ? [] : undefined),
-    );
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+    // The download runs in Rust, so its failure arrives as the command's.
+    vi.mocked(invoke).mockImplementation((cmd) => {
+      if (cmd === "install_plugin_from_registry") return Promise.reject("download failed: 500");
+      return Promise.resolve(cmd === "list_plugins" ? [] : undefined);
+    });
     const entry = {
       id: "com.x.market",
       name: "Market",
@@ -175,7 +176,6 @@ describe("PluginsProvider enable and uninstall", () => {
     await waitFor(() =>
       expect(screen.getByRole("status")).toHaveTextContent("Plugin error: download failed: 500"),
     );
-    vi.unstubAllGlobals();
     spy.mockRestore();
   });
 

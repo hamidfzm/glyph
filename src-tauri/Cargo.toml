@@ -56,10 +56,11 @@ keyring = { version = "3", features = [
     "vendored",
 ] }
 tauri-plugin-clipboard-manager = "2"
-# Marketplace downloads. GitHub release assets send no CORS headers, so the
-# webview's own fetch cannot read them; this routes the request through Rust,
-# and capabilities/default.json scopes it to the plugin registry's hosts.
+# Marketplace downloads run in Rust (commands/plugins/registry.rs), which
+# fetches the registry and verifies the package itself; the crate is here for
+# the reqwest client it configures, and no capability grants its commands.
 tauri-plugin-http = "2"
+sha2 = "0.10"
 
 [dev-dependencies]
 tauri = { version = "2", features = ["test"] }
