@@ -489,7 +489,10 @@ mod tests {
         let state = SyncState::new();
         assert!(!has_token(&state, "/ws").unwrap());
         set_token(&state, "/ws".into(), "tok".into());
-        assert_eq!(state.get_token("/ws").as_deref(), Some("tok"));
+        assert_eq!(
+            state.get_token("/ws").map(|t| t.token).as_deref(),
+            Some("tok")
+        );
         assert!(has_token(&state, "/ws").unwrap());
         clear_token(&state, "/ws");
         assert!(state.get_token("/ws").is_none());

@@ -20,10 +20,15 @@ use super::resolve::{resolve_workspace, WorkspaceResolution};
 
 /// Resolve a selected folder for the "one folder = one workspace" guard (#262).
 ///
-/// Deliberately not grant-gated: this pre-open probe runs before the folder
-/// becomes a workspace and only inspects, never reads content or writes.
+/// The probe reads no content, but it looks up the folder and its ancestors,
+/// and on Windows looking a network path up connects to its host: such a path
+/// is refused first. A local folder needs no grant to be probed.
 #[tauri::command]
-pub fn workspace_resolve(selected: String) -> Result<WorkspaceResolution, String> {
+pub fn workspace_resolve(
+    selected: String,
+    grants: State<'_, GrantRegistry>,
+) -> Result<WorkspaceResolution, String> {
+    grants.refuse_remote(&selected)?;
     resolve_workspace(Path::new(&selected))
 }
 
@@ -350,11 +355,27 @@ mod tests {
         assert!(!elsewhere.path().join(".gitignore").exists());
     }
 
+    // No grant is asked of a local folder: the probe decides nothing a grant does.
     #[test]
     fn resolve_reports_a_plain_folder() {
         let tmp = TempDir::new().unwrap();
-        let r = workspace_resolve(tmp.path().to_string_lossy().to_string()).unwrap();
+        let app = mock_app();
+        app.manage(GrantRegistry::default());
+        let selected = tmp.path().to_string_lossy().to_string();
+        let r = workspace_resolve(selected, app.state::<GrantRegistry>()).unwrap();
         assert!(!r.is_git_repo);
         assert!(r.nested_under.is_none());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn resolve_never_looks_a_network_or_device_path_up() {
+        let app = mock_app();
+        app.manage(GrantRegistry::default());
+        for selected in crate::grants::NEVER_LOOKED_UP {
+            let refusal =
+                workspace_resolve(selected.to_string(), app.state::<GrantRegistry>()).unwrap_err();
+            assert!(refusal.contains("never looked up"), "{refusal}");
+        }
     }
 }

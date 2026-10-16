@@ -34,6 +34,14 @@ struct Grants {
     pending_plugin_dir: Option<PathBuf>,
 }
 
+/// Whether `path` names a `.git` directory or anything below one. Judged by
+/// name, case-insensitively, since git itself finds its directory that way
+/// on a volume that ignores case.
+pub fn names_git_dir(path: &Path) -> bool {
+    path.components()
+        .any(|component| component.as_os_str().eq_ignore_ascii_case(".git"))
+}
+
 /// Denials echo only the requested path, never the grant list.
 fn denied(path: &Path) -> String {
     format!(
@@ -47,6 +55,8 @@ fn denied(path: &Path) -> String {
 /// tail: nothing shows where it leads, and the read or write that comes next
 /// would follow it there.
 fn canonicalize_lenient(path: &Path) -> Result<PathBuf, String> {
+    // Asked at every level: the fallback below looks each ancestor up in turn.
+    refuse_legacy_device(path)?;
     if let Ok(canonical) = path.canonicalize() {
         return Ok(canonical);
     }
@@ -78,6 +88,7 @@ pub(crate) fn is_symlink(path: &Path) -> bool {
 #[cfg(windows)]
 fn refuse_remote(grants: &Grants, path: &Path) -> Result<(), String> {
     use std::path::{Component, Prefix};
+    refuse_legacy_device(path)?;
     let Some(Component::Prefix(prefix)) = path.components().next() else {
         // Windows resolves these as a share or a device though `Path` finds no
         // prefix: `\??\` is the namespace holding both, and `\\host\\share`
@@ -115,6 +126,22 @@ fn refuse_remote(grants: &Grants, path: &Path) -> Result<(), String> {
     }
 }
 
+/// Refuse a legacy DOS device name (`NUL`, `COM3`, `x\NUL`), which Win32 opens
+/// as `\\.\<name>` though `Path` finds no prefix in it. Windows is asked how
+/// it would rewrite the path, which looks nothing up: the names that count
+/// changed with Windows 11.
+#[cfg(windows)]
+fn refuse_legacy_device(path: &Path) -> Result<(), String> {
+    use std::path::{Component, Prefix};
+    let rewritten = std::path::absolute(path).unwrap_or_default();
+    match rewritten.components().next() {
+        Some(Component::Prefix(prefix)) if matches!(prefix.kind(), Prefix::DeviceNS(_)) => {
+            Err(remote(path))
+        }
+        _ => Ok(()),
+    }
+}
+
 #[cfg(windows)]
 fn remote(path: &Path) -> String {
     format!(
@@ -126,6 +153,12 @@ fn remote(path: &Path) -> String {
 /// Only Windows resolves a path by connecting to the host it names.
 #[cfg(not(windows))]
 fn refuse_remote(_: &Grants, _: &Path) -> Result<(), String> {
+    Ok(())
+}
+
+/// Only Win32 rewrites a file name into a device.
+#[cfg(not(windows))]
+fn refuse_legacy_device(_: &Path) -> Result<(), String> {
     Ok(())
 }
 
@@ -244,25 +277,37 @@ impl GrantRegistry {
         }
     }
 
+    /// A recursive grant never covers a `.git` directory below its root: git
+    /// reads hooks and the remote URL from there, so a write into it is code
+    /// the user's next commit runs, or a remote the sync token is sent to.
     pub fn ensure_writable(&self, path: &str) -> Result<PathBuf, String> {
         let requested = Path::new(path);
         refuse_remote(&*self.lock()?, requested)?;
         let canonical = canonicalize_lenient(requested)?;
         let grants = self.lock()?;
-        if grants.files.contains(&canonical)
-            || grants.export_files.contains(&canonical)
-            || grants.workspaces.iter().any(|w| canonical.starts_with(w))
-            || grants.export_dirs.iter().any(|d| canonical.starts_with(d))
-        {
-            Ok(canonical)
-        } else {
-            Err(denied(requested))
+        if grants.files.contains(&canonical) || grants.export_files.contains(&canonical) {
+            return Ok(canonical);
         }
+        let root = grants
+            .workspaces
+            .iter()
+            .chain(grants.export_dirs.iter())
+            .find(|root| canonical.starts_with(root));
+        let Some(root) = root else {
+            return Err(denied(requested));
+        };
+        if names_git_dir(canonical.strip_prefix(root).unwrap_or(&canonical)) {
+            return Err(format!(
+                "path is inside a .git directory, which is never written: {}",
+                requested.display()
+            ));
+        }
+        Ok(canonical)
     }
 
     /// See [`refuse_remote`]: for a path a caller resolves itself.
-    pub fn refuse_remote(&self, path: &str) -> Result<(), String> {
-        refuse_remote(&*self.lock()?, Path::new(path))
+    pub fn refuse_remote(&self, path: impl AsRef<Path>) -> Result<(), String> {
+        refuse_remote(&*self.lock()?, path.as_ref())
     }
 
     /// Watching follows the read rule.
@@ -368,6 +413,18 @@ pub fn allow_asset_file<R: tauri::Runtime>(app: &tauri::AppHandle<R>, file: &Pat
     let _ = app.asset_protocol_scope().allow_file(file);
 }
 
+/// Spellings a command must refuse before it looks its path up. A host under
+/// `.invalid` cannot exist, should a refusal ever come late.
+#[cfg(all(test, windows))]
+pub(crate) const NEVER_LOOKED_UP: [&str; 6] = [
+    r"\\glyph-test-host.invalid\share\notes",
+    r"\\?\UNC\glyph-test-host.invalid\share\notes",
+    r"\??\UNC\glyph-test-host.invalid\share\notes",
+    r"\\glyph-test-host.invalid\\share\notes",
+    r"\\.\pipe\glyph",
+    "NUL",
+];
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -438,6 +495,66 @@ mod tests {
         path.to_string_lossy().to_string()
     }
 
+    #[cfg(windows)]
+    #[test]
+    fn a_legacy_device_name_is_refused_before_it_resolves() {
+        let tmp = TempDir::new().unwrap();
+        let grants = GrantRegistry::default();
+        grants.grant_workspace(tmp.path()).unwrap();
+        // A granted folder does not make the name in it a file.
+        let in_workspace = as_str(&tmp.path().join("NUL"));
+        for path in [
+            "NUL",
+            "nul",
+            "CON",
+            "COM3",
+            "AUX",
+            "PRN",
+            "LPT1",
+            "CONIN$",
+            "CONOUT$",
+            "NUL:",
+            r"x\NUL",
+            r"\NUL",
+            "C:NUL",
+            in_workspace.as_str(),
+        ] {
+            for refusal in [
+                grants.ensure_readable(path),
+                grants.ensure_writable(path),
+                grants.ensure_workspace(path),
+                grants.ensure_document_asset(path),
+            ] {
+                let refusal = refusal.unwrap_err();
+                assert!(refusal.contains("never looked up"), "{path}: {refusal}");
+            }
+        }
+
+        // Under a folder named like a device, the fallback for a missing file
+        // would look that folder up.
+        let under_device = as_str(&tmp.path().join("NUL").join("x.md"));
+        for path in [r"COM3\x.md", r"x\NUL\y.md", under_device.as_str()] {
+            for refusal in [grants.ensure_readable(path), grants.ensure_writable(path)] {
+                let refusal = refusal.unwrap_err();
+                assert!(refusal.contains("never looked up"), "{path}: {refusal}");
+            }
+        }
+
+        // A name that only starts like a device's is a file, and so is a
+        // device's own name behind the verbatim prefix, which Win32 leaves alone.
+        for path in [
+            "CONFIG",
+            "nullable.md",
+            r"notes\COMMON.md",
+            r"\\?\C:\notes\NUL",
+        ] {
+            assert!(grants.refuse_remote(path).is_ok(), "{path}");
+        }
+        // Windows rewrites no empty path: the lookup fails it, as before.
+        let empty = grants.ensure_readable("").unwrap_err();
+        assert!(empty.starts_with("path is outside"), "{empty}");
+    }
+
     #[test]
     fn everything_is_denied_by_default() {
         let tmp = TempDir::new().unwrap();
@@ -476,6 +593,48 @@ mod tests {
         assert!(grants.ensure_workspace(&as_str(tmp.path())).is_ok());
         // A path nested inside is not the workspace root itself.
         assert!(grants.ensure_workspace(&as_str(&nested)).is_err());
+    }
+
+    #[test]
+    fn a_git_directory_inside_a_grant_is_never_writable() {
+        let tmp = TempDir::new().unwrap();
+        let ws = tmp.path().join("ws");
+        let hooks = ws.join(".git").join("hooks");
+        fs::create_dir_all(&hooks).unwrap();
+        let hook = hooks.join("pre-commit");
+        fs::write(&hook, "#!/bin/sh\n").unwrap();
+        let config = ws.join(".git").join("config");
+        fs::write(&config, "").unwrap();
+        let note = ws.join("note.md");
+        fs::write(&note, "x").unwrap();
+
+        let grants = GrantRegistry::default();
+        grants.grant_workspace(&ws).unwrap();
+
+        assert!(grants.ensure_writable(&as_str(&note)).is_ok());
+        let new_hook = hooks.join("post-commit");
+        let other_case = ws.join(".GIT").join("config");
+        for path in [&hook, &config, &new_hook, &other_case] {
+            let err = grants.ensure_writable(&as_str(path)).unwrap_err();
+            assert!(
+                err.starts_with("path is inside a .git directory"),
+                "{}: {err}",
+                path.display()
+            );
+        }
+        // Reading is as it was: the folder was readable before.
+        assert!(grants.ensure_readable(&as_str(&config)).is_ok());
+
+        // An export folder is held to the same rule.
+        let out = tmp.path().join("out");
+        fs::create_dir_all(out.join(".git")).unwrap();
+        grants.grant_export_dir(&out).unwrap();
+        assert!(grants
+            .ensure_writable(&as_str(&out.join("index.html")))
+            .is_ok());
+        assert!(grants
+            .ensure_writable(&as_str(&out.join(".git").join("config")))
+            .is_err());
     }
 
     #[test]

@@ -1106,6 +1106,28 @@ fn every_path_command_is_denied_without_a_grant() {
     fs::remove_dir_all(&root).unwrap();
 }
 
+// Forgetting compares paths and looks none up, so the folder need not be there.
+#[test]
+fn a_workspace_whose_folder_is_gone_is_still_forgotten() {
+    let root = fixture_vault("cmd_forget_gone");
+    let other = fixture_vault("cmd_forget_kept");
+    let app = app_with_workspace(&root);
+    let (grants, store) = (app.state::<GrantRegistry>(), app.state::<VaultStore>());
+    grants.grant_workspace(&other).unwrap();
+    let path = root.to_string_lossy().to_string();
+    for open in [&root, &other] {
+        let open = open.to_string_lossy().to_string();
+        vault_snapshot(open, grants.clone(), store.clone()).unwrap();
+    }
+
+    fs::remove_dir_all(&root).unwrap();
+    vault_forget(path, store.clone()).unwrap();
+
+    let kept: Vec<_> = store.0.lock().unwrap().keys().cloned().collect();
+    assert_eq!(kept, [other.canonicalize().unwrap()]);
+    fs::remove_dir_all(&other).unwrap();
+}
+
 #[test]
 fn the_targeted_commands_answer_from_the_cached_index() {
     let root = fixture_vault("cmd_targeted");

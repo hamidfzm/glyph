@@ -201,7 +201,12 @@ mod tests {
             ".hidden.md",
         ] {
             let err = create_workspace_file(tmp.path(), path, "x").unwrap_err();
-            assert!(err.contains("hidden"), "{path}: {err}");
+            // A `.git` path is refused by the write grant itself, one step
+            // earlier than the hidden-name rule.
+            assert!(
+                err.contains("hidden") || err.contains(".git"),
+                "{path}: {err}"
+            );
         }
         assert!(!tmp.path().join(".git/hooks/pre-commit").exists());
         assert!(!tmp.path().join(".glyph").exists());
@@ -335,7 +340,7 @@ mod tests {
 
         let err = create_workspace_file(tmp.path(), "notes/pre-commit", "x").unwrap_err();
 
-        assert!(err.contains("hidden"), "{err}");
+        assert!(err.contains("hidden") || err.contains(".git"), "{err}");
         assert!(!tmp.path().join(".git/hooks/pre-commit").exists());
     }
 }

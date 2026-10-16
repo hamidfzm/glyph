@@ -1,12 +1,40 @@
+/// A token and the `https://` authority (host, with its port when the URL
+/// names one) it was entered for. The callback hands the token to that
+/// authority alone: the remote URL comes from `.git/config`, which the
+/// renderer can point anywhere through `sync_set_origin`, and a token sent
+/// to whatever host that names would reach an attacker's server.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BoundToken {
+    pub token: String,
+    pub host: String,
+}
+
+/// The authority of an `https://` URL, lowercased. `None` for any other
+/// scheme and for a URL carrying credentials: a token is bound to neither.
+pub fn https_authority(url: &str) -> Option<String> {
+    let rest = url.strip_prefix("https://")?;
+    let authority = rest.split(['/', '?', '#']).next().unwrap_or("");
+    if authority.is_empty() || authority.contains('@') {
+        return None;
+    }
+    Some(authority.to_ascii_lowercase())
+}
+
 /// Build the FnMut closure libgit2 hands to `credentials()`. Returns
 /// `impl FnMut` directly so it's reusable from fetch/push and
 /// clone, and the body is reachable from tests (call the returned
-/// closure with synthetic args).
+/// closure with synthetic args). The token is offered only for the
+/// authority it is bound to; any other URL gets the tokenless path.
 pub fn make_credentials_callback(
-    token: Option<String>,
+    token: Option<BoundToken>,
 ) -> impl FnMut(&str, Option<&str>, git2::CredentialType) -> Result<git2::Cred, git2::Error> {
-    move |_url, username_from_url, allowed| {
-        select_credentials(allowed, username_from_url, token.as_deref())
+    move |url, username_from_url, allowed| {
+        let authority = https_authority(url);
+        let token = token
+            .as_ref()
+            .filter(|bound| authority.as_deref() == Some(bound.host.as_str()))
+            .map(|bound| bound.token.as_str());
+        select_credentials(allowed, username_from_url, token)
     }
 }
 
@@ -51,12 +79,19 @@ mod tests {
         i64::from(cred.credtype()) & i64::from(kind.bits()) != 0
     }
 
+    fn bound(host: &str) -> Option<BoundToken> {
+        Some(BoundToken {
+            token: "ghp_xyz".into(),
+            host: host.into(),
+        })
+    }
+
     #[test]
     fn make_credentials_callback_forwards_to_select_credentials() {
         // The closure body is one call to `select_credentials`; we
         // exercise it directly with synthetic args so the closure lines
         // get coverage even without an authenticated remote handshake.
-        let mut cb = make_credentials_callback(Some("ghp_xyz".into()));
+        let mut cb = make_credentials_callback(bound("example.com"));
         let cred = cb(
             "https://example.com/repo.git",
             None,
@@ -76,6 +111,75 @@ mod tests {
         )
         .expect("default cred");
         assert!(cred_has(&cred, git2::CredentialType::DEFAULT));
+    }
+
+    /// The token goes to the host it was entered for and nowhere else: not
+    /// to another host, a subdomain, the same name over another scheme, a
+    /// URL smuggling the host into its userinfo, or one that adds a port.
+    #[test]
+    fn the_token_is_offered_only_to_the_host_it_is_bound_to() {
+        for url in [
+            "https://attacker.example/repo.git",
+            "https://example.com.attacker.example/repo.git",
+            "https://sub.example.com/repo.git",
+            "http://example.com/repo.git",
+            "https://example.com@attacker.example/repo.git",
+            "https://example.com:8443/repo.git",
+            "ssh://example.com/repo.git",
+            "example.com",
+        ] {
+            let mut cb = make_credentials_callback(bound("example.com"));
+            let cred = cb(url, None, git2::CredentialType::USER_PASS_PLAINTEXT).unwrap();
+            assert!(cred_has(&cred, git2::CredentialType::DEFAULT), "{url}");
+            assert!(
+                !cred_has(&cred, git2::CredentialType::USER_PASS_PLAINTEXT),
+                "{url}"
+            );
+        }
+        // The host is matched without regard to case, and with its port.
+        for (host, url) in [
+            ("example.com", "https://EXAMPLE.com/repo.git"),
+            ("example.com:8443", "https://example.com:8443/repo.git"),
+        ] {
+            let mut cb = make_credentials_callback(bound(host));
+            let cred = cb(url, None, git2::CredentialType::USER_PASS_PLAINTEXT).unwrap();
+            assert!(
+                cred_has(&cred, git2::CredentialType::USER_PASS_PLAINTEXT),
+                "{url}"
+            );
+        }
+        // A token bound to no host (entered before a remote existed) is
+        // offered to no one.
+        let mut cb = make_credentials_callback(bound(""));
+        let cred = cb(
+            "https://example.com/repo.git",
+            None,
+            git2::CredentialType::USER_PASS_PLAINTEXT,
+        )
+        .unwrap();
+        assert!(cred_has(&cred, git2::CredentialType::DEFAULT));
+    }
+
+    #[test]
+    fn https_authority_reads_https_urls_only() {
+        assert_eq!(
+            https_authority("https://Example.com:8443/o/r.git?x#y").as_deref(),
+            Some("example.com:8443")
+        );
+        assert_eq!(
+            https_authority("https://example.com").as_deref(),
+            Some("example.com")
+        );
+        for url in [
+            "http://example.com/r.git",
+            "ssh://git@example.com/r.git",
+            "git@example.com:o/r.git",
+            "https://",
+            "https:///r.git",
+            "https://user:token@example.com/r.git",
+        ] {
+            assert!(https_authority(url).is_none(), "{url}");
+        }
     }
 
     #[test]
