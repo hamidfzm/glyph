@@ -82,6 +82,8 @@ Budget roughly 1–2 minutes on a clean working tree. The fast lint-staged step 
 
 To bypass in a genuine emergency: `git commit --no-verify`. Don't make a habit of it. CI runs the same gate and will reject the PR.
 
+The commit-msg and pre-push hooks also reject AI attribution (see [Conventions](#conventions)), and the pre-push hook enforces the branch naming convention.
+
 ## Development Commands
 
 ```bash
@@ -255,13 +257,14 @@ committed; regenerate them only when the Tauri CLI requires it.
 
 - **Commits**: [Conventional commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `chore:`, `docs:`, `refactor:`)
 - **Breaking changes**: mark the commit `feat(scope)!:` **and** label the PR `breaking`. The `!` on its own changes nothing in the release notes: GitHub groups them by label, and `.github/release.yml` keys the "💥 Breaking Changes" section off that label. A PR carrying both `breaking` and `enhancement` appears only under Breaking Changes, because the first matching category wins.
-- **No co-authored-by** lines in commits, and no other AI attribution (`Generated with ...`). The `.husky/commit-msg` hook rejects both.
+- **No co-authored-by** lines in commits, and no other AI attribution (`Generated with ...`, or an agent as a commit's author or committer) in commits or PR descriptions. `scripts/check-ai-attribution.sh` rejects all of them from the commit-msg and pre-push hooks, and CI runs it over a PR's commits, title and description, so a commit made without the hooks is still caught. An agent author matters as much as a trailer: GitHub's squash merge turns a branch commit's author into a co-author trailer on `main`.
 - **Package manager**: pnpm only (not npm/yarn)
 - **Linting (TS)**: Biome (configured in `biome.json`); run `pnpm lint`
 - **Linting (Rust)**: Clippy; run `cargo clippy` in `src-tauri/`
 - **Formatting**: Biome for TypeScript, rustfmt for Rust
 - **Testing (TS)**: Vitest + Testing Library; test files colocated as `*.test.{ts,tsx}`
 - **Testing (Rust)**: `#[cfg(test)]` modules in source files
+- **Tauri commands**: give `invoke` its command name as a string literal, or as a value typed as a union of literals. `scripts/tauri-commands.test.mjs` fails on a name it cannot read that way, on a name `generate_handler!` in `src-tauri/src/lib.rs` does not register, and on a registered command that no `invoke` call can name.
 - **Imports**: Named exports, no default exports
 - **Issue titles**: imperative mood (e.g. "Add search within document", not "Search feature" or "feat: search"). Always tag with `enhancement`/`bug` + a `priority: *` label + a category label (`markdown`/`ui`/`navigation`) where it fits. Add new issues to the **Glyph Roadmap** project board with status **Todo**.
 

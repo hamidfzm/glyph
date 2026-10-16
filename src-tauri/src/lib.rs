@@ -299,7 +299,7 @@ pub fn run() {
             commands::file::create_dir_all,
             commands::file::copy_file,
             commands::file::prune_export_dir,
-            commands::file::get_file_metadata,
+            commands::file::check_path_exists,
             commands::file::allow_document_asset,
             #[cfg(desktop)]
             commands::file::print_document,

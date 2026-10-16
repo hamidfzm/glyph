@@ -30,11 +30,30 @@ jobs:
     # Cargo.lock agreement) and the changelog resolution (previous tag from the
     # tag's own ancestry, commit fallback when generate-notes finds no pull
     # requests). Guards create-release.yml and release.yml without cutting a
-    # release (see #504).
+    # release (see #504). On a pull request it also runs the commit-msg and
+    # pre-push hooks' check over the PR's commits and text, which catches
+    # commits made where those hooks never ran.
     name: Release bump
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          # Every commit, but no file contents beyond the checkout: the
+          # commit check walks the PR's commits back to its base branch.
+          fetch-depth: 0
+          filter: blob:none
       - uses: ./.github/actions/rust-setup
       - run: bash scripts/bump-version.test.sh
       - run: bash scripts/release-changelog.test.sh
+      - run: bash scripts/check-ai-attribution.test.sh
+      - name: Check the PR's commits, title and description
+        if: github.event_name == 'pull_request'
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          TITLE: ${{ github.event.pull_request.title }}
+          BODY: ${{ github.event.pull_request.body }}
+        run: |
+          sh scripts/check-ai-attribution.sh commits "$HEAD_SHA" --not "origin/$BASE_REF"
+          printf '%s\n\n%s\n' "$TITLE" "$BODY" > "$RUNNER_TEMP/pr.md"
+          sh scripts/check-ai-attribution.sh text "$RUNNER_TEMP/pr.md"
