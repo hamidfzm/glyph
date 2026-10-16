@@ -5,7 +5,7 @@
 // state and the stdout/stderr routing) live in [`super::export`] with direct
 // tests.
 
-use super::export::{get_cli_export, write_cli_export_outcome, CliExport};
+use super::export::{cli_export_output, write_cli_export_outcome, CliExport};
 use tauri::State;
 
 /// Report the outcome of a CLI export and terminate the process, making the
@@ -13,13 +13,20 @@ use tauri::State;
 /// output path to stdout, and a nonzero code fails the CI step. Exits via
 /// `std::process::exit` rather than `AppHandle::exit`: the latter unwinds the
 /// event loop and the process then reports 0 regardless of the requested code.
+/// Refused, with the process left alone, when no CLI export is in progress:
+/// the command is registered in every session, and a renderer could otherwise
+/// end an interactive one with a message of its choosing on stderr.
 #[tauri::command]
-pub fn finish_cli_export(state: State<'_, CliExport>, code: i32, message: String) {
+pub fn finish_cli_export(
+    state: State<'_, CliExport>,
+    code: i32,
+    message: String,
+) -> Result<(), String> {
     // The path printed is the one parsed from argv, never one the renderer names.
-    let output = get_cli_export(state).map(|request| request.output);
+    let output = cli_export_output(&state)?;
     let written = write_cli_export_outcome(
         code,
-        output.as_deref(),
+        Some(&output),
         &message,
         &mut std::io::stdout(),
         &mut std::io::stderr(),

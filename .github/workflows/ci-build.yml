@@ -117,7 +117,7 @@ jobs:
       # release so the image is tested against this checkout.
       - name: Upload the Debian package
         if: matrix.platform == 'ubuntu-22.04'
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: glyph-deb
           path: src-tauri/target/release/bundle/deb/*.deb
@@ -195,11 +195,7 @@ jobs:
           java-version: '17'
           cache: gradle
       - name: Set up Android SDK
-        uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3.2.2
-        with:
-          # The default also installs the legacy `tools` package, which the
-          # runner's cmdline-tools 16.0 no longer carries, so sdkmanager fails.
-          packages: platform-tools
+        uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
       - name: Cache NDK
         id: ndk-cache
         uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
@@ -215,7 +211,7 @@ jobs:
           NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/${{ env.NDK_VERSION }}
         run: pnpm tauri android build --debug --apk --target aarch64
       - name: Upload debug APK
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: glyph-android-debug-apk
           path: src-tauri/gen/android/app/build/outputs/apk/universal/debug/*.apk

@@ -6,6 +6,8 @@
 //! so this file is excluded from codecov coverage; the real logic lives
 //! in `ops.rs` and is fully tested there.
 
+use std::path::Path;
+
 use tauri::State;
 
 use crate::grants::GrantRegistry;
@@ -13,6 +15,7 @@ use crate::grants::GrantRegistry;
 use super::backend::{StatusReport, SyncResult};
 use super::config::{CommitAuthorHint, WorkspaceSyncConfig};
 use super::error::SyncError;
+use super::git;
 use super::ops;
 use super::state::SyncState;
 
@@ -22,6 +25,42 @@ fn ensure_workspace(grants: &GrantRegistry, workspace_path: &str) -> Result<(), 
         .ensure_workspace(workspace_path)
         .map(|_| ())
         .map_err(SyncError::Io)
+}
+
+/// For a command that opens the workspace's repository. The repository's own
+/// files can send libgit2 to a network path, so on Windows they are judged
+/// first (`git::pointers`).
+fn ensure_repository(grants: &GrantRegistry, workspace_path: &str) -> Result<(), SyncError> {
+    ensure_workspace(grants, workspace_path)?;
+    #[cfg(windows)]
+    refuse_pointers(grants, workspace_path, git::refuse_remote_pointers)?;
+    Ok(())
+}
+
+/// [`ensure_repository`] for a command that runs status, staging or checkout,
+/// which also open the repository's submodules.
+fn ensure_working_tree(grants: &GrantRegistry, workspace_path: &str) -> Result<(), SyncError> {
+    ensure_workspace(grants, workspace_path)?;
+    #[cfg(windows)]
+    refuse_pointers(
+        grants,
+        workspace_path,
+        git::refuse_remote_pointers_with_submodules,
+    )?;
+    Ok(())
+}
+
+#[cfg(windows)]
+fn refuse_pointers(
+    grants: &GrantRegistry,
+    workspace_path: &str,
+    check: fn(&Path, git::Judge) -> Result<(), String>,
+) -> Result<(), SyncError> {
+    let judge = |path: &Path| {
+        let spelled: &str = &path.to_string_lossy();
+        grants.refuse_remote(spelled)
+    };
+    check(Path::new(workspace_path), &judge).map_err(SyncError::Io)
 }
 
 #[tauri::command]
@@ -94,7 +133,7 @@ pub async fn sync_init_repo(
     remote_url: Option<String>,
     grants: State<'_, GrantRegistry>,
 ) -> Result<(), SyncError> {
-    ensure_workspace(&grants, &workspace_path)?;
+    ensure_repository(&grants, &workspace_path)?;
     if let Some(url) = &remote_url {
         ops::validate_remote_url(url)?;
     }
@@ -124,7 +163,7 @@ pub async fn sync_set_origin(
     remote_url: String,
     grants: State<'_, GrantRegistry>,
 ) -> Result<(), SyncError> {
-    ensure_workspace(&grants, &workspace_path)?;
+    ensure_repository(&grants, &workspace_path)?;
     ops::validate_remote_url(&remote_url)?;
     ops::set_origin(workspace_path, remote_url).await
 }
@@ -135,7 +174,7 @@ pub async fn sync_commit_config(
     state: State<'_, SyncState>,
     grants: State<'_, GrantRegistry>,
 ) -> Result<bool, SyncError> {
-    ensure_workspace(&grants, &workspace_path)?;
+    ensure_working_tree(&grants, &workspace_path)?;
     ops::commit_config(&state, &workspace_path).await
 }
 
@@ -145,7 +184,7 @@ pub async fn sync_status(
     state: State<'_, SyncState>,
     grants: State<'_, GrantRegistry>,
 ) -> Result<StatusReport, SyncError> {
-    ensure_workspace(&grants, &workspace_path)?;
+    ensure_working_tree(&grants, &workspace_path)?;
     ops::run_status(&state, &workspace_path).await
 }
 
@@ -156,7 +195,7 @@ pub async fn sync_run(
     state: State<'_, SyncState>,
     grants: State<'_, GrantRegistry>,
 ) -> Result<SyncResult, SyncError> {
-    ensure_workspace(&grants, &workspace_path)?;
+    ensure_working_tree(&grants, &workspace_path)?;
     ops::run_sync(&state, &workspace_path, message).await
 }
 
@@ -165,7 +204,7 @@ pub async fn sync_default_author(
     workspace_path: String,
     grants: State<'_, GrantRegistry>,
 ) -> Result<CommitAuthorHint, SyncError> {
-    ensure_workspace(&grants, &workspace_path)?;
+    ensure_repository(&grants, &workspace_path)?;
     Ok(ops::default_author(&workspace_path))
 }
 
@@ -174,7 +213,7 @@ pub async fn sync_repo_present(
     workspace_path: String,
     grants: State<'_, GrantRegistry>,
 ) -> Result<bool, SyncError> {
-    ensure_workspace(&grants, &workspace_path)?;
+    ensure_repository(&grants, &workspace_path)?;
     Ok(ops::repo_present(&workspace_path))
 }
 
@@ -291,6 +330,75 @@ mod tests {
         let result = sync_init_repo(path, None, None, ws.grants()).await;
         assert!(matches!(result, Err(SyncError::Io(_))));
         assert!(!outside.join(".git").exists());
+    }
+
+    #[cfg(windows)]
+    fn assert_never_looked_up(command: &str, result: Result<(), SyncError>) {
+        match result {
+            Err(SyncError::Io(reason)) => {
+                assert!(reason.contains("never looked up"), "{command}: {reason}")
+            }
+            other => panic!("{command}: {other:?}"),
+        }
+    }
+
+    // The workspace is granted, and its `.git` still names a host. One under
+    // `.invalid` cannot exist, should a refusal ever come late.
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn commands_that_open_the_repository_refuse_one_pointing_at_a_network_path() {
+        let ws = Workspace::new();
+        let dot_git = Path::new(&ws.workspace_path).join(".git");
+        fs::write(&dot_git, "gitdir: //glyph-test-host.invalid/share/x.git\n").unwrap();
+        let path = || ws.workspace_path.clone();
+        let origin = "https://example.com/notes.git".to_string();
+
+        let present = sync_repo_present(path(), ws.grants()).await;
+        assert_never_looked_up("repo_present", present.map(|_| ()));
+        let author = sync_default_author(path(), ws.grants()).await;
+        assert_never_looked_up("default_author", author.map(|_| ()));
+        let init = sync_init_repo(path(), None, None, ws.grants()).await;
+        assert_never_looked_up("init_repo", init);
+        let set_origin = sync_set_origin(path(), origin, ws.grants()).await;
+        assert_never_looked_up("set_origin", set_origin);
+        let commit = sync_commit_config(path(), ws.sync_state(), ws.grants()).await;
+        assert_never_looked_up("commit_config", commit.map(|_| ()));
+        let status = sync_status(path(), ws.sync_state(), ws.grants()).await;
+        assert_never_looked_up("status", status.map(|_| ()));
+        let run = sync_run(path(), None, ws.sync_state(), ws.grants()).await;
+        assert_never_looked_up("run", run.map(|_| ()));
+
+        // Still the file it was: nothing initialized over it.
+        assert!(dot_git.is_file());
+    }
+
+    // Status, staging and checkout open the repository's submodules.
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn working_tree_commands_refuse_a_submodule_pointing_at_a_network_path() {
+        let ws = Workspace::new();
+        sync_init_repo(ws.workspace_path.clone(), None, None, ws.grants())
+            .await
+            .unwrap();
+        crate::workspace::store_sync_config(&ws.config()).unwrap();
+        let root = Path::new(&ws.workspace_path);
+        let declared = "[submodule \"s\"]\n\tpath = notes/sub\n\turl = ../s.git\n";
+        fs::write(root.join(".gitmodules"), declared).unwrap();
+        let nested = root.join("notes").join("sub");
+        fs::create_dir_all(&nested).unwrap();
+        let line = "gitdir: //glyph-test-host.invalid/share/x.git\n";
+        fs::write(nested.join(".git"), line).unwrap();
+        let path = || ws.workspace_path.clone();
+
+        // The workspace's own repository names nothing remote.
+        assert!(sync_repo_present(path(), ws.grants()).await.unwrap());
+
+        let commit = sync_commit_config(path(), ws.sync_state(), ws.grants()).await;
+        assert_never_looked_up("commit_config", commit.map(|_| ()));
+        let status = sync_status(path(), ws.sync_state(), ws.grants()).await;
+        assert_never_looked_up("status", status.map(|_| ()));
+        let run = sync_run(path(), None, ws.sync_state(), ws.grants()).await;
+        assert_never_looked_up("run", run.map(|_| ()));
     }
 
     #[tokio::test]

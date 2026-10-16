@@ -21,6 +21,7 @@ The renderer is untrusted after compromise: assume it can call every registered 
 - **Grants are minted only from backend-observed events** (CLI args, OS open events, drag-and-drop, Rust pickers, the settings seed at startup, a folder the user allows in an MCP client's elicitation prompt). A command that receives a renderer path checks it; it never grants it. Mirroring a path the registry already allows into the asset scope (`allow_document_asset`) is a check, not a grant.
 - **Every new gated command gets a denial test** driving the command with an ungranted path, plus the applicable rows of the adversarial scenario matrix.
 - Commands return `Result<T, String>`; a gate that cannot fail is not a gate.
+- **A repository is judged before libgit2 opens it.** libgit2 resolves the paths a repository names (the target of a `.git` file, `commondir`, alternates, paths in its config, a submodule's `.git`) and has no switch against it, so on Windows a folder's own files can send it to a network host. A sync command goes through `ensure_repository` or `ensure_working_tree`, never straight to `Repository::open`, and nothing opens a repository for a folder that is merely being opened (`resolve_workspace` only asks whether a `.git` entry exists). `Repository::discover` is not used at all: it reads those files in every ancestor.
 
 ## Capabilities (`src-tauri/capabilities/*.json`)
 
