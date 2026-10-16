@@ -180,6 +180,15 @@ feature:
   `data:`/`blob:` for exports and diagram rendering, and `https:`/`http:`
   because documents legitimately embed remote images and media; a remote fetch
   exposes the viewer's IP to the embedded host, same as any markdown viewer.
+  An AI reply loads an image only when the document it was asked about
+  already named that URL, compared after the renderer's percent-encoding:
+  the reply is shaped by that document, so a URL the model composed would
+  be a channel for its contents, while a quoted one carries nothing the
+  document view would not already fetch. The URLs are read from the
+  document when the reply is requested and kept on the reply, since the
+  chat outlives a switch to another document. Any other image is shown as
+  its alt text and URL. Mermaid's on-screen SVG goes through DOMPurify
+  before it is put in the document, as the page renders already did.
 - `object-src 'none'`, `frame-src 'none'`, `base-uri 'self'`, and
   `form-action 'none'` close the remaining injection sinks.
 
