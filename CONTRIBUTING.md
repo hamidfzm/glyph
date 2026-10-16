@@ -264,6 +264,7 @@ committed; regenerate them only when the Tauri CLI requires it.
 - **Formatting**: Biome for TypeScript, rustfmt for Rust
 - **Testing (TS)**: Vitest + Testing Library; test files colocated as `*.test.{ts,tsx}`
 - **Testing (Rust)**: `#[cfg(test)]` modules in source files
+- **Tauri commands**: give `invoke` its command name as a string literal, or as a value typed as a union of literals. `scripts/tauri-commands.test.mjs` fails on a name it cannot read that way, on a name `generate_handler!` in `src-tauri/src/lib.rs` does not register, and on a registered command that no `invoke` call can name.
 - **Imports**: Named exports, no default exports
 - **Issue titles**: imperative mood (e.g. "Add search within document", not "Search feature" or "feat: search"). Always tag with `enhancement`/`bug` + a `priority: *` label + a category label (`markdown`/`ui`/`navigation`) where it fits. Add new issues to the **Glyph Roadmap** project board with status **Todo**.
 

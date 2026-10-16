@@ -9,6 +9,8 @@ multi-ecosystem-groups:
   tauri:
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
     # Settable only here, not on a member entry. Group PRs get no prefix by
     # default, and the CI title check rejects a title without one.
     commit-message:
@@ -41,6 +43,8 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
     commit-message:
       prefix: "chore(deps)"
     ignore:
@@ -60,6 +64,8 @@ updates:
     directory: "/src-tauri"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
     commit-message:
       prefix: "chore(deps)"
     ignore:
@@ -74,6 +80,17 @@ updates:
         patterns:
           - "*"
 
+  # The runtime image is pinned to a digest in the Dockerfile, so a retagged
+  # base image reaches the build only through a reviewed bump.
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: "chore(deps)"
+
   # Every `uses:` is pinned to a commit SHA (see CONTRIBUTING.md); Dependabot
   # rewrites the SHA and the `# vX.Y.Z` comment together. "/" only covers
   # .github/workflows, so the composite actions need their own entries.
@@ -83,6 +100,8 @@ updates:
       - "/.github/actions/*"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
     commit-message:
       prefix: "chore(ci)"
     ignore:

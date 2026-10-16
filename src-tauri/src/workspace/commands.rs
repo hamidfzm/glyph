@@ -2,7 +2,8 @@
 //!
 //! Thin wrappers over [`super::resolve`] and [`super::config`] /
 //! [`super::paths`]. Sync (not async) to match the filesystem commands in
-//! `commands/file.rs`; each is a small single-file or git-discovery call.
+//! `commands/file.rs`; each is a small single-file call or a walk up the
+//! folder's ancestors.
 
 use std::path::Path;
 use tauri::State;
