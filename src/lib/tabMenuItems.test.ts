@@ -1,4 +1,4 @@
-import { revealItemInDir } from "@tauri-apps/plugin-opener";
+import { invoke } from "@tauri-apps/api/core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { FileTab, GraphTab, Tab } from "@/lib/tabs";
 import type { ContextMenuActionItem } from "./contextMenuItems";
@@ -37,7 +37,7 @@ function select(items: ReturnType<typeof buildTabMenuItems>, label: string): voi
 describe("buildTabMenuItems", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(revealItemInDir).mockResolvedValue(undefined);
+    vi.mocked(invoke).mockResolvedValue(undefined);
   });
 
   it("returns nothing when the target tab is gone", () => {
@@ -104,14 +104,14 @@ describe("buildTabMenuItems", () => {
 
   it("reveals the target tab's file in the OS file manager", () => {
     select(buildTabMenuItems(tabs(1), "tab-0", vi.fn(), vi.fn(), t), "fileTree.reveal");
-    expect(revealItemInDir).toHaveBeenCalledWith("/p/file0.md");
+    expect(invoke).toHaveBeenCalledWith("reveal_path", { path: "/p/file0.md" });
   });
 
   it("tolerates a reveal the OS refuses", async () => {
-    vi.mocked(revealItemInDir).mockRejectedValue(new Error("no such file"));
+    vi.mocked(invoke).mockRejectedValue(new Error("no such file"));
     select(buildTabMenuItems(tabs(1), "tab-0", vi.fn(), vi.fn(), t), "fileTree.reveal");
     await Promise.resolve();
-    expect(revealItemInDir).toHaveBeenCalled();
+    expect(invoke).toHaveBeenCalledWith("reveal_path", { path: "/p/file0.md" });
   });
 
   // A virtual buffer's path is its "Untitled-N" title, which is neither worth

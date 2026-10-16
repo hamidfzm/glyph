@@ -1,4 +1,4 @@
-import { revealItemInDir } from "@tauri-apps/plugin-opener";
+import { invoke } from "@tauri-apps/api/core";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { Sidebar } from "@/components/layout/Sidebar";
@@ -65,7 +65,7 @@ describe("Sidebar files panel", () => {
 
     fireEvent.contextMenu(screen.getByText("readme.md"));
     fireEvent.click(screen.getByText("Show in system explorer"));
-    expect(revealItemInDir).toHaveBeenCalledWith("/tmp/notes/readme.md");
+    expect(invoke).toHaveBeenCalledWith("reveal_path", { path: "/tmp/notes/readme.md" });
 
     fireEvent.contextMenu(screen.getByText("readme.md"));
     fireEvent.click(screen.getByText("Move to…"));

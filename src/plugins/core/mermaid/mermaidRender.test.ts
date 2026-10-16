@@ -18,7 +18,11 @@ vi.mock("mermaid", () => ({
 const sanitizeMock = vi.fn((svg: string, _opts?: Record<string, unknown>) => {
   const parsed = new DOMParser().parseFromString(svg, "image/svg+xml");
   const fragment = document.createDocumentFragment();
-  if (!parsed.querySelector("parsererror")) fragment.appendChild(parsed.documentElement);
+  // Cloned rather than moved: happy-dom hands the same document back for a
+  // repeated string, and a root moved out of it would leave the next parse empty.
+  if (!parsed.querySelector("parsererror")) {
+    fragment.appendChild(parsed.documentElement.cloneNode(true));
+  }
   return fragment;
 });
 vi.mock("dompurify", () => ({
@@ -72,7 +76,7 @@ describe("renderMermaid", () => {
     renderSvg.mockRejectedValueOnce(new Error("boom"));
     renderSvg.mockResolvedValueOnce({ svg: "<svg id='retried'/>" });
     await expect(renderMermaid("retry-key", false)).rejects.toThrow("boom");
-    await expect(renderMermaid("retry-key", false)).resolves.toBe("<svg id='retried'/>");
+    await expect(renderMermaid("retry-key", false)).resolves.toContain('id="retried"');
     expect(renderSvg).toHaveBeenCalledTimes(2);
   });
 
@@ -90,8 +94,8 @@ describe("renderMermaid", () => {
     // wait for it before resolving, or the resolver is still the no-op.
     await vi.waitFor(() => expect(renderSvg).toHaveBeenCalledTimes(1));
     resolveRender({ svg: "<svg id='shared'/>" });
-    await expect(first).resolves.toBe("<svg id='shared'/>");
-    await expect(second).resolves.toBe("<svg id='shared'/>");
+    await expect(first).resolves.toContain('id="shared"');
+    await expect(second).resolves.toContain('id="shared"');
     expect(renderSvg).toHaveBeenCalledTimes(1);
   });
 
@@ -140,7 +144,7 @@ describe("renderMermaid", () => {
     rejectFirst(new Error("stale failure"));
     await expect(first).rejects.toThrow("stale failure");
     await Promise.all(fillers);
-    await expect(second).resolves.toBe("<svg/>");
+    await expect(second).resolves.toContain("<svg");
     const settled = renderSvg.mock.calls.length;
     // The healthy promise must have survived the failed one's eviction.
     await renderMermaid("w1-dup", false);
@@ -164,10 +168,32 @@ describe("renderMermaid", () => {
   });
 });
 
+describe("renderMermaid sanitizing", () => {
+  beforeEach(() => {
+    initialize.mockReset();
+    renderSvg.mockReset();
+    sanitizeMock.mockClear();
+  });
+
+  // The on-screen render lands in the document through innerHTML, so it gets
+  // the same pass the page renders get, with the HTML labels the screen keeps.
+  it("sanitizes the on-screen render and pins Mermaid's strict level", async () => {
+    renderSvg.mockResolvedValue({ svg: '<svg xmlns="http://www.w3.org/2000/svg"/>' });
+    const svg = await renderMermaid("sanitize-live", false);
+    expect(sanitizeMock).toHaveBeenCalledTimes(1);
+    expect(sanitizeMock.mock.calls[0][1]).toMatchObject({
+      USE_PROFILES: { html: true, svg: true, svgFilters: true },
+    });
+    expect(svg).toContain("<svg");
+    expect(initialize).toHaveBeenCalledWith(expect.objectContaining({ securityLevel: "strict" }));
+  });
+});
+
 describe("renderMermaidStatic", () => {
   beforeEach(() => {
     initialize.mockReset();
     renderSvg.mockReset();
+    sanitizeMock.mockClear();
   });
 
   it("re-renders light with SVG text labels and returns the markup", async () => {
@@ -181,6 +207,7 @@ describe("renderMermaidStatic", () => {
     // emits <foreignObject> node labels and they vanish from the PDF.
     expect(initialize).toHaveBeenCalledWith({
       startOnLoad: false,
+      securityLevel: "strict",
       theme: "default",
       htmlLabels: false,
       flowchart: { htmlLabels: false },
@@ -193,7 +220,11 @@ describe("renderMermaidStatic", () => {
     await renderMermaid("after-static", false);
     // Relies on Mermaid 11's initialize resetting to its defaults first, so
     // passing no htmlLabels flag here brings HTML labels back on screen.
-    expect(initialize).toHaveBeenLastCalledWith({ startOnLoad: false, theme: "default" });
+    expect(initialize).toHaveBeenLastCalledWith({
+      startOnLoad: false,
+      securityLevel: "strict",
+      theme: "default",
+    });
   });
 
   it("sanitizes the rendered markup before any consumer sees it", async () => {

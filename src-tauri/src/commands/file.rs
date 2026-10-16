@@ -1115,23 +1115,36 @@ mod tests {
     /// Make `path` impossible to open and still possible to remove: a handle
     /// that shares it for deletion alone on Windows, for as long as what this
     /// returns is alive, and no permission bits elsewhere (which root ignores).
+    /// A seal that does not hold fails the test here, which would otherwise
+    /// pass or fail for some other reason.
     fn seal(path: &Path) -> Option<fs::File> {
         #[cfg(windows)]
-        {
+        let sealed = {
             use std::os::windows::fs::OpenOptionsExt;
             const FILE_SHARE_DELETE: u32 = 4;
+            // Open for writing too: an open with backup semantics was seen to
+            // get past a handle that only reads while the backup privilege is
+            // enabled, as Git Bash run elevated enables it in whatever it
+            // starts. The check below catches a Windows that lets it past this.
             let handle = fs::OpenOptions::new()
                 .read(true)
+                .write(true)
                 .share_mode(FILE_SHARE_DELETE)
                 .open(path);
             Some(handle.unwrap())
-        }
+        };
         #[cfg(unix)]
-        {
+        let sealed = {
             use std::os::unix::fs::PermissionsExt;
             fs::set_permissions(path, fs::Permissions::from_mode(0o000)).unwrap();
             None
-        }
+        };
+        // The open `is_one_file` makes.
+        assert!(
+            same_file::Handle::from_path(path).is_err(),
+            "the seal on {path:?} does not hold for this user or file system"
+        );
+        sealed
     }
 
     /// What `.glyph` holds, to tell a staging file that was left behind.

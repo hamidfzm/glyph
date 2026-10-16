@@ -4,6 +4,7 @@ import type { ChatMessage } from "@/lib/ai/types";
 import { createAIProvider } from "@/lib/ai-providers";
 import { type AIDocContext, buildSystemPrompt } from "@/lib/aiPrompts";
 import { errorMessage } from "@/lib/errorMessage";
+import { quotedImageUrls } from "@/lib/quotedImageUrls";
 import type { AISettings } from "@/lib/settings";
 
 export interface ChatTurn {
@@ -14,6 +15,9 @@ export interface ChatTurn {
   /** Short label shown in the transcript instead of `content` (quick actions
    *  embed long passages the user shouldn't have to re-read). */
   display?: string;
+  /** Image URLs the document named when this reply was requested; a reply
+   *  image loads only when its URL is among them. Assistant turns only. */
+  quotedImageUrls?: readonly string[];
 }
 
 /**
@@ -52,18 +56,26 @@ export function useAIChat(aiSettings: AISettings, getDocContext: () => AIDocCont
         .map(({ role, content: c }) => ({ role, content: c }));
       history.push({ role: "user", content });
 
+      // Read once per send: the history outlives document switches, so the
+      // reply keeps the URLs of the document it was asked about.
+      const doc = getDocContext();
       const userId = ++idRef.current;
       const assistantId = ++idRef.current;
       setTurns((prev) => [
         ...prev,
         { id: userId, role: "user", content, display },
-        { id: assistantId, role: "assistant", content: "" },
+        {
+          id: assistantId,
+          role: "assistant",
+          content: "",
+          quotedImageUrls: quotedImageUrls(doc?.content ?? ""),
+        },
       ]);
       setStreaming(true);
 
       try {
         const full = await provider.chat(history, {
-          system: buildSystemPrompt(getDocContext()),
+          system: buildSystemPrompt(doc),
           signal: controller.signal,
           onChunk: (delta) =>
             setTurns((prev) =>
