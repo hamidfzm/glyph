@@ -23,6 +23,15 @@ fn to_path(picked: FilePath) -> Result<PathBuf, String> {
     picked.into_path().map_err(|e| e.to_string())
 }
 
+/// A dialog resolves its starting folder as it opens (on Windows, connecting to
+/// a network path's host), so the renderer's must be a granted workspace.
+fn ensure_start_dir<R: Runtime>(app: &AppHandle<R>, dir: Option<&str>) -> Result<(), String> {
+    if let Some(dir) = dir {
+        app.state::<GrantRegistry>().ensure_workspace(dir)?;
+    }
+    Ok(())
+}
+
 /// Open Folder: pick a directory and grant it as a workspace.
 #[tauri::command]
 pub async fn pick_folder<R: Runtime>(app: AppHandle<R>) -> Result<Option<String>, String> {
@@ -89,7 +98,8 @@ pub async fn pick_files<R: Runtime>(
 }
 
 /// Export save dialog: pick a destination file and grant it write-only.
-/// `default_dir` preselects a starting folder (the open workspace) when given.
+/// `default_dir` is the folder it opens in, when given. It is passed on as
+/// spelled, not canonicalized: the dialog cannot open a `\\?\UNC\` path.
 #[tauri::command]
 pub async fn pick_save<R: Runtime>(
     app: AppHandle<R>,
@@ -98,6 +108,7 @@ pub async fn pick_save<R: Runtime>(
     extensions: Vec<String>,
     default_dir: Option<String>,
 ) -> Result<Option<String>, String> {
+    ensure_start_dir(&app, default_dir.as_deref())?;
     let exts: Vec<&str> = extensions.iter().map(String::as_str).collect();
     let mut dialog = app
         .dialog()
@@ -163,6 +174,7 @@ pub async fn pick_move_dir<R: Runtime>(
     app: AppHandle<R>,
     default_dir: Option<String>,
 ) -> Result<Option<String>, String> {
+    ensure_start_dir(&app, default_dir.as_deref())?;
     let mut dialog = app.dialog().file();
     if let Some(dir) = default_dir {
         dialog = dialog.set_directory(dir);
@@ -179,10 +191,27 @@ pub async fn pick_move_dir<R: Runtime>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tauri::test::mock_app;
+    use tauri::async_runtime::block_on;
+    use tauri::test::{mock_app, MockRuntime};
 
-    #[test]
-    fn the_export_dir_picker_refuses_a_root_that_is_not_a_granted_workspace() {
+    const DENIED: &str = "path is outside the allowed workspaces and files:";
+    /// On Windows a network path is refused unresolved: looking it up would
+    /// connect to the host it names. Elsewhere it is one more missing path.
+    const REMOTE: &str = if cfg!(windows) {
+        "never looked up"
+    } else {
+        DENIED
+    };
+
+    struct Fixture {
+        _tmp: tempfile::TempDir,
+        app: tauri::App<MockRuntime>,
+        workspace: String,
+        /// Paths that are not the granted workspace, each with its refusal.
+        refused: Vec<(String, &'static str)>,
+    }
+
+    fn fixture() -> Fixture {
         let tmp = tempfile::TempDir::new().unwrap();
         let workspace = tmp.path().join("ws");
         std::fs::create_dir_all(workspace.join("sub")).unwrap();
@@ -192,21 +221,74 @@ mod tests {
             .grant_workspace(&workspace)
             .unwrap();
 
-        // An ungranted folder, one inside a workspace, and one that is gone.
-        // The mock app has no dialog to open, so each is refused before one.
-        for root in [
-            tmp.path().to_path_buf(),
-            workspace.join("sub"),
-            workspace.join("missing"),
-        ] {
-            let root = root.to_string_lossy().to_string();
-            let picked =
-                tauri::async_runtime::block_on(pick_export_dir(app.handle().clone(), root));
-            let denial = picked.expect_err("must be denied");
-            assert!(
-                denial.starts_with("path is outside the allowed workspaces and files:"),
-                "unexpected message: {denial}"
-            );
+        let local = |path: PathBuf| (path.to_string_lossy().to_string(), DENIED);
+        let remote = |path: &str| (path.to_string(), REMOTE);
+        let refused = vec![
+            // An ungranted folder, one inside the workspace, one that is gone,
+            // a relative name, and nothing at all.
+            local(tmp.path().to_path_buf()),
+            local(workspace.join("sub")),
+            local(workspace.join("missing")),
+            local(PathBuf::from("ws")),
+            local(PathBuf::new()),
+            // A host under `.invalid` cannot exist, should a refusal ever come late.
+            remote(r"\\attacker.invalid\share\notes"),
+            remote(r"\\?\UNC\attacker.invalid\share\notes"),
+            remote(r"\??\UNC\attacker.invalid\share\notes"),
+            remote(r"\\attacker.invalid\\share\notes"),
+        ];
+        Fixture {
+            workspace: workspace.to_string_lossy().to_string(),
+            _tmp: tmp,
+            app,
+            refused,
         }
+    }
+
+    /// The mock app has no dialog to open, so a refusal came before one.
+    fn assert_refused<T: std::fmt::Debug>(picked: Result<T, String>, refusal: &str) {
+        let denial = picked.expect_err("must be denied");
+        assert!(denial.contains(refusal), "unexpected message: {denial}");
+    }
+
+    #[test]
+    fn the_export_dir_picker_refuses_a_root_that_is_not_a_granted_workspace() {
+        let fx = fixture();
+        for (root, refusal) in &fx.refused {
+            let picked = block_on(pick_export_dir(fx.app.handle().clone(), root.clone()));
+            assert_refused(picked, refusal);
+        }
+    }
+
+    #[test]
+    fn the_save_picker_refuses_a_starting_folder_that_is_not_a_granted_workspace() {
+        let fx = fixture();
+        for (dir, refusal) in &fx.refused {
+            let picked = block_on(pick_save(
+                fx.app.handle().clone(),
+                "Untitled-1.md".to_string(),
+                "Markdown".to_string(),
+                vec!["md".to_string()],
+                Some(dir.clone()),
+            ));
+            assert_refused(picked, refusal);
+        }
+    }
+
+    #[test]
+    fn the_move_picker_refuses_a_starting_folder_that_is_not_a_granted_workspace() {
+        let fx = fixture();
+        for (dir, refusal) in &fx.refused {
+            let picked = block_on(pick_move_dir(fx.app.handle().clone(), Some(dir.clone())));
+            assert_refused(picked, refusal);
+        }
+    }
+
+    #[test]
+    fn a_granted_workspace_and_no_starting_folder_both_pass_the_check() {
+        let fx = fixture();
+        let app = fx.app.handle();
+        assert_eq!(ensure_start_dir(app, Some(&fx.workspace)), Ok(()));
+        assert_eq!(ensure_start_dir(app, None), Ok(()));
     }
 }

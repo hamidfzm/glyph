@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { ask } from "@tauri-apps/plugin-dialog";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { pickSave } from "@/lib/pickers";
@@ -35,6 +36,23 @@ async function newDraft(result: TabsHook, text: string) {
     result.current.newDocument();
   });
   const tabId = result.current.tabs[0].id;
+  act(() => {
+    result.current.updateEditContent(tabId, text);
+  });
+  return tabId;
+}
+
+/** Open the workspace /p/ws, then an untitled buffer holding `text`; return its tab id. */
+async function newDraftInWorkspace(result: TabsHook, text: string) {
+  await waitFor(() => expect(result.current.initializing).toBe(false));
+  await act(async () => {
+    await result.current.openFolder("/p/ws");
+  });
+  act(() => {
+    result.current.newDocument();
+  });
+  const tabId = result.current.tabs.find((t) => t.kind === "file" && t.file.virtual)?.id;
+  if (!tabId) throw new Error("expected a virtual tab");
   act(() => {
     result.current.updateEditContent(tabId, text);
   });
@@ -458,19 +476,7 @@ describe("useTabs in-memory documents", () => {
     );
     vi.mocked(pickSave).mockResolvedValue("/p/ws/saved.md");
     const { result } = renderHook(() => useTabs(defaultOptions()));
-    await waitFor(() => expect(result.current.initializing).toBe(false));
-    await act(async () => {
-      await result.current.openFolder("/p/ws");
-    });
-
-    act(() => {
-      result.current.newDocument();
-    });
-    const tabId = result.current.tabs.find((t) => t.kind === "file" && t.file.virtual)?.id;
-    if (!tabId) throw new Error("expected a virtual tab");
-    act(() => {
-      result.current.updateEditContent(tabId, "HELLO");
-    });
+    const tabId = await newDraftInWorkspace(result, "HELLO");
 
     await act(async () => {
       await result.current.saveDocument(tabId);
@@ -480,5 +486,163 @@ describe("useTabs in-memory documents", () => {
       workspaceRoot: "/p/ws",
       filePath: "/p/ws/saved.md",
     });
+  });
+
+  it("saveDocument asks again with no starting folder when the workspace root is refused", async () => {
+    const writeFile = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({ write_file: writeFile as unknown as Invoker }) as typeof invoke,
+    );
+    // The root's folder was renamed under the app, so the backend no longer
+    // resolves it and refuses it as the folder to open the dialog in.
+    expectConsole(/asking again with no starting folder/);
+    vi.mocked(pickSave)
+      .mockRejectedValueOnce("path is outside the allowed workspaces and files: /p/ws")
+      .mockResolvedValueOnce("/elsewhere/saved.md");
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    const tabId = await newDraftInWorkspace(result, "HELLO");
+
+    let ok: boolean | undefined;
+    await act(async () => {
+      ok = await result.current.saveDocument(tabId);
+    });
+
+    expect(ok).toBe(true);
+    expect(vi.mocked(pickSave).mock.calls.map((call) => call[3])).toEqual(["/p/ws", undefined]);
+    expect(writeFile).toHaveBeenCalledWith("write_file", {
+      path: "/elsewhere/saved.md",
+      content: "HELLO",
+    });
+  });
+
+  it("saveDocument keeps the buffer virtual when the second Save As is cancelled", async () => {
+    const writeFile = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({ write_file: writeFile as unknown as Invoker }) as typeof invoke,
+    );
+    expectConsole(/asking again with no starting folder/);
+    vi.mocked(pickSave)
+      .mockRejectedValueOnce("path is outside the allowed workspaces and files: /p/ws")
+      .mockResolvedValueOnce(null);
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    const tabId = await newDraftInWorkspace(result, "HELLO");
+
+    let ok: boolean | undefined;
+    await act(async () => {
+      ok = await result.current.saveDocument(tabId);
+    });
+
+    // False routes a closing window to its unsaved-changes prompt.
+    expect(ok).toBe(false);
+    expect(writeFile).not.toHaveBeenCalled();
+    const tab = result.current.tabs.find((t) => t.id === tabId);
+    expect(tab?.kind === "file" && tab.file.virtual).toBe(true);
+  });
+
+  // How the backend refuses a chosen name the grants will not write (a dangling link, say).
+  const REFUSED = "path is outside the allowed workspaces and files: /p/link.md";
+
+  it("saveDocument keeps the buffer and shows a notice when Save As fails", async () => {
+    const onWorkspaceNotice = vi.fn();
+    expectConsole(/Save As failed:/);
+    vi.mocked(pickSave).mockRejectedValue(REFUSED);
+    const { result } = renderHook(() => useTabs(defaultOptions({ onWorkspaceNotice })));
+    const tabId = await newDraft(result, "HELLO");
+
+    let ok: boolean | undefined;
+    await act(async () => {
+      ok = await result.current.saveDocument(tabId);
+    });
+
+    expect(ok).toBe(false);
+    // With no workspace there is no starting folder to drop, so no second dialog.
+    expect(pickSave).toHaveBeenCalledTimes(1);
+    expect(onWorkspaceNotice).toHaveBeenCalledWith(
+      { key: "notice.saveFailed", values: { name: fileOf(result).path } },
+      { persistent: true },
+    );
+    expect(fileOf(result).virtual).toBe(true);
+    expect(fileOf(result).dirty).toBe(true);
+    expect(fileOf(result).editContent).toBe("HELLO");
+  });
+
+  it("saveDocument keeps the buffer and shows a notice when both Save As attempts fail", async () => {
+    const onWorkspaceNotice = vi.fn();
+    expectConsole(/asking again with no starting folder/, /Save As failed:/);
+    vi.mocked(pickSave).mockRejectedValue(REFUSED);
+    const { result } = renderHook(() => useTabs(defaultOptions({ onWorkspaceNotice })));
+    const tabId = await newDraftInWorkspace(result, "HELLO");
+
+    let ok: boolean | undefined;
+    await act(async () => {
+      ok = await result.current.saveDocument(tabId);
+    });
+
+    expect(ok).toBe(false);
+    expect(vi.mocked(pickSave).mock.calls.map((call) => call[3])).toEqual(["/p/ws", undefined]);
+    expect(onWorkspaceNotice).toHaveBeenCalledWith(
+      expect.objectContaining({ key: "notice.saveFailed" }),
+      { persistent: true },
+    );
+    const tab = result.current.tabs.find((t) => t.id === tabId);
+    expect(tab?.kind === "file" && tab.file.virtual).toBe(true);
+    expect(tab?.kind === "file" && tab.file.editContent).toBe("HELLO");
+  });
+
+  it("a window close reaches the unsaved-changes prompt when Save As fails", async () => {
+    expectConsole(/Save As failed:/);
+    vi.mocked(pickSave).mockRejectedValue(REFUSED);
+    vi.mocked(ask).mockResolvedValueOnce(false);
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    const tabId = await newDraft(result, "HELLO");
+
+    // The window-close flush, unscoped; a rejection here would close the window.
+    let proceed: boolean | undefined;
+    await act(async () => {
+      proceed = await result.current.flushForClose();
+    });
+
+    expect(ask).toHaveBeenCalledWith(
+      expect.stringContaining(fileOf(result).path),
+      expect.objectContaining({ kind: "warning" }),
+    );
+    expect(proceed).toBe(false);
+    expect(result.current.tabs.map((t) => t.id)).toEqual([tabId]);
+    expect(fileOf(result).editContent).toBe("HELLO");
+  });
+
+  it("a Save As that fails after its tab was closed has nothing to save", async () => {
+    const onWorkspaceNotice = vi.fn();
+    expectConsole(/Save As failed:/);
+    const dialog = deferred<string | null>();
+    vi.mocked(pickSave).mockReturnValue(dialog.promise);
+    const { result } = renderHook(() =>
+      useTabs(
+        defaultOptions({
+          onWorkspaceNotice,
+          autoSave: false,
+          confirmUnsaved: async () => "discard" as const,
+        }),
+      ),
+    );
+    const tabId = await newDraft(result, "first");
+
+    let saving: Promise<boolean> | undefined;
+    act(() => {
+      saving = result.current.saveDocument(tabId);
+    });
+    await act(async () => {
+      await result.current.closeTab(tabId);
+    });
+    let ok: boolean | undefined;
+    await act(async () => {
+      dialog.reject(REFUSED);
+      ok = await saving;
+    });
+
+    // The user already discarded it, so there is nothing to report as unsaved.
+    expect(ok).toBe(true);
+    expect(onWorkspaceNotice).not.toHaveBeenCalled();
+    expect(result.current.tabs).toHaveLength(0);
   });
 });

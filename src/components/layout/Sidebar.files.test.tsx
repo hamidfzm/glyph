@@ -6,6 +6,7 @@ import { PluginsContext } from "@/contexts/PluginsContext";
 import { pickMoveDir } from "@/lib/pickers";
 import { createRegistry } from "@/lib/plugins/registry";
 import type { FileTreeFilter } from "@/lib/plugins/types";
+import { expectConsole } from "@/test/consoleGuard";
 import { pluginsContextValue } from "@/test/fixtures/pluginsContext";
 import {
   makeFileTab,
@@ -112,6 +113,24 @@ describe("Sidebar files panel", () => {
     fireEvent.contextMenu(screen.getByText("readme.md"));
     fireEvent.click(screen.getByText("Move to…"));
     await waitFor(() => expect(pickMoveDir).toHaveBeenCalled());
+    expect(movePath).not.toHaveBeenCalled();
+  });
+
+  it("Move to… logs a refused picker and moves nothing", async () => {
+    expectConsole(/Failed to pick a move destination/);
+    vi.mocked(pickMoveDir).mockRejectedValue("path is outside the allowed workspaces and files");
+    const movePath = vi.fn();
+    const consoleError = vi.spyOn(console, "error");
+    renderSidebar({ workspace: makeWorkspace(), tabs: { movePath } });
+
+    fireEvent.contextMenu(screen.getByText("readme.md"));
+    fireEvent.click(screen.getByText("Move to…"));
+    await waitFor(() =>
+      expect(consoleError).toHaveBeenCalledWith(
+        "Failed to pick a move destination:",
+        "path is outside the allowed workspaces and files",
+      ),
+    );
     expect(movePath).not.toHaveBeenCalled();
   });
 
