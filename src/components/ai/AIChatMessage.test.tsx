@@ -89,6 +89,25 @@ describe("AIChatMessage", () => {
     expect(placeholder).toHaveAttribute("title", "https://attacker.example/c?d=secret");
   });
 
+  it("loads a reply image whose URL the document named when the reply was requested", () => {
+    render(
+      <AIChatMessage
+        turn={{
+          id: 1,
+          role: "assistant",
+          content:
+            "Here ![chart](https://img.test/chart.png) and ![](https://img.test/chart.png?x)",
+          quotedImageUrls: ["https://img.test/chart.png"],
+        }}
+      />,
+    );
+    expect(screen.getByRole("img", { name: "chart" })).toHaveAttribute(
+      "src",
+      "https://img.test/chart.png",
+    );
+    expect(screen.getByText("https://img.test/chart.png?x")).not.toHaveAttribute("src");
+  });
+
   it("omits the read-aloud button entirely when TTS is unavailable", () => {
     render(<AIChatMessage turn={{ id: 1, role: "assistant", content: "reply" }} />);
     expect(screen.queryByRole("button", { name: "Read Aloud" })).not.toBeInTheDocument();

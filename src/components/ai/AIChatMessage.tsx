@@ -1,17 +1,13 @@
-import { useCallback } from "react";
+import { type ComponentProps, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { LinkComponent } from "@/components/markdown/LinkComponent";
 import type { ChatTurn } from "@/hooks/useAIChat";
-import { AIImagePlaceholder } from "./AIImagePlaceholder";
 import { AIQuoteBlock } from "./AIQuoteBlock";
+import { AIReplyImage } from "./AIReplyImage";
 
-// A model-chosen href must open in the system browser behind the external-link
-// prompt, never navigate the app webview; LinkComponent owns that. A
-// model-chosen image never loads: the reply is shaped by the document it was
-// asked about, so an image URL is a channel out of the user's notes.
-const components = { blockquote: AIQuoteBlock, a: LinkComponent, img: AIImagePlaceholder };
+const NO_QUOTED_URLS: readonly string[] = [];
 
 interface AIChatMessageProps {
   turn: ChatTurn;
@@ -35,6 +31,21 @@ export function AIChatMessage({
     // Best-effort copy; nothing to recover if the clipboard write is denied.
     void navigator.clipboard.writeText(turn.content).catch(() => undefined);
   }, [turn.content]);
+
+  // A model-chosen href must open in the system browser behind the
+  // external-link prompt, never navigate the app webview; LinkComponent owns
+  // that. A model-chosen image loads only when the document the reply was
+  // asked about already named its URL: the reply is shaped by that document,
+  // so a URL the model composed is a channel out of the user's notes.
+  const quotedUrls = turn.quotedImageUrls ?? NO_QUOTED_URLS;
+  const components = useMemo(
+    () => ({
+      blockquote: AIQuoteBlock,
+      a: LinkComponent,
+      img: (props: ComponentProps<"img">) => <AIReplyImage {...props} quotedUrls={quotedUrls} />,
+    }),
+    [quotedUrls],
+  );
 
   if (turn.role === "user") {
     return (

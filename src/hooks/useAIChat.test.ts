@@ -72,6 +72,24 @@ describe("useAIChat", () => {
     expect(options?.system).toContain("doc.md");
   });
 
+  it("keeps the document's image URLs on the reply it was asked about", async () => {
+    mockProvider(async () => "ok");
+    let doc = { content: "![a](https://img.test/a.png)", path: "a.md" };
+    const { result } = renderHook(() => useAIChat(ollamaSettings, () => doc));
+
+    await act(async () => {
+      await result.current.send("first");
+    });
+    doc = { content: "![b](https://img.test/b.png)", path: "b.md" };
+    await act(async () => {
+      await result.current.send("second");
+    });
+
+    expect(result.current.turns[1].quotedImageUrls).toEqual(["https://img.test/a.png"]);
+    expect(result.current.turns[3].quotedImageUrls).toEqual(["https://img.test/b.png"]);
+    expect(result.current.turns[0].quotedImageUrls).toBeUndefined();
+  });
+
   it("keeps the user's display label separate from the sent prompt", async () => {
     const chat = mockProvider(async () => "done");
     const { result } = renderHook(() => useAIChat(ollamaSettings, () => null));
