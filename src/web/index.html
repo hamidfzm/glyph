@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- First in the head: a meta policy only governs what follows it. The URL
+         fragment holds a document anyone can write, and unlike the OS
+         previews no native host blocks the network, so this is the only layer. -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; media-src 'none'; worker-src 'none'; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'"
+    />
+    <meta name="referrer" content="no-referrer" />
+    <meta http-equiv="x-dns-prefetch-control" content="off" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Dark canvas from the first frame in dark mode, before any CSS loads. -->
+    <meta name="color-scheme" content="light dark" />
+    <title>Glyph</title>
+  </head>
+  <body>
+    <main id="preview"></main>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

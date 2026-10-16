@@ -16,10 +16,19 @@ import enWorkspaceSettings from "@/locales/en/workspaceSettings.json";
 // each `import()` into a separate file) and fetched only when that locale is
 // first activated. English is excluded from the lazy set and bundled inline
 // below, so first paint and missing-key fallback never wait on a load.
-const localeChunks = import.meta.glob<Record<string, unknown>>(
+const localeFiles = import.meta.glob<Record<string, unknown>>(
   ["@/locales/*/*.json", "!@/locales/en/**"],
   { import: "default" },
 );
+
+// Keyed by `<locale>/<namespace>`, because Vite writes glob keys relative to
+// the build's root: `/src/locales/…` in the app, `../locales/…` in the preview
+// and web builds.
+const localeChunks = new Map<string, () => Promise<Record<string, unknown>>>();
+for (const [path, load] of Object.entries(localeFiles)) {
+  const [, lng, ns] = /([^/]+)\/([^/]+)\.json$/.exec(path) ?? [];
+  if (lng && ns) localeChunks.set(`${lng}/${ns}`, load);
+}
 
 export const i18n = i18next;
 
@@ -30,7 +39,7 @@ i18n
     // resolve to null and fall back to English.
     resourcesToBackend(async (lng: string, ns: string) => {
       if (lng === FALLBACK_LOCALE) return null;
-      const load = localeChunks[`/src/locales/${lng}/${ns}.json`];
+      const load = localeChunks.get(`${lng}/${ns}`);
       return load ? await load() : null;
     }),
   )

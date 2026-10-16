@@ -15,11 +15,12 @@ interface HastElement extends HastNode {
 
 type VisitTree = Parameters<typeof visit>[0];
 
-// Rehype plugin for the Explorer and Quick Look previews. Relative images load
-// from the previewed file's folder, which the host serves read-only at
-// `baseUrl`. Every other image becomes its alt text: a remote image would need
-// the network, and a path outside that folder is not served.
-export function rehypePreviewImages(baseUrl: string) {
+// Rehype plugin for the Explorer, Quick Look and web previews. Relative images
+// load from the previewed file's folder, which the host serves read-only at
+// `baseUrl` (the web viewer serves none: null). Every other image becomes its
+// alt text: a remote image would need the network, and a path outside that
+// folder is not served.
+export function rehypePreviewImages(baseUrl: string | null) {
   return (tree: HastNode) => {
     visit(
       tree as unknown as VisitTree,
@@ -29,7 +30,7 @@ export function rehypePreviewImages(baseUrl: string) {
         const props = node.properties;
         // Raw `<img>` in the document can reach here with neither attribute.
         const src = typeof props.src === "string" ? props.src : "";
-        if (isInFolder(src)) {
+        if (baseUrl && isInFolder(src)) {
           props.src = new URL(src, baseUrl).href;
           return;
         }

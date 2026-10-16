@@ -124,15 +124,15 @@ const svgAttributes: Record<string, string[]> = {
   image: ["href", "xLinkHref", "preserveAspectRatio", ...svgCommonAttributes],
 };
 
-// Allowlist for raw HTML in markdown. Glyph is a local-file viewer so the
-// XSS surface is small, but we still strip <script>, on* handlers, and
-// javascript: URLs (defaultSchema's behaviour) and only widen the allowlist
-// to the GitHub-style elements/attributes README authors actually use, plus
-// static inline SVG (see `svgTagNames`).
+// Allowlist for raw HTML in markdown, including documents opened from a shared
+// link in the web viewer. It strips <script>, on* handlers, and javascript:
+// URLs (defaultSchema's behaviour) and only widens the allowlist to the
+// GitHub-style elements/attributes README authors actually use, plus static
+// inline SVG (see `svgTagNames`).
 //
 // `style` is intentionally allowed: badges and centered headers in GitHub
-// READMEs frequently rely on inline style. If Glyph ever loads remote
-// content this needs to be revisited.
+// READMEs frequently rely on inline style. Its reach in the web viewer is
+// bounded there (CSP, paint containment) and accepted in the threat model.
 export const markdownSanitizeSchema = {
   ...defaultSchema,
   // xlink:href needs its own protocol entry or it would bypass URL filtering.
@@ -149,7 +149,10 @@ export const markdownSanitizeSchema = {
   // ids with that prefix (`user-content-fn-1`). The double-prefix breaks
   // footnote `[^1]` navigation because the href stays `#user-content-fn-1`
   // while the target id becomes `#user-content-user-content-fn-1`.
-  // Glyph is a local viewer with no host-page collisions to worry about.
+  // A document's ids therefore share the page with the host's own: the
+  // viewers' own styles and lookups go through references or structure, not a
+  // bare id. (Mermaid's renderer still looks up its own ids, so a document can
+  // break a diagram's render, which then falls back to its source.)
   clobberPrefix: "",
   clobber: [],
   // Disallowed elements are unwrapped by default; foreignObject carries

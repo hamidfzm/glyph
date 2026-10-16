@@ -95,7 +95,8 @@ describe("startPreview", () => {
     await vi.waitFor(() => expect(root.textContent).toBe("newest"));
 
     resolveFirst?.("<p>stale</p>");
-    await Promise.resolve();
+    // A macrotask: the stale write would land several microtasks later.
+    await new Promise((resolve) => setTimeout(resolve, 0));
     expect(root.textContent).toBe("newest");
   });
 
@@ -129,5 +130,61 @@ describe("startPreview", () => {
     await Promise.resolve();
     expect(root.childNodes).toHaveLength(0);
     expect(renderPreview).not.toHaveBeenCalled();
+  });
+});
+
+describe("startPreview without a host", () => {
+  function startDirect() {
+    const root = document.createElement("main");
+    document.body.append(root);
+    const { query } = stubDarkQuery(false);
+    const preview = startPreview({ root, darkQuery: query, language: "en" });
+    return { root, preview };
+  }
+
+  it("renders a document shown directly, with no folder behind it", async () => {
+    const { root, preview } = startDirect();
+    preview.show({ kind: "document", content: "# Web", baseUrl: null });
+    await vi.waitFor(() => expect(root.textContent).toContain("# Web in light"));
+    expect(renderPreview).toHaveBeenCalledWith("# Web", { dark: false, baseUrl: null });
+  });
+
+  it("shows a notice for a link it could not decode", async () => {
+    const { root, preview } = startDirect();
+    preview.show({ kind: "invalidLink" });
+    await vi.waitFor(() =>
+      expect(root.textContent).toBe(i18n.t("preview.invalidLink", { lng: "en" })),
+    );
+  });
+
+  it("clears the root for null, even while an earlier render is in flight", async () => {
+    let resolveRender: ((html: string) => void) | undefined;
+    vi.mocked(renderPreview).mockImplementationOnce(
+      () => new Promise((resolve) => (resolveRender = resolve)),
+    );
+    const { root, preview } = startDirect();
+    preview.show({ kind: "document", content: "# Late", baseUrl: null });
+    await vi.waitFor(() => expect(resolveRender).toBeDefined());
+
+    preview.show(null);
+    resolveRender?.("<p>late</p>");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(root.childNodes).toHaveLength(0);
+  });
+
+  it("renders the message shown last when several arrive while translations load", async () => {
+    const { root, preview } = startDirect();
+    preview.show({ kind: "document", content: "# First", baseUrl: null });
+    preview.show({ kind: "unreadable" });
+    await vi.waitFor(() =>
+      expect(root.textContent).toBe(i18n.t("preview.unreadable", { lng: "en" })),
+    );
+    expect(root.textContent).not.toContain("First");
+  });
+
+  it("settles ready once translations have loaded", async () => {
+    const { preview } = startDirect();
+    await preview.ready;
+    expect(i18n.language).toBe("en");
   });
 });

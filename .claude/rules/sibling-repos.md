@@ -2,7 +2,7 @@
 
 Rules for working across the Glyph ecosystem's satellite repositories.
 
-The main repo is `hamidfzm/glyph`. Every satellite (Homebrew tap, Scoop bucket, apt/rpm repos, plugin marketplace, plugin template, export-website action, org profile, and the `glyph-md.github.io` website) lives in the **glyph-md** GitHub org.
+The main repo is `hamidfzm/glyph`. Every satellite (Homebrew tap, Scoop bucket, apt/rpm repos, plugin marketplace, plugin template, export-website action, org profile, the `glyph-md.github.io` website, and the `view` web viewer deploy, which each release's `publish-web-viewer` job starts) lives in the **glyph-md** GitHub org.
 
 - **Clone all satellites into `../glyph-md/<repo>`**, a `glyph-md/` directory **adjacent to this repo** (i.e. next to the `glyph` checkout), not inside a worktree or a temp dir. Make cross-repo changes there so the working copies persist between sessions instead of re-cloning each time.
 

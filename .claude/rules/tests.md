@@ -21,7 +21,7 @@ paths:
 ## WebKit smoke tests (Playwright)
 
 - `src/test/e2e/*.spec.ts` runs in Playwright's WebKit only (`pnpm test:e2e`, CI job `Smoke / WebKit` in `ci-smoke.yml`); Vitest ignores it (it only collects `*.test.*`). This suite exists for behavior that differs by engine, like CSP enforcement inside blob workers (the D2 renderer); a Chromium run would pass even when the app is broken on Linux/macOS.
-- Keep it a smoke suite: a handful of engine-level checks, not app E2E coverage. It drives the bundled libraries directly, not the Tauri app.
+- Keep it a smoke suite: a handful of engine-level checks, not app E2E coverage. It drives the bundled libraries directly, not the Tauri app, plus the built web viewer page, whose meta CSP is its only network control (`webViewer.spec.ts`; run `pnpm build:web` first).
 
 ## Built-app smoke tests (tauri-driver)
 
