@@ -102,7 +102,7 @@ describe("sandboxed plugins", () => {
     await host.load(boxed());
     // The consent dialog and the external-link prompt read these bundles, and
     // a registration overwrites existing keys.
-    for (const namespace of ["plugins", "common", "com.x.demoid", "com.x.other"]) {
+    for (const namespace of ["plugins", "common", "menu", "ai"]) {
       worker.emit({
         type: "register-translations",
         locale: "en",

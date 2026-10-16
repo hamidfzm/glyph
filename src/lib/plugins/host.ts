@@ -5,7 +5,7 @@ import { DisposerBag } from "./disposer";
 import { registerFileType } from "./fileTypes";
 import { importPluginModule, type ModuleImporter } from "./loader";
 import { buildPluginContext, type ContextRegistries, tracked } from "./pluginContext";
-import { cssReachesOutside, ownsTranslationNamespace } from "./pluginNamespace";
+import { cssReachesOutside, isAppNamespace } from "./pluginNamespace";
 import { createRegistry, type Registry } from "./registry";
 import { startSandbox, type WorkerSpawner } from "./sandbox/sandbox";
 import type {
@@ -190,13 +190,13 @@ export function createPluginHost(
       const generation = loadGeneration.get(plugin.id);
 
       // Translations land in i18next's live bundles, where a key overwrites
-      // the app's own: a plugin may fill its own namespace and no other.
+      // the app's own: a plugin may fill any namespace but the app's.
       const registerOwnTranslations: GlyphPluginContext["registerTranslations"] = (
         lng,
         ns,
         resources,
       ) => {
-        if (!ownsTranslationNamespace(plugin.id, ns)) {
+        if (isAppNamespace(ns)) {
           console.error(`Plugin ${plugin.id} may not register translations under "${ns}"`);
           return;
         }

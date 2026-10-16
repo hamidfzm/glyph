@@ -1,15 +1,16 @@
+import { NAMESPACES } from "@/lib/locales";
+
+const APP_NAMESPACES: readonly string[] = [...NAMESPACES];
+
 /**
- * Whether a plugin may register translations under `namespace`: its own id,
- * or a namespace it prefixes with its id. `i18n.addResourceBundle` overwrites
- * existing keys, so an app namespace (`plugins`, `common`) handed to a plugin
- * would let it rewrite the consent dialog or the external-link prompt.
+ * Whether `namespace` is one of the app's own. `i18n.addResourceBundle`
+ * overwrites existing keys, so a plugin registering under `plugins` or
+ * `common` could rewrite the consent dialog or the external-link prompt. Any
+ * other namespace is a plugin's to fill: the published template registers
+ * under a short name of its own, not its id.
  */
-export function ownsTranslationNamespace(pluginId: string, namespace: string): boolean {
-  return (
-    namespace === pluginId ||
-    namespace.startsWith(`${pluginId}.`) ||
-    namespace.startsWith(`${pluginId}:`)
-  );
+export function isAppNamespace(namespace: string): boolean {
+  return APP_NAMESPACES.includes(namespace);
 }
 
 const EXTERNAL_REFERENCE = /\burl\s*\(|\bimage-set\s*\(|@import\b/i;

@@ -1,16 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { cssReachesOutside, ownsTranslationNamespace } from "./pluginNamespace";
+import { NAMESPACES } from "@/lib/locales";
+import { cssReachesOutside, isAppNamespace } from "./pluginNamespace";
 
-describe("ownsTranslationNamespace", () => {
-  it("accepts the plugin's id and namespaces it prefixes", () => {
-    expect(ownsTranslationNamespace("com.x.demo", "com.x.demo")).toBe(true);
-    expect(ownsTranslationNamespace("com.x.demo", "com.x.demo.panel")).toBe(true);
-    expect(ownsTranslationNamespace("com.x.demo", "com.x.demo:panel")).toBe(true);
+describe("isAppNamespace", () => {
+  it("names every bundle the app registers", () => {
+    for (const ns of NAMESPACES) {
+      expect(isAppNamespace(ns), ns).toBe(true);
+    }
+    expect(isAppNamespace("plugins")).toBe(true);
   });
 
-  it("refuses the app's namespaces and another plugin's", () => {
-    for (const ns of ["plugins", "common", "menu", "com.x.demoid", "com.x", "", "com.x.other"]) {
-      expect(ownsTranslationNamespace("com.x.demo", ns), ns).toBe(false);
+  it("leaves a plugin's own namespaces alone", () => {
+    for (const ns of ["myplugin", "com.x.demo", "com.x.demo.panel", "pluginsx", "Plugins", ""]) {
+      expect(isAppNamespace(ns), ns).toBe(false);
     }
   });
 });
