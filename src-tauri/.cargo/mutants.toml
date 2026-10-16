@@ -9,6 +9,10 @@ examine_globs = [
     "src/commands/create_file.rs",
 ]
 
+# Unit tests only: nothing else in the package has tests, and without this
+# every mutant also relinks the app binary and the static and dynamic libraries.
+additional_cargo_args = ["--lib"]
+
 # Triaged acceptable miss: print_document is a one-line delegation to the
 # webview's print(); making it observably fail needs a real window, which the
 # mock runtime cannot provide. Low impact: no state, no filesystem access.

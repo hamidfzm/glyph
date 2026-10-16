@@ -60,9 +60,9 @@ function mockFs(
           targets.map((t) => paths.find((p) => pathStem(p) === t.split("#")[0]) ?? null),
         );
       }
-      case "get_file_metadata":
+      case "check_path_exists":
         return a.path in files
-          ? Promise.resolve({ name: "", path: a.path, size: 1, modified: 0 })
+          ? Promise.resolve(undefined)
           : Promise.reject(new Error("not found"));
       default:
         return Promise.reject(new Error(`unexpected command ${cmd}`));
@@ -635,7 +635,7 @@ describe("exportSite", () => {
           ? Promise.resolve("# A")
           : Promise.reject(new Error("not found"));
       }
-      if (cmd === "get_file_metadata") return Promise.reject(new Error("not found"));
+      if (cmd === "check_path_exists") return Promise.reject(new Error("not found"));
       return Promise.reject(new Error("disk full"));
     });
     await expect(exportSite({ root: "/ws", outDir: "/out" })).rejects.toThrow("disk full");

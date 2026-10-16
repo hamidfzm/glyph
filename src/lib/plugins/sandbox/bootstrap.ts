@@ -47,13 +47,27 @@ function hostCall(message) {
   });
 }
 
-// Network fence: exact declared host or a subdomain of it.
+// A trailing dot names the same host; without this, "evil.com." would match
+// an empty declaration and slip past a declared "evil.com" check alike.
+function hostName(name) {
+  return name.toLowerCase().replace(/\\.$/, "");
+}
+
+// Network fence: http or https to the exact declared host or a subdomain of
+// it. The webview's own hosts are never covered, whatever is declared: the
+// asset protocol serves every granted file from asset.localhost (http) or
+// asset://localhost, and ipc.localhost is the command bridge, so a plugin
+// declaring "network:localhost" for a local server reaches that server alone.
 function isNetworkAllowed(permissions, url) {
-  let host;
-  try { host = new URL(url).hostname; } catch { return false; }
+  let parsed;
+  try { parsed = new URL(url); } catch { return false; }
+  if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return false;
+  const host = hostName(parsed.hostname);
+  if (host.endsWith(".localhost")) return false;
   return permissions.some((p) => {
     if (!p.startsWith("network:")) return false;
-    const allowed = p.slice("network:".length);
+    const allowed = hostName(p.slice("network:".length));
+    if (!allowed) return false;
     return host === allowed || host.endsWith("." + allowed);
   });
 }
@@ -93,7 +107,9 @@ function installNetworkFence(permissions) {
   lockGlobal("fetch", (input, init) => {
     let request;
     try {
-      request = new RealRequest(input, init);
+      // The check sees the first URL only, so a redirect is never followed:
+      // an allowed host that redirects would otherwise reach any other.
+      request = new RealRequest(input, { ...init, redirect: "error" });
     } catch (err) {
       return Promise.reject(err);
     }
