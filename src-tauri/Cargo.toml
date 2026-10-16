@@ -1,6 +1,6 @@
 [package]
 name = "glyph"
-version = "0.25.0"
+version = "0.26.0"
 description = "A cross-platform markdown viewer"
 authors = ["hamidfzm"]
 edition = "2021"
@@ -32,6 +32,10 @@ walkdir = "2.5.0"
 # Whether two paths are one file, which their spelling cannot say where the
 # filesystem ignores case. Already in the tree through walkdir.
 same-file = "1"
+# Unicode normalization, to find the names a volume may read as one: macOS
+# opens a file by either form of an accented name. Already in the tree through
+# the URL parser, with this feature set.
+icu_normalizer = { version = "2", default-features = false, features = ["compiled_data"] }
 thiserror = "2"
 # Backs all three workspace-search toggles (literal, whole-word, regex) with a
 # single compiled pattern. Already in the tree transitively.
@@ -85,6 +89,8 @@ hyper-util = { version = "0.1", features = ["tokio"] }
 http-body-util = "0.1"
 tower = { version = "0.5", features = ["util"] }
 tower-http = { version = "0.6", features = ["fs"] }
+# `glyph serve` judges a request path the way tower-http reads it: decoded.
+percent-encoding = "2"
 futures-util = { version = "0.3", default-features = false }
 tokio = { version = "1", features = ["net", "sync", "signal", "time"] }
 # The site a `glyph serve` without `--out` writes to. Not just a name under

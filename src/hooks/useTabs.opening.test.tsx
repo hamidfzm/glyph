@@ -187,15 +187,15 @@ describe("useTabs opening documents", () => {
     expect(tab.kind === "file" ? tab.file.content : "x").toBeNull();
     expect(invoke).not.toHaveBeenCalledWith("read_file", { path: "/p/diagram.svg" });
     expect(invoke).not.toHaveBeenCalledWith("watch_file", { path: "/p/diagram.svg" });
-    expect(invoke).toHaveBeenCalledWith("get_file_metadata", { path: "/p/diagram.svg" });
+    expect(invoke).toHaveBeenCalledWith("check_path_exists", { path: "/p/diagram.svg" });
   });
 
   it("opens no tab for an image the backend refuses", async () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     vi.mocked(invoke).mockImplementation(
       makeInvoker({
-        get_file_metadata: async () => {
-          throw new Error("Failed to get metadata");
+        check_path_exists: async () => {
+          throw new Error("Failed to find path");
         },
       }) as typeof invoke,
     );
@@ -440,6 +440,6 @@ describe("mobile file opening", () => {
 
     expect(result.current.tabs).toHaveLength(1);
     const commands = vi.mocked(invoke).mock.calls.map((c) => c[0]);
-    expect(commands).not.toContain("get_file_metadata");
+    expect(commands).not.toContain("check_path_exists");
   });
 });

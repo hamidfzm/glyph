@@ -1,4 +1,3 @@
-import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { CollapseAllIcon } from "@/components/icons/CollapseAllIcon";
@@ -14,6 +13,7 @@ import { useOpenInNewWindow } from "@/hooks/useOpenInNewWindow";
 import { useRegistryEntries } from "@/hooks/usePluginRegistry";
 import { lastSegment } from "@/lib/paths";
 import { pickMoveDir } from "@/lib/pickers";
+import { revealPath } from "@/lib/revealPath";
 import type { Workspace } from "@/lib/tabs";
 import { FileTree, type FileTreeHandle } from "./FileTree";
 import { FilteredFileList } from "./FilteredFileList";
@@ -143,9 +143,7 @@ export function FilesPanel({ workspace, headerSide }: FilesPanelProps) {
             onDuplicate={duplicatePath}
             onMove={handleMove}
             onMoveEntry={movePath}
-            onReveal={(path) => {
-              void revealItemInDir(path);
-            }}
+            onReveal={revealPath}
             onDelete={deletePath}
           />
         )}

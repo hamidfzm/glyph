@@ -46,10 +46,14 @@ jobs:
     permissions:
       contents: write
     steps:
+      # No token in the checkout: `pnpm install` and `cargo check` below run
+      # every dependency's lifecycle and build scripts from the bumped tree,
+      # and a credential in .git/config would be theirs. The push step alone
+      # gets the token, through the remote URL it pushes to.
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           ref: ${{ inputs.branch }}
-          token: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: false
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
@@ -72,6 +76,9 @@ jobs:
         run: cargo check
 
       - name: Commit and push if changed
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: ${{ inputs.branch }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -81,4 +88,4 @@ jobs:
             exit 0
           fi
           git commit -m "chore(deps): align @tauri-apps plugins and regenerate schemas"
-          git push
+          git push "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:refs/heads/${BRANCH}"

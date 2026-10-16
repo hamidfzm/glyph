@@ -10,15 +10,15 @@ use crate::sync::{
 
 use super::{
     auto_commit_message, config_commit_message, make_credentials_callback, map_remote_error,
-    merge_commit_message, now_unix, ORIGIN,
+    merge_commit_message, now_unix, BoundToken, ORIGIN,
 };
 
 pub struct GitBackend {
     pub(super) config: WorkspaceSyncConfig,
-    /// Optional plaintext token used for HTTPS basic-auth. v1 hardcoded
-    /// to "x-access-token" username (GitHub / Codeberg / GitLab all
-    /// accept it). SSH key flow comes in a follow-up.
-    https_token: Option<String>,
+    /// Optional plaintext token used for HTTPS basic-auth, bound to the host
+    /// it was entered for. v1 hardcoded to "x-access-token" username (GitHub /
+    /// Codeberg / GitLab all accept it). SSH key flow comes in a follow-up.
+    https_token: Option<BoundToken>,
 }
 
 impl GitBackend {
@@ -31,8 +31,8 @@ impl GitBackend {
 
     /// Attach an HTTPS PAT/token. Used for private remotes; public
     /// HTTPS clones don't need a token at all.
-    pub fn with_https_token(mut self, token: impl Into<String>) -> Self {
-        self.https_token = Some(token.into());
+    pub fn with_https_token(mut self, token: BoundToken) -> Self {
+        self.https_token = Some(token);
         self
     }
 

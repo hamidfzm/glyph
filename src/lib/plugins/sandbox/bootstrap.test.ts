@@ -422,6 +422,57 @@ describe("worker bootstrap", () => {
     expect(realFetch).not.toHaveBeenCalled();
   });
 
+  it("never covers the webview's own hosts, whatever the plugin declares", async () => {
+    const realFetch = vi.fn().mockResolvedValue("response");
+    const w = bootWorker(realFetch as unknown as typeof fetch);
+    await w.send(
+      init("export default { activate(){} }", {
+        permissions: ["network:localhost", "network:asset.localhost", "network:"],
+      }),
+    );
+    await vi.waitFor(() => expect(w.typesPosted()).toContain("activated"));
+
+    const fenced = w.fakeGlobal.fetch as typeof fetch;
+    // A declared loopback host reaches a local server on it and nothing else:
+    // the asset protocol serves every granted file from asset.localhost (or
+    // asset://localhost on macOS), and ipc.localhost is the command bridge.
+    await expect(fenced("http://localhost:11434/api/tags")).resolves.toBe("response");
+    for (const url of [
+      `http://asset.localhost/${encodeURIComponent("/home/me/vault/.env")}`,
+      "https://asset.localhost/x",
+      "asset://localhost/x",
+      "http://ipc.localhost/read_file",
+      "http://tauri.localhost/",
+      "http://localhost.evil.net/",
+      // An empty declaration covers nothing: "evil.com." is "evil.com".
+      "https://evil.com./exfil",
+      "ws://localhost/",
+    ]) {
+      await expect(fenced(url), url).rejects.toThrow("not covered");
+    }
+    expect(realFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("reads a trailing dot as the same host and never follows a redirect", async () => {
+    const realFetch = vi.fn().mockResolvedValue("response");
+    const w = bootWorker(realFetch as unknown as typeof fetch);
+    await w.send(
+      init("export default { activate(){} }", { permissions: ["network:Example.COM."] }),
+    );
+    await vi.waitFor(() => expect(w.typesPosted()).toContain("activated"));
+
+    const fenced = w.fakeGlobal.fetch as typeof fetch;
+    await expect(fenced("https://api.example.com./x")).resolves.toBe("response");
+    await expect(fenced(new Request("https://EXAMPLE.com/", { redirect: "follow" }))).resolves.toBe(
+      "response",
+    );
+    for (const call of realFetch.mock.calls) {
+      // The fence checks the first URL only, so an allowed host with an open
+      // redirect must not be able to reach another.
+      expect((call[0] as Request).redirect).toBe("error");
+    }
+  });
+
   it("reports a plugin without a default activate export as an error", async () => {
     const w = bootWorker();
     await w.send(init("export const nothing = 1;"));

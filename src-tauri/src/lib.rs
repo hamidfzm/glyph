@@ -296,7 +296,7 @@ pub fn run() {
             commands::file::create_dir_all,
             commands::file::copy_file,
             commands::file::prune_export_dir,
-            commands::file::get_file_metadata,
+            commands::file::check_path_exists,
             commands::file::allow_document_asset,
             #[cfg(desktop)]
             commands::file::print_document,
@@ -336,6 +336,7 @@ pub fn run() {
             commands::create::move_path,
             commands::create::delete_path,
             commands::create_file::create_workspace_file,
+            commands::reveal::reveal_path,
             vault::commands::vault_snapshot,
             vault::commands::vault_refresh,
             vault::commands::vault_forget,
@@ -918,6 +919,34 @@ mod tests {
                 "default capability must not grant {identifier}: the fs plugin is mobile-only"
             );
         }
+    }
+
+    /// `opener:default` carries `reveal_item_in_dir`, which looks up whatever
+    /// path the webview names under no scope. "Show in system explorer" goes
+    /// through `reveal_path`, which asks the grants first.
+    #[test]
+    fn no_capability_grants_an_opener_command_that_takes_a_path() {
+        let mut opener = Vec::new();
+        for capability in [
+            include_str!("../capabilities/default.json"),
+            include_str!("../capabilities/desktop.json"),
+            include_str!("../capabilities/mobile.json"),
+        ] {
+            let conf: serde_json::Value = serde_json::from_str(capability).unwrap();
+            for permission in conf["permissions"].as_array().unwrap() {
+                let identifier = permission
+                    .as_str()
+                    .or_else(|| permission["identifier"].as_str())
+                    .expect("every permission is a string or an object with an identifier");
+                if identifier.starts_with("opener:") {
+                    opener.push(identifier.to_string());
+                }
+            }
+        }
+        assert_eq!(
+            opener,
+            ["opener:allow-open-url", "opener:allow-default-urls"]
+        );
     }
 
     /// Mobile keeps the fs read path because Android pickers return

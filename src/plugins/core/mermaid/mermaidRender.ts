@@ -6,12 +6,21 @@ import { RenderCache } from "./renderCache";
 
 let idCounter = 0;
 let mermaidPromise: Promise<typeof import("mermaid").default> | null = null;
+// DOMPurify is imported on demand so it stays out of the startup bundle.
+let purifyPromise: Promise<typeof import("dompurify").default> | null = null;
 
 function loadMermaid() {
   if (!mermaidPromise) {
     mermaidPromise = import("mermaid").then((m) => m.default);
   }
   return mermaidPromise;
+}
+
+function loadPurify() {
+  if (!purifyPromise) {
+    purifyPromise = import("dompurify").then((m) => m.default);
+  }
+  return purifyPromise;
 }
 
 // `mermaid.initialize()` sets global config; the theme is not a per-render
@@ -27,7 +36,9 @@ let queue: Promise<unknown> = Promise.resolve();
 function renderWith(config: MermaidConfig, source: string): Promise<string> {
   const pending = queue.then(async () => {
     const mermaid = await loadMermaid();
-    mermaid.initialize({ startOnLoad: false, ...config });
+    // `strict` is Mermaid's default today; named so a future default cannot
+    // widen what diagram source may put in the page.
+    mermaid.initialize({ startOnLoad: false, securityLevel: "strict", ...config });
     // Always pass a fresh id. Mermaid v11 keeps internal state keyed by id,
     // and a reused id returns a tiny stub SVG that paints as a blank preview.
     const { svg } = await mermaid.render(`mermaid-diagram-${idCounter++}`, source);
@@ -35,6 +46,19 @@ function renderWith(config: MermaidConfig, source: string): Promise<string> {
   });
   queue = pending.catch(() => {});
   return pending;
+}
+
+// The on-screen render lands in the document through `innerHTML`, so it gets
+// the same pass the page renders get (see `renderTextLabels`), keeping the
+// HTML labels the screen uses: DOMPurify sanitizes inside a `<foreignObject>`
+// as it does any HTML. Mermaid's own sanitizer is the first line, not the only.
+async function sanitizeLive(svg: string): Promise<string> {
+  const DOMPurify = await loadPurify();
+  const fragment = DOMPurify.sanitize(svg, {
+    USE_PROFILES: { html: true, svg: true, svgFilters: true },
+    RETURN_DOM_FRAGMENT: true,
+  });
+  return svgMarkup(fragment);
 }
 
 // Rendered SVG keyed by `${theme}:${source}` so re-renders (scroll, tab
@@ -50,7 +74,7 @@ export function renderMermaid(source: string, dark: boolean): Promise<string> {
   const cached = cache.get(key);
   if (cached) return cached;
 
-  const pending = renderWith({ theme: dark ? "dark" : "default" }, source);
+  const pending = renderWith({ theme: dark ? "dark" : "default" }, source).then(sanitizeLive);
   // Don't cache a failed render, so a transient error can be retried. Evict
   // only the promise that actually failed: past the LRU bound the key may
   // have been evicted and re-inserted with a newer, healthy promise.
@@ -91,8 +115,7 @@ export async function renderMermaidPreview(source: string, dark: boolean): Promi
 
 // Mermaid builds raw markup out of user-authored diagram source, so it is
 // sanitized here, before any consumer can put it in a document;
-// `<foreignObject>` is the SVG-embedded-HTML vector. DOMPurify is imported on
-// demand so it stays out of the startup bundle.
+// `<foreignObject>` is the SVG-embedded-HTML vector.
 async function renderTextLabels(source: string, dark: boolean): Promise<DocumentFragment> {
   // Both flags are needed: with only the flowchart one, Mermaid v11 still
   // wraps every node label in a `<foreignObject>` and the labels vanish from
@@ -105,7 +128,7 @@ async function renderTextLabels(source: string, dark: boolean): Promise<Document
     },
     source,
   );
-  const { default: DOMPurify } = await import("dompurify");
+  const DOMPurify = await loadPurify();
   return DOMPurify.sanitize(svg, { FORBID_TAGS: ["foreignObject"], RETURN_DOM_FRAGMENT: true });
 }
 
