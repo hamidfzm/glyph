@@ -530,7 +530,13 @@ the way a renderer-supplied path is.
   and `ipc.localhost` is the command bridge; a plugin that declares
   `network:localhost` for a local server reaches that server alone. The
   manifest parser refuses a `network:` host that is empty, not a plain
-  lowercase name, or under `.localhost`. A plugin that declares
+  lowercase name, or under `.localhost`. A stylesheet a sandboxed plugin
+  adds is dropped when it would make requests (`url()`, `image-set()`,
+  `@import`: with a selector on an attribute, each one reports what the
+  page holds), and a plugin of either kind may not register translations
+  under one of the app's own namespaces, which the consent dialog and the
+  external-link prompt read; any other namespace is its to fill. A plugin
+  that declares
   `"sandbox": false` still executes in the app context and sees everything the
   renderer sees (the host's own Escape handling and close button on a plugin
   overlay guard against a plugin's bugs, not against a hostile one); that mode

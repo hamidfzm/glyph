@@ -5,6 +5,22 @@
 
 export const FALLBACK_LOCALE = "en";
 
+// The namespaces the app's own bundles are registered under, one per JSON
+// file in src/locales/<locale>/. A plugin may not register translations in
+// these: i18next overwrites existing keys, and the consent dialog and the
+// external-link prompt read them.
+export const NAMESPACES = [
+  "common",
+  "settings",
+  "commands",
+  "ai",
+  "workspaceSettings",
+  "sync",
+  "workspace",
+  "menu",
+  "plugins",
+] as const;
+
 export interface LocaleMeta {
   // BCP-47 tag, e.g. "en", "de", "pt-BR", "zh-Hans".
   code: string;
