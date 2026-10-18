@@ -404,6 +404,40 @@ mod tests {
         assert!(app.state::<WindowRegistry>().snapshot().files.is_empty());
     }
 
+    /// A workspace grant reads its `.git` directory but never writes it. The
+    /// new window holds the file as an exact grant, which is held to the same
+    /// rule, so the open widens nothing.
+    #[test]
+    fn open_in_new_window_leaves_a_git_directory_unwritable() {
+        let dir = unique_tmp("git_dir");
+        let git = dir.join(".git");
+        std::fs::create_dir_all(&git).unwrap();
+        let config = git.join("config");
+        std::fs::write(&config, "[core]\n").unwrap();
+        let path = config.to_string_lossy().to_string();
+
+        let (app, window) = app_with_registries();
+        let grants = app.state::<GrantRegistry>();
+        grants.grant_workspace(&dir).unwrap();
+        // Another window already holds it, so routing takes the Focus branch
+        // rather than starting a real window build this test never joins.
+        app.state::<WindowRegistry>()
+            .set_files("w1", vec![path.clone()]);
+
+        open_in_new_window(
+            window,
+            app.handle().clone(),
+            app.state::<WindowRegistry>(),
+            app.state::<GrantRegistry>(),
+            path.clone(),
+        )
+        .unwrap();
+        let err = grants.ensure_writable(&path).unwrap_err();
+        assert!(err.starts_with("path is inside a .git directory"), "{err}");
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     #[test]
     fn open_in_new_window_accepts_a_granted_path() {
         let dir = unique_tmp("granted");

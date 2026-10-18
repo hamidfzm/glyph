@@ -277,13 +277,22 @@ impl GrantRegistry {
         }
     }
 
-    /// A recursive grant never covers a `.git` directory below its root: git
-    /// reads hooks and the remote URL from there, so a write into it is code
-    /// the user's next commit runs, or a remote the sync token is sent to.
+    /// No grant covers a write into a `.git` directory: git reads hooks and
+    /// the remote URL from there, so a write into it is code the user's next
+    /// commit runs, or a remote the sync token is sent to. An exact-file
+    /// grant is held to it as well as a recursive one, since one is minted
+    /// for any readable file a new window opens and for every entry the
+    /// renderer-writable settings seed names.
     pub fn ensure_writable(&self, path: &str) -> Result<PathBuf, String> {
         let requested = Path::new(path);
         refuse_remote(&*self.lock()?, requested)?;
         let canonical = canonicalize_lenient(requested)?;
+        if names_git_dir(&canonical) {
+            return Err(format!(
+                "path is inside a .git directory, which is never written: {}",
+                requested.display()
+            ));
+        }
         let grants = self.lock()?;
         if grants.files.contains(&canonical) || grants.export_files.contains(&canonical) {
             return Ok(canonical);
@@ -293,15 +302,9 @@ impl GrantRegistry {
             .iter()
             .chain(grants.export_dirs.iter())
             .find(|root| canonical.starts_with(root));
-        let Some(root) = root else {
+        let Some(_root) = root else {
             return Err(denied(requested));
         };
-        if names_git_dir(canonical.strip_prefix(root).unwrap_or(&canonical)) {
-            return Err(format!(
-                "path is inside a .git directory, which is never written: {}",
-                requested.display()
-            ));
-        }
         Ok(canonical)
     }
 
@@ -634,6 +637,19 @@ mod tests {
             .is_ok());
         assert!(grants
             .ensure_writable(&as_str(&out.join(".git").join("config")))
+            .is_err());
+
+        // An exact-file grant is held to it too: a new window mints one for
+        // any readable file, and the settings seed for any entry it names.
+        grants.grant_file(&config).unwrap();
+        assert!(grants.ensure_readable(&as_str(&config)).is_ok());
+        let err = grants.ensure_writable(&as_str(&config)).unwrap_err();
+        assert!(err.starts_with("path is inside a .git directory"), "{err}");
+        grants
+            .grant_export_file(&out.join(".git").join("page.html"))
+            .unwrap();
+        assert!(grants
+            .ensure_writable(&as_str(&out.join(".git").join("page.html")))
             .is_err());
     }
 
