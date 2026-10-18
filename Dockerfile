@@ -15,16 +15,27 @@
 # check exercises the pull request's own binary. Without that, the image could
 # only ever be tested against whatever release happened to be newest, and a
 # CLI change could not land in the app and here in the same commit.
-FROM scratch AS package
-# The release to install, without the leading "v" (e.g. 0.22.1). Pinned at
-# build time so an image always maps to one published release, never to
-# whatever "latest" happens to mean when it is rebuilt. Unused when this stage
-# is overridden, since then the package is already on disk.
+# The release to install, without the leading "v" (e.g. 0.22.1), and the
+# sha256 of its package for each architecture, from the release's SHA256SUMS.
+# Pinned at build time so an image always maps to one published release,
+# never to whatever "latest" happens to mean when it is rebuilt, and the
+# download is checked against the hash so a package replaced under the same
+# name after publishing never lands in an image. Unused when the `package`
+# stage is overridden, since then the package is already on disk. One stage
+# per architecture: `--checksum` takes one hash, and `TARGETARCH` (set per
+# platform by buildx, `amd64` / `arm64`, exactly how the release names its
+# Debian packages) picks the stage below.
+FROM scratch AS package-amd64
 ARG GLYPH_VERSION
-# Set per platform by buildx. `amd64` / `arm64` is exactly how the release
-# names its Debian packages, so one Dockerfile covers both architectures.
-ARG TARGETARCH
-ADD https://github.com/hamidfzm/glyph/releases/download/v${GLYPH_VERSION}/Glyph_${GLYPH_VERSION}_${TARGETARCH}.deb glyph.deb
+ARG GLYPH_SHA256_AMD64
+ADD --checksum=sha256:${GLYPH_SHA256_AMD64} https://github.com/hamidfzm/glyph/releases/download/v${GLYPH_VERSION}/Glyph_${GLYPH_VERSION}_amd64.deb glyph.deb
+
+FROM scratch AS package-arm64
+ARG GLYPH_VERSION
+ARG GLYPH_SHA256_ARM64
+ADD --checksum=sha256:${GLYPH_SHA256_ARM64} https://github.com/hamidfzm/glyph/releases/download/v${GLYPH_VERSION}/Glyph_${GLYPH_VERSION}_arm64.deb glyph.deb
+
+FROM package-${TARGETARCH} AS package
 
 FROM debian:bookworm-slim@sha256:7c7b2c966bc9ee8cedfeef67e0e279108992c77681fa595db4a9d65c06ccc587
 

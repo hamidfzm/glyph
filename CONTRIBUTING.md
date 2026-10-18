@@ -376,6 +376,8 @@ Run the **Create Release** workflow from GitHub Actions (`create-release.yml`) w
 
 The release workflow builds all platforms and publishes to Homebrew, Chocolatey, Scoop, AUR, PPA, the Debian apt repo, and the Fedora/RHEL dnf repo.
 
+The build legs only build: each uploads its bundles as a workflow artifact and holds no write to the repository, since a build runs the whole npm and cargo dependency tree. One job, `publish-release`, hashes every bundle into `SHA256SUMS`, attests their provenance (`gh attestation verify <file> --repo hamidfzm/glyph` checks it), renders the `PKGBUILD`, and uploads them all. Every publish job downloads through `.github/actions/release-download`, which checks each file against that list and fails on one it does not name, so a channel packages what was built. The jobs that hold a publishing secret run in the `release` environment, which the repository settings restrict to `v*` tags; a job that writes to this repository holds no secret of its own. See the [threat model](docs/security/threat-model.md#release-pipeline).
+
 Do **not** create releases manually with `gh release create` or push tags by hand. Use the workflow.
 
 **A release with a Breaking Changes section needs an upgrade note written by hand.** The generated bullet is only the PR title, which tells nobody what to change. Prepend a short before/after block to the published notes with `gh release edit vX.Y.Z --notes-file <file>`; [v0.23.0](https://github.com/hamidfzm/glyph/releases/tag/v0.23.0) is the worked example.
