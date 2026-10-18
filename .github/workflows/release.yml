@@ -20,6 +20,8 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -48,7 +50,13 @@ jobs:
     permissions:
       contents: write
     steps:
+      # No token in the checkout, here and in every job: `pnpm install` and
+      # the Rust build run every dependency's lifecycle and build scripts, and
+      # a credential in .git/config would be theirs. A job that writes to a
+      # repository is handed its token through the environment of that step.
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
       - uses: ./.github/actions/pnpm-setup
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
@@ -100,6 +108,7 @@ jobs:
       # instead of against whatever happened to ship most recently.
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
+          persist-credentials: false
           fetch-depth: 0
       - name: Generate changelog and prepend install instructions
         id: notes
@@ -166,6 +175,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
       - name: Get version
         id: version
         uses: ./.github/actions/get-version
@@ -254,6 +265,8 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
       - name: Get version
         id: version
         uses: ./.github/actions/get-version
@@ -322,6 +335,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
       - name: Get version
         id: version
         uses: ./.github/actions/get-version
@@ -442,6 +457,8 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
       - name: Get version
         id: version
         uses: ./.github/actions/get-version
@@ -520,6 +537,8 @@ jobs:
         series: [jammy, noble]
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
       - name: Install packaging tools
         timeout-minutes: 8
         env:
@@ -610,6 +629,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
       - name: Install packaging tools
         timeout-minutes: 8
         env:
@@ -709,6 +730,8 @@ jobs:
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
       # The snap is built from the released .deb (see snap/snapcraft.yaml), so
       # this job needs no toolchain. It is a no-op until the maintainer adds the
       # SNAPCRAFT_STORE_CREDENTIALS secret (snapcraft export-login), so it never
@@ -752,6 +775,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
       # The signed DNF repo lives in glyph-md/rpm-repo (GitHub Pages), mirroring
       # the apt-repo. Skip cleanly until that repo exists, so a missing target
       # never fails the release (gated like publish-snap, though this probes the
@@ -858,6 +883,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
       # The canonical Flatpak manifest lives in this repo (flatpak/). Flathub
       # builds from its own app repo (flathub/com.hamidfzm.glyph), so each
       # release we rewrite the version + per-arch sha256 in the manifest and
@@ -950,6 +977,8 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
       - name: Get version
         id: version
         uses: ./.github/actions/get-version
