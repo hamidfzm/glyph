@@ -119,6 +119,21 @@ describe("handleDocumentClick", () => {
     expect(open).toHaveBeenCalledWith("https://example.com/svg", "_blank", "noopener,noreferrer");
   });
 
+  it("keeps a link the sanitizer emptied, such as a javascript: one, inert", () => {
+    mount("<a>Run it</a>");
+    expect(click(root.querySelector("a")!).defaultPrevented).toBe(true);
+    expect(open).not.toHaveBeenCalled();
+  });
+
+  it("ignores a click dispatched on a text node", () => {
+    mount('<a href="https://example.com">Out</a>');
+    const text = root.querySelector("a")!.firstChild!;
+    const event = new MouseEvent("click", { bubbles: true, cancelable: true });
+    text.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(false);
+    expect(open).not.toHaveBeenCalled();
+  });
+
   it("makes a relative link to another file inert", () => {
     mount('<a href="other.md">Other</a>');
     expect(click(root.querySelector("a")!).defaultPrevented).toBe(true);

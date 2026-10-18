@@ -21,13 +21,12 @@ const localeFiles = import.meta.glob<Record<string, unknown>>(
   { import: "default" },
 );
 
-// Keyed by `<locale>/<namespace>`, because Vite writes glob keys relative to
-// the build's root: `/src/locales/…` in the app, `../locales/…` in the preview
-// and web builds.
+// Keyed by `<locale>/<namespace>`, the last two segments of every path the glob
+// matches, because Vite writes glob keys relative to the build's root:
+// `/src/locales/…` in the app, `../locales/…` in the preview and web builds.
 const localeChunks = new Map<string, () => Promise<Record<string, unknown>>>();
 for (const [path, load] of Object.entries(localeFiles)) {
-  const [, lng, ns] = /([^/]+)\/([^/]+)\.json$/.exec(path) ?? [];
-  if (lng && ns) localeChunks.set(`${lng}/${ns}`, load);
+  localeChunks.set(path.replace(/^.*\/([^/]+\/[^/]+)\.json$/, "$1"), load);
 }
 
 export const i18n = i18next;

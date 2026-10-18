@@ -145,6 +145,24 @@ describe("startWebViewer", () => {
     expect(root.tabIndex).toBe(0);
   });
 
+  it("does nothing when the picker reports a change with no file", async () => {
+    const { root, fileInput } = await start(`#${await encodeDocument("# Kept")}`);
+    await vi.waitFor(() => expect(root.textContent).toBe("# Kept"));
+    const push = vi.spyOn(history, "pushState");
+    Object.defineProperty(fileInput, "files", { value: [], configurable: true });
+    fileInput.dispatchEvent(new Event("change"));
+    expect(push).not.toHaveBeenCalled();
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(root.textContent).toBe("# Kept");
+  });
+
+  it("leaves a drag with no data to the browser", async () => {
+    await start();
+    const event = new Event("dragover", { cancelable: true });
+    window.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(false);
+  });
+
   it("offers only markdown files in the picker", async () => {
     const { fileInput } = await start();
     expect(fileInput.accept.split(",")).toContain(".md");
@@ -231,10 +249,16 @@ describe("startWebViewer", () => {
     vi.mocked(encodeDocument).mockImplementationOnce(
       () => new Promise((resolve) => (finish = resolve)),
     );
-    const { root, fileInput, copyButton } = await start();
+    const writeText = vi.fn((_text: string) => Promise.resolve());
+    vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText } });
+    const { root, fileInput, copyButton, status } = await start();
     pick(fileInput, new File(["# Pending"], "pending.md"));
     await vi.waitFor(() => expect(root.textContent).toBe("# Pending"));
     expect(copyButton.disabled).toBe(true);
+    // A click that still reaches the disabled button, say from a script, copies nothing.
+    copyButton.dispatchEvent(new Event("click"));
+    expect(writeText).not.toHaveBeenCalled();
+    expect(status.textContent).toBe("");
     finish("v1.AAAA");
     await vi.waitFor(() => expect(copyButton.disabled).toBe(false));
   });
