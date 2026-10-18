@@ -1,4 +1,4 @@
-import { sseData, streamLines } from "@/lib/ai/stream";
+import { errorBody, sseData, streamLines } from "@/lib/ai/stream";
 import type { AIProvider, ChatMessage, ChatOptions } from "@/lib/ai/types";
 
 export class OpenAIProvider implements AIProvider {
@@ -27,7 +27,7 @@ export class OpenAIProvider implements AIProvider {
     });
 
     if (!response.ok) {
-      const err = await response.text();
+      const err = await errorBody(response);
       throw new Error(`OpenAI API error (${response.status}): ${err}`);
     }
 

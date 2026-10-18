@@ -109,6 +109,13 @@ describe("MarkdownViewer raw HTML", () => {
     const href = a?.getAttribute("href") ?? "";
     expect(href.toLowerCase()).not.toMatch(/^javascript:/);
   });
+
+  it("strips accesskey, which would bind a document link to an accelerator", () => {
+    const { container } = renderMd('<a href="https://x.test" accesskey="s" title="t">x</a>');
+    const a = container.querySelector("a");
+    expect(a?.getAttribute("accesskey")).toBeNull();
+    expect(a?.getAttribute("title")).toBe("t");
+  });
 });
 
 describe("MarkdownViewer GitHub alerts", () => {

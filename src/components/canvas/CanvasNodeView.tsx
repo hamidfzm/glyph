@@ -1,9 +1,10 @@
-import { openUrl } from "@tauri-apps/plugin-opener";
 import { useCallback, useRef } from "react";
 import { MarkdownContent } from "@/components/markdown/MarkdownContent";
 import { useWorkspaceRoot } from "@/contexts/TabsContext";
+import { useOpenExternalLink } from "@/hooks/useOpenExternalLink";
 import { canvasColorToCss } from "@/lib/canvas/color";
 import type { CanvasNode } from "@/lib/canvas/types";
+import { isExternalLinkUrl } from "@/lib/externalLink";
 import { isImageFile } from "@/lib/imageExtensions";
 import { basename, isPathInside } from "@/lib/paths";
 import { normalizeRelativePath } from "@/lib/relativePath";
@@ -41,6 +42,7 @@ export function CanvasNodeView({
   onTaskToggle,
 }: CanvasNodeViewProps) {
   const workspaceRoot = useWorkspaceRoot();
+  const openExternal = useOpenExternalLink();
   const accent = canvasColorToCss(node.color);
 
   // The toggle handler must keep a stable identity: parents rebuild their
@@ -72,9 +74,14 @@ export function CanvasNodeView({
 
     case "link": {
       const label = <span className="glyph-canvas-node-link-url">{node.url}</span>;
-      if (!interactive) {
+      // A board's link node carries whatever the file's author wrote. One of
+      // the opener's schemes opens behind the external-link prompt, like a
+      // markdown link; anything else stays text, and the exports (which read
+      // the card's title) get no link for it either.
+      const openable = isExternalLinkUrl(node.url);
+      if (!interactive || !openable) {
         return (
-          <div className="glyph-canvas-node-link" title={node.url}>
+          <div className="glyph-canvas-node-link" title={openable ? node.url : undefined}>
             {label}
           </div>
         );
@@ -83,10 +90,7 @@ export function CanvasNodeView({
         <button
           type="button"
           className="glyph-canvas-node-link"
-          // A board's link node carries whatever URL the document author wrote,
-          // so the opener plugin's scope can refuse it. Swallowed rather than
-          // left to escape as an unhandled rejection, which is reported as a crash.
-          onClick={() => void openUrl(node.url).catch(() => undefined)}
+          onClick={() => void openExternal(node.url)}
           title={node.url}
         >
           {label}

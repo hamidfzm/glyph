@@ -174,7 +174,14 @@ export const markdownSanitizeSchema = {
   ],
   attributes: {
     ...defaultSchema.attributes,
-    "*": [...(defaultSchema.attributes?.["*"] ?? []), "align", "style", "className", "dir"],
+    // `accesskey` would bind a document's link to a keyboard accelerator.
+    "*": [
+      ...(defaultSchema.attributes?.["*"] ?? []).filter((attribute) => attribute !== "accessKey"),
+      "align",
+      "style",
+      "className",
+      "dir",
+    ],
     // Plain `className` (first entry wins in hast-util-sanitize) overrides the
     // default `[className, data-footnote-backref]` allowlist so wikilink
     // classes survive sanitization.
