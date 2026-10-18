@@ -48,3 +48,10 @@ sudo dnf install glyph
 Or download the `.deb` / `.rpm` / `.AppImage` below.
 
 On Arch, when the AUR lags behind a release, download the `PKGBUILD` asset below and run `makepkg -si` next to it.
+
+### Verify a download
+Every asset below is listed in `SHA256SUMS` and carries a build provenance attestation from the workflow that built it:
+```bash
+sha256sum --check --ignore-missing SHA256SUMS
+gh attestation verify Glyph_*.deb --repo hamidfzm/glyph
+```
