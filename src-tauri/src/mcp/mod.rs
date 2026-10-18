@@ -71,9 +71,13 @@ pub fn run(
                 tools.join(", ")
             ),
         };
+        // The path comes last, after everything the user is told, so a folder
+        // named to read like the end of a sentence (a quote, "Allow? It only
+        // lists names.") cannot rewrite what is being asked; the characters
+        // that could hide or reorder text are refused before this (`refs.rs`).
         let allow_vault = |root: &str| -> Result<(), String> {
             ask.borrow_mut().confirm(&format!(
-                "An agent asks to read the folder \"{root}\". Allow it until this session ends? It could then read every note in that folder,{changes} and save exported documents there, replacing files of the same name."
+                "An agent asks to read a folder until this session ends. Allowing it lets the agent read every note in that folder,{changes} and save exported documents there, replacing files of the same name. The folder: {root}"
             ))?;
             added.borrow_mut().push(root.to_string());
             Ok(())
