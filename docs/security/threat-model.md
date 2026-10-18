@@ -136,6 +136,7 @@ looked up (see "Network paths" below).
 | `copy_file` | source readable and destination writable |
 | `prune_export_dir` | the output directory must be writable, and each entry read back from its manifest must be plain path segments whose parent still canonicalizes inside that directory (so a hand-edited manifest cannot delete outside the export). The manifest is neither read nor replaced when it, or the `.glyph` folder holding it, is a link: the output directory is checked, but a link below it leads anywhere. A manifest that cannot be read or parsed is left as it is and nothing is pruned. A new one is written to a staging file of its own beside it, opened only if nothing holds that name, and moved over the old one in one step. The list of files the export failed to replace, like the list of files it wrote, can only spare a manifest entry, never name something else to remove. An entry that differs from a listed name only in case, Unicode normalization form or separators is opened beside that name to see whether the two are one file (the volume decides, not the fold); both paths are confined as above, and nothing but that yes or no comes of it. The reason handed back names the first entry that could not be removed, quoted and escaped, because that name comes from the manifest and ends up in the app's notice and on stderr |
 | `pick_export_dir` | `root` must be a granted workspace, checked before the dialog opens. It only decides whether the folder the user then picks is refused for resolving inside that workspace; the grant is for the picked folder alone, so naming another root gains a renderer nothing it could not already write |
+| `pick_save`, `pick_move_dir` | `default_dir`, the folder the dialog opens in, must be a granted workspace when one is given, checked before the dialog opens. A native dialog resolves that folder as it opens, before the user chooses anything, and on Windows resolving a network path connects to the host it names. A folder that passes is handed on as the renderer spelled it rather than canonicalized, since the dialog cannot open a `\\?\UNC\` path. The grant `pick_save` mints is for the file the user picks, and `pick_move_dir` mints none |
 | `watch_file`, `watch_directory` | readable (unwatch stays open; it only drops a watcher) |
 | `create_note`, `create_canvas`, `create_folder` | `root` must be a granted workspace and the target directory canonicalizes inside it; a network or device path is refused before that lookup. The entry takes the first default name nothing holds, and a link holds its name even when its target is missing, so creating never writes through one |
 | `rename_path`, `duplicate_path`, `move_path`, `delete_path` | `root` must be a granted workspace and the entry itself canonicalizes strictly inside it (a network or device path is refused before that lookup, for a move's destination too; a trailing `..`, the root itself, or a symlink resolving outside is refused; `duplicate_path` refuses a folder containing a symlink rather than copying its target). `rename_path` and `move_path` also rewrite links in the workspace's own indexed notes and canvases, each write passing `ensure_writable`; a link or canvas card target that resolves outside the workspace is never rewritten or probed on disk, a file changed since the plan read it is left as it is, and `dryRun` reads without writing. The name a copy, a rename, or a move lands on is picked the way a new entry's is, so it is never one a link holds. Neither the entry nor its destination may sit inside the workspace's `.git` directory |
@@ -148,6 +149,7 @@ looked up (see "Network paths" below).
 | `create_workspace_file` | `root` must be a granted workspace. The path is workspace-relative (`..`, a drive letter, or a backslash is refused) and must canonicalize strictly inside that workspace, so a symlink resolving outside it, or into another granted workspace, is refused. A hidden name anywhere in the resolved path is refused too, which keeps `.git/hooks` and `.glyph` out of reach. The file is opened with `create_new`: one that already exists is reported back and never written to |
 | `sync_*` | granted workspace (`sync_clone_remote` clones into the workspace path itself); `sync_init_repo`, `sync_clone_remote`, and `sync_set_origin` accept only `https://` without credentials, `ssh://`, or scp-like `user@host:path` remotes, since libgit2 would also take a local path or `file://` (pulling any local repository into a granted workspace) and cleartext `http://`/`git://`. The HTTPS token is bound, when `sync_set_token` stores it, to the authority (host, and port if named) of the remote the workspace is configured with at that moment, and the credential callback offers it to that authority alone: `sync_set_origin`, and `.git/config` with it, can name any `https://` host, and a token sent wherever that points would reach whoever runs it. A token entered before a remote is configured binds to the first `https://` remote it is used against, and a token stored by an earlier build binds the same way at its first use. Changing the remote to another host means entering the token again. The binding is kept in the keychain beside the token, never in a file the renderer writes |
 | `install_plugin` | consumes the pending picked folder; no path argument |
+| `install_plugin_from_registry` | takes a plugin id and nothing else. The backend fetches the registry index from its fixed URL, finds the entry, downloads the package the entry names (the marketplace hosts alone, a redirect included, 50 MiB at most), and verifies the sha256 and the manifest id before anything is written, so a package that lies about itself never lands on another installed plugin |
 | `finish_cli_export` | ends the process, so it is refused unless a CLI export is in progress: the command is registered in every session, and a renderer could otherwise end an interactive one |
 
 Reading no content does not exempt a command. Looking a path up is itself an
@@ -288,8 +290,11 @@ control is the page's own:
 `capabilities/default.json` grants no permission set whose members resolve
 renderer-supplied paths: the dialog, filesystem, opener, and store plugins get
 the exact commands the frontend calls instead of their `default` sets. The
-remaining default sets (`core`, `os`, `http`) reach no file, and
-`http:default` is scoped to the marketplace hosts.
+remaining default sets (`core`, `os`) reach no file. There is no `http`
+permission: the marketplace download runs in Rust
+(`install_plugin_from_registry` in the table above), which fetches the
+registry index from its fixed URL and follows the entry to a package on the
+marketplace hosts alone, so the renderer never names a URL.
 
 - **Dialog.** Desktop holds `dialog:allow-message` alone (it backs `ask`).
   The plugin's `open` command adds whatever the user picks to the fs and asset
@@ -610,8 +615,9 @@ the way a renderer-supplied path is.
   renderer sees (the host's own Escape handling and close button on a plugin
   overlay guard against a plugin's bugs, not against a hostile one); that mode
   requires an explicit full-trust consent, persisted per plugin, and
-  marketplace packages are SHA-256-verified against the reviewed registry
-  entry before install. The app-context API also lets a full-trust plugin
+  marketplace packages are downloaded and SHA-256-verified in Rust against
+  the registry entry it fetches itself, so a compromised renderer can install
+  a reviewed package but never bytes of its own. The app-context API also lets a full-trust plugin
   read the active document, query the workspace index, open workspace files,
   and list workspace files in the Files panel. None of that adds a command:
   index queries go through the `vault_*` commands, which check the workspace

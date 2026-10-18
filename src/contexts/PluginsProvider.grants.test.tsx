@@ -74,7 +74,10 @@ describe("PluginsProvider grants and updates", () => {
     expect(message).toContain("New permissions:");
     expect(message).toContain("network:api.example.com");
     expect(message).not.toContain("workspace:read");
-    expect(vi.mocked(invoke)).not.toHaveBeenCalledWith("install_plugin_package", expect.anything());
+    expect(vi.mocked(invoke)).not.toHaveBeenCalledWith(
+      "install_plugin_from_registry",
+      expect.anything(),
+    );
   });
 
   it("keeps the recorded grant when the installed plugin merely fails to load", async () => {
@@ -103,7 +106,7 @@ describe("PluginsProvider grants and updates", () => {
     // itself fails after a successful install: the grant must survive.
     vi.mocked(invoke).mockImplementation((cmd) => {
       if (cmd === "list_plugins") return Promise.resolve([]);
-      if (cmd === "install_plugin_package")
+      if (cmd === "install_plugin_from_registry")
         return Promise.resolve(installedPlugin({ id: entry.id, name: entry.name, sandbox: true }));
       return Promise.resolve(undefined);
     });
@@ -174,7 +177,7 @@ describe("PluginsProvider grants and updates", () => {
     vi.mocked(invoke).mockImplementation((cmd) => {
       if (cmd === "list_plugins")
         return Promise.resolve([installedPlugin({ permissions: ["workspace:read"] })]);
-      if (cmd === "install_plugin_package")
+      if (cmd === "install_plugin_from_registry")
         return Promise.resolve(
           installedPlugin({
             version: "2.0.0",
@@ -304,7 +307,7 @@ describe("PluginsProvider grants and updates", () => {
     );
     vi.mocked(invoke).mockImplementation((cmd) => {
       if (cmd === "list_plugins") return Promise.resolve([]);
-      if (cmd === "install_plugin_package")
+      if (cmd === "install_plugin_from_registry")
         return Promise.resolve(installedPlugin({ id: entry.id, name: entry.name }));
       return Promise.resolve(undefined);
     });

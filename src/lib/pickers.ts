@@ -36,7 +36,8 @@ export async function pickFiles(filters: PickFilter[]): Promise<string[] | null>
 }
 
 /** Save dialog for exports; grants the target write-only. `defaultDir` picks the
- *  folder it opens in (the workspace root when saving a new note). */
+ *  folder it opens in (the workspace root when saving a new note); the backend
+ *  rejects one that is not a granted workspace, before any dialog opens. */
 export function pickSave(
   defaultName: string,
   filterName: string,
@@ -60,7 +61,8 @@ export function pickPluginDir(): Promise<string | null> {
   return invoke<string | null>("pick_plugin_dir");
 }
 
-/** "Move to..." picker; mints no grant, `move_path` validates the destination. */
+/** "Move to..." picker; mints no grant, `move_path` validates the destination.
+ *  `defaultDir` is checked the way `pickSave`'s is. */
 export function pickMoveDir(defaultDir: string): Promise<string | null> {
   return invoke<string | null>("pick_move_dir", { defaultDir });
 }

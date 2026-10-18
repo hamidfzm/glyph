@@ -146,7 +146,10 @@ describe("PluginsProvider installing", () => {
     const [message] = vi.mocked(ask).mock.calls.at(-1) ?? [];
     expect(message).toContain("Market");
     expect(message).toContain("workspace:read");
-    expect(vi.mocked(invoke)).not.toHaveBeenCalledWith("install_plugin_package", expect.anything());
+    expect(vi.mocked(invoke)).not.toHaveBeenCalledWith(
+      "install_plugin_from_registry",
+      expect.anything(),
+    );
   });
 
   it("rolls back a folder install when the installed manifest demands more trust than inspected", async () => {
@@ -329,7 +332,7 @@ describe("PluginsProvider installing", () => {
     );
     vi.mocked(invoke).mockImplementation((cmd) => {
       if (cmd === "list_plugins") return Promise.resolve([]);
-      if (cmd === "install_plugin_package")
+      if (cmd === "install_plugin_from_registry")
         return Promise.resolve(installedPlugin({ id: entry.id, name: entry.name }));
       return Promise.resolve(undefined);
     });

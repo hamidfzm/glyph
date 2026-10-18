@@ -35,18 +35,20 @@ pub struct InstalledPlugin {
     pub main_source: String,
 }
 
+mod download;
 mod manifest;
+mod registry;
 mod store;
 #[cfg(test)]
 mod test_support;
 #[cfg(test)]
 mod tests;
 
+pub use download::Marketplace;
 pub(crate) use manifest::is_well_formed_id;
 
-use store::{
-    inspect_dir, install_into, install_package, read_asset_from, scan_plugins_root, uninstall_from,
-};
+use download::install_from_registry;
+use store::{inspect_dir, install_into, read_asset_from, scan_plugins_root, uninstall_from};
 
 fn plugins_root<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Result<PathBuf, String> {
     app.path()
@@ -100,14 +102,18 @@ pub fn install_plugin<R: tauri::Runtime>(
     install_into(&plugins_root(&app)?, &src_dir)
 }
 
+/// Install a marketplace plugin by id. The backend fetches the registry index
+/// itself, downloads the package the entry names, and verifies the bytes
+/// against the entry's hash before anything is written: the renderer never
+/// supplies a URL, a hash, or package bytes.
 #[tauri::command]
-pub fn install_plugin_package<R: tauri::Runtime>(
+pub async fn install_plugin_from_registry<R: tauri::Runtime>(
     app: tauri::AppHandle<R>,
-    // ponytail: bytes ride the JSON IPC as a number array; switch to Tauri's
-    // raw request body if multi-MB installs ever feel slow.
-    bytes: Vec<u8>,
+    marketplace: tauri::State<'_, Marketplace>,
+    id: String,
 ) -> Result<InstalledPlugin, String> {
-    install_package(&plugins_root(&app)?, &bytes)
+    manifest::validate_id(&id)?;
+    install_from_registry(&plugins_root(&app)?, &marketplace, &id).await
 }
 
 #[tauri::command]

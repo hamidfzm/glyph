@@ -64,8 +64,71 @@ fn install_plugin_command_errors_without_a_pending_pick() {
     assert_eq!(result.unwrap_err(), "no plugin folder was picked");
 }
 
+/// A reserved or unsafe id is refused before any request is made: the
+/// marketplace here names a registry nothing listens on.
 #[test]
-fn package_and_asset_commands_run_via_mock_app() {
+fn install_plugin_from_registry_refuses_a_bad_id_before_any_request() {
+    use tauri::test::mock_app;
+    use tauri::Manager;
+    let app = mock_app();
+    app.manage(Marketplace {
+        registry_url: "http://127.0.0.1:1/index.json".into(),
+        allows: |_| true,
+    });
+    for id in ["glyph.core.mermaid", "../evil", "", "a/b"] {
+        let err = tauri::async_runtime::block_on(install_plugin_from_registry(
+            app.handle().clone(),
+            app.state::<Marketplace>(),
+            id.to_string(),
+        ))
+        .unwrap_err();
+        assert!(err.contains("plugin id"), "{id:?}: {err}");
+    }
+}
+
+/// The command end to end through the mock app: the registry and the package
+/// come from a local server, and the plugin lands in the app's plugins root.
+#[test]
+fn install_plugin_from_registry_installs_what_a_local_registry_names() {
+    use tauri::test::mock_app;
+    use tauri::Manager;
+    let manifest = PACKAGED_MANIFEST.replace("com.x.pkg", "com.x.fromregistry");
+    let bytes = zip_of(&[
+        ("manifest.json", manifest.as_bytes()),
+        ("main.js", b"export default {};"),
+        ("assets/data.txt", b"payload"),
+    ]);
+    let server = LocalServer::bind();
+    let index = format!(
+        r#"{{"plugins":[{{"id":"com.x.fromregistry","packageUrl":"{}/pkg.zip","sha256":"{}"}}]}}"#,
+        server.url(),
+        super::registry::sha256_hex(&bytes)
+    );
+    let app = mock_app();
+    app.manage(Marketplace {
+        registry_url: format!("{}/index.json", server.url()),
+        allows: |url| url.starts_with("http://127.0.0.1:"),
+    });
+    server.serve(vec![
+        ("/index.json", ok(index.into_bytes())),
+        ("/pkg.zip", ok(bytes)),
+    ]);
+
+    let plugin = tauri::async_runtime::block_on(install_plugin_from_registry(
+        app.handle().clone(),
+        app.state::<Marketplace>(),
+        "com.x.fromregistry".to_string(),
+    ))
+    .unwrap();
+    assert_eq!(plugin.id, "com.x.fromregistry");
+    let root = plugins_root(&app.handle().clone()).unwrap();
+    assert!(root.join("com.x.fromregistry").join("main.js").is_file());
+    uninstall_plugin(app.handle().clone(), "com.x.fromregistry".to_string()).unwrap();
+    assert!(!root.join("com.x.fromregistry").exists());
+}
+
+#[test]
+fn asset_command_reads_a_declared_file_of_an_installed_package() {
     use tauri::test::mock_app;
     let app = mock_app();
     let bytes = zip_of(&[
@@ -73,8 +136,8 @@ fn package_and_asset_commands_run_via_mock_app() {
         ("main.js", b"export default {};"),
         ("assets/data.txt", b"payload"),
     ]);
-
-    let plugin = install_plugin_package(app.handle().clone(), bytes).unwrap();
+    let root = plugins_root(&app.handle().clone()).unwrap();
+    let plugin = super::store::install_package(&root, &bytes).unwrap();
     assert_eq!(plugin.id, "com.x.pkg");
 
     let asset = read_plugin_asset(

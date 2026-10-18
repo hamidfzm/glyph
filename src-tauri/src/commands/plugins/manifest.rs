@@ -163,8 +163,10 @@ pub(crate) fn parse_manifest(json: &str) -> Result<ManifestInfo, String> {
         Some(s) if !s.trim().is_empty() => s.trim().to_string(),
         _ => "main.js".to_string(),
     };
-    // The entry must be a plain file name inside the plugin folder.
-    if main.contains('/') || main.contains('\\') || main.starts_with('.') {
+    // The entry must be a plain file name inside the plugin folder: no
+    // separators, no leading dot, and none of the drive and stream colons
+    // `validate_file_path` refuses (`d:evil.js` joins onto another drive).
+    if main.contains('/') || main.starts_with('.') || validate_file_path(&main).is_err() {
         return Err(format!("invalid manifest \"main\": {main}"));
     }
     let files = parse_files(&value, &main)?;
@@ -273,6 +275,19 @@ mod tests {
     fn parse_manifest_rejects_backslash_in_main() {
         let json = r#"{"id":"ok.id","name":"n","version":"1.0.0","apiVersion":"^1.0.0","main":"sub\\x.js"}"#;
         assert!(parse_manifest(json).is_err());
+    }
+
+    /// On Windows `dest.join("d:evil.js")` lands on drive D, outside the
+    /// plugins folder; a colon also names an alternate stream there.
+    #[test]
+    fn parse_manifest_rejects_a_drive_or_stream_colon_in_main() {
+        for main in ["d:evil.js", "C:main.js", "x:", "main.js:stream"] {
+            let json = format!(
+                r#"{{"id":"ok.id","name":"n","version":"1.0.0","apiVersion":"^1.0.0","main":"{main}"}}"#
+            );
+            let err = parse_manifest(&json).unwrap_err();
+            assert!(err.contains("invalid manifest \"main\""), "{main}: {err}");
+        }
     }
 
     #[test]

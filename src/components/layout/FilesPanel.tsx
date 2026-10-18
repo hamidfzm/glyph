@@ -65,7 +65,11 @@ export function FilesPanel({ workspace, headerSide }: FilesPanelProps) {
   // "Move to…": pick a destination folder (within the workspace), then relocate.
   const handleMove = useCallback(
     async (from: string) => {
-      const dir = await pickMoveDir(workspace.root);
+      // A root the backend no longer resolves is refused before a dialog opens.
+      const dir = await pickMoveDir(workspace.root).catch((err) => {
+        console.error("Failed to pick a move destination:", err);
+        return null;
+      });
       if (typeof dir === "string") movePath(from, dir);
     },
     [movePath, workspace.root],

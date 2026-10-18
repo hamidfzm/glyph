@@ -40,3 +40,91 @@ pub(crate) fn zip_with(method: zip::CompressionMethod, entries: &[(&str, &[u8])]
 pub(crate) fn zip_of(entries: &[(&str, &[u8])]) -> Vec<u8> {
     zip_with(zip::CompressionMethod::Stored, entries)
 }
+
+/// What a route of a `LocalServer` answers.
+pub(crate) struct Response {
+    pub(crate) status: u16,
+    pub(crate) location: Option<String>,
+    pub(crate) body: Vec<u8>,
+}
+
+pub(crate) fn ok(body: Vec<u8>) -> Response {
+    Response {
+        status: 200,
+        location: None,
+        body,
+    }
+}
+
+pub(crate) fn redirect(to: &str) -> Response {
+    Response {
+        status: 302,
+        location: Some(to.to_string()),
+        body: Vec::new(),
+    }
+}
+
+/// A one-request-per-connection HTTP server on a loopback port, for the
+/// download tests. Bound first so the routes can name its URL, then served.
+pub(crate) struct LocalServer {
+    listener: std::net::TcpListener,
+    url: String,
+}
+
+impl LocalServer {
+    pub(crate) fn bind() -> Self {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}", listener.local_addr().unwrap());
+        Self { listener, url }
+    }
+
+    pub(crate) fn url(&self) -> &str {
+        &self.url
+    }
+
+    /// Answer each request from its path until the process ends; a path with
+    /// no route gets a 404.
+    pub(crate) fn serve(self, routes: Vec<(&'static str, Response)>) {
+        use std::io::{BufRead, BufReader, Write};
+        let not_found = Response {
+            status: 404,
+            location: None,
+            body: Vec::new(),
+        };
+        std::thread::spawn(move || {
+            for stream in self.listener.incoming().flatten() {
+                let mut reader = BufReader::new(&stream);
+                let mut line = String::new();
+                let _ = reader.read_line(&mut line);
+                let path = line.split_whitespace().nth(1).unwrap_or("");
+                // The headers end at an empty line; nothing in them matters.
+                let mut header = String::new();
+                while reader.read_line(&mut header).unwrap_or(0) > 2 {
+                    header.clear();
+                }
+                let response = routes
+                    .iter()
+                    .find(|(route, _)| *route == path)
+                    .map_or(&not_found, |(_, response)| response);
+                let reason = match response.status {
+                    200 => "OK",
+                    302 => "Found",
+                    _ => "Not Found",
+                };
+                let location = response
+                    .location
+                    .as_ref()
+                    .map_or(String::new(), |to| format!("Location: {to}\r\n"));
+                let head = format!(
+                    "HTTP/1.1 {} {reason}\r\nContent-Length: {}\r\nConnection: close\r\n{location}\r\n",
+                    response.status,
+                    response.body.len()
+                );
+                let mut stream = &stream;
+                let _ = stream.write_all(head.as_bytes());
+                let _ = stream.write_all(&response.body);
+                let _ = stream.flush();
+            }
+        });
+    }
+}

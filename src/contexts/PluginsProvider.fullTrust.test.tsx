@@ -151,7 +151,10 @@ describe("PluginsProvider full-trust plugins", () => {
     await waitFor(() => expect(vi.mocked(ask)).toHaveBeenCalled());
     const [message] = vi.mocked(ask).mock.calls.at(-1) ?? [];
     expect(message).toContain("WITHOUT the plugin sandbox");
-    expect(vi.mocked(invoke)).not.toHaveBeenCalledWith("install_plugin_package", expect.anything());
+    expect(vi.mocked(invoke)).not.toHaveBeenCalledWith(
+      "install_plugin_from_registry",
+      expect.anything(),
+    );
   });
 
   it("loads sandboxed plugins without a grant and uninstalls them without touching grants", async () => {

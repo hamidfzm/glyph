@@ -181,6 +181,7 @@ fn manage_state<R: tauri::Runtime>(builder: tauri::Builder<R>) -> tauri::Builder
         .manage(commands::CliExport(Mutex::new(None)))
         .manage(windows::WindowRegistry::new())
         .manage(grants::GrantRegistry::default())
+        .manage(commands::plugins::Marketplace::default())
         .manage(vault::VaultStore::default())
         .manage(commands::default_app::DefaultAppHost(Box::new(
             commands::default_app::ProcessHost,
@@ -265,9 +266,6 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_clipboard_manager::init())
-        // Marketplace package downloads only; the URL scope lives in
-        // capabilities/default.json.
-        .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_store::Builder::new().build());
 
     // Window-state restoration, the native menu bar, sync, and telemetry only
@@ -351,7 +349,7 @@ pub fn run() {
             commands::plugins::list_plugins,
             commands::plugins::inspect_plugin,
             commands::plugins::install_plugin,
-            commands::plugins::install_plugin_package,
+            commands::plugins::install_plugin_from_registry,
             commands::plugins::read_plugin_asset,
             commands::plugins::uninstall_plugin,
             watcher::watch_file,
