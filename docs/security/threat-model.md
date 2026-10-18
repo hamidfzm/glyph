@@ -555,7 +555,14 @@ the way a renderer-supplied path is.
   `@import`: with a selector on an attribute, each one reports what the
   page holds), and a plugin of either kind may not register translations
   under one of the app's own namespaces, which the consent dialog and the
-  external-link prompt read; any other namespace is its to fill. A plugin
+  external-link prompt read; any other namespace is its to fill. A site
+  theme a sandboxed plugin registers is held to the same rule as its
+  stylesheet, since it is written into the exported site's stylesheet and
+  runs in every visitor's browser. A plugin id starts with a letter or
+  digit, so it is never `__proto__`, and the settings and grant maps the
+  renderer keeps per id answer from their own entries only: an id the
+  prototype answers for (`constructor`) reads as no entry, not as
+  `Object.prototype`. A plugin
   that declares
   `"sandbox": false` still executes in the app context and sees everything the
   renderer sees (the host's own Escape handling and close button on a plugin
@@ -563,7 +570,16 @@ the way a renderer-supplied path is.
   requires an explicit full-trust consent, persisted per plugin, and
   marketplace packages are downloaded and SHA-256-verified in Rust against
   the registry entry it fetches itself, so a compromised renderer can install
-  a reviewed package but never bytes of its own. The app-context API also lets a full-trust plugin
+  a reviewed package but never bytes of its own. The marketplace hosts are
+  judged on the parsed URL, as the client will send it, so a `..` segment or
+  userinfo in an entry's spelling cannot name another org. An install is
+  written beside its destination and moved in whole: a failure part way
+  leaves the installed version as it was, a file the previous version
+  declared and the new one does not is gone, and a destination that is a
+  link is refused. What a sandboxed plugin reaches at load time comes from
+  its manifest on disk, so at startup one whose manifest declares a
+  permission its grant does not hold is parked disabled until the user
+  answers the dialog, as a full-trust plugin without its grant already is. The app-context API also lets a full-trust plugin
   read the active document, query the workspace index, open workspace files,
   and list workspace files in the Files panel. None of that adds a command:
   index queries go through the `vault_*` commands, which check the workspace

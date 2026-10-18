@@ -7,7 +7,7 @@ use super::manifest::{
 };
 use super::{InstalledPlugin, PluginInspection};
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// Read only a folder's manifest metadata, for the pre-install consent dialog.
 pub(crate) fn inspect_dir(dir: &Path) -> Result<PluginInspection, String> {
@@ -77,24 +77,64 @@ pub(crate) fn write_plugin_file(dest: &Path, rel: &str, bytes: &[u8]) -> Result<
     fs::write(&target, bytes).map_err(|e| format!("cannot write {rel}: {e}"))
 }
 
+/// An install is written beside its destination and moved in whole, so a
+/// failure part way leaves the installed version as it was, and a file the
+/// previous version declared but the new one does not is gone with it.
+struct Staging {
+    dir: PathBuf,
+    dest: PathBuf,
+}
+
+impl Staging {
+    fn begin(root: &Path, id: &str) -> Result<Self, String> {
+        let dest = root.join(id);
+        // A link at the destination would send the install wherever it points.
+        if fs::symlink_metadata(&dest).is_ok_and(|meta| meta.file_type().is_symlink()) {
+            return Err(format!(
+                "{} is a link, which is never written",
+                dest.display()
+            ));
+        }
+        let dir = root.join(format!(".staging-{id}"));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).map_err(|e| format!("cannot create {}: {e}", dir.display()))?;
+        Ok(Self { dir, dest })
+    }
+
+    fn commit(self) -> Result<InstalledPlugin, String> {
+        if self.dest.exists() {
+            fs::remove_dir_all(&self.dest)
+                .map_err(|e| format!("cannot replace {}: {e}", self.dest.display()))?;
+        }
+        fs::rename(&self.dir, &self.dest)
+            .map_err(|e| format!("cannot move the install into place: {e}"))?;
+        read_plugin_dir(&self.dest)
+    }
+}
+
+impl Drop for Staging {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.dir);
+    }
+}
+
 /// Copy a plugin from `src` into `root/<id>/` after validating its manifest,
 /// then read it back from the installed location. Only the manifest and the
-/// manifest-declared files are copied; anything else in the folder stays put.
+/// manifest-declared files are copied.
 pub(crate) fn install_into(root: &Path, src: &Path) -> Result<InstalledPlugin, String> {
     let manifest_json = fs::read_to_string(src.join("manifest.json"))
         .map_err(|e| format!("not a plugin folder (no manifest.json): {e}"))?;
     let info = parse_manifest(&manifest_json)?;
 
-    let dest = root.join(&info.id);
-    fs::create_dir_all(&dest).map_err(|e| format!("cannot create {}: {e}", dest.display()))?;
-    fs::copy(src.join("manifest.json"), dest.join("manifest.json"))
+    let staging = Staging::begin(root, &info.id)?;
+    fs::copy(src.join("manifest.json"), staging.dir.join("manifest.json"))
         .map_err(|e| format!("cannot copy manifest.json: {e}"))?;
     for rel in info.install_files() {
         let bytes = fs::read(src.join(&rel))
             .map_err(|e| format!("declared plugin file \"{rel}\" not found: {e}"))?;
-        write_plugin_file(&dest, &rel, &bytes)?;
+        write_plugin_file(&staging.dir, &rel, &bytes)?;
     }
-    read_plugin_dir(&dest)
+    staging.commit()
 }
 
 type Package<'a> = zip::ZipArchive<std::io::Cursor<&'a [u8]>>;
@@ -150,9 +190,8 @@ pub(crate) fn install_package(root: &Path, bytes: &[u8]) -> Result<InstalledPlug
         }
     }
 
-    let dest = root.join(&info.id);
-    fs::create_dir_all(&dest).map_err(|e| format!("cannot create {}: {e}", dest.display()))?;
-    fs::write(dest.join("manifest.json"), &manifest_json)
+    let staging = Staging::begin(root, &info.id)?;
+    fs::write(staging.dir.join("manifest.json"), &manifest_json)
         .map_err(|e| format!("cannot write manifest.json: {e}"))?;
 
     for rel in info.install_files() {
@@ -171,9 +210,9 @@ pub(crate) fn install_package(root: &Path, bytes: &[u8]) -> Result<InstalledPlug
                 "plugin file \"{rel}\" is larger than its header declares"
             ));
         }
-        write_plugin_file(&dest, &rel, &bytes)?;
+        write_plugin_file(&staging.dir, &rel, &bytes)?;
     }
-    read_plugin_dir(&dest)
+    staging.commit()
 }
 
 /// Read one manifest-declared file of an installed plugin. Backs `ctx.assets`:
@@ -390,41 +429,75 @@ mod tests {
         let _ = fs::remove_dir_all(&root);
     }
 
+    /// A package whose own files collide (a file where a directory must go)
+    /// fails in the staging folder and leaves the installed version as it was.
     #[test]
-    fn install_package_reports_a_file_colliding_with_an_asset_directory() {
+    fn install_package_leaves_the_installed_version_when_a_declared_file_cannot_be_written() {
         let root = temp_root("pkg_dir_collision");
-        // A file already sits where the package's assets/ directory must go.
-        fs::create_dir_all(root.join("com.x.pkg")).unwrap();
-        fs::write(root.join("com.x.pkg").join("assets"), "in the way").unwrap();
-        let bytes = zip_of(&[
+        let first = zip_of(&[
             ("manifest.json", PACKAGED_MANIFEST.as_bytes()),
-            ("main.js", b"export default {};"),
+            ("main.js", b"export default 1;"),
             ("assets/data.txt", b"payload"),
         ]);
+        install_package(&root, &first).unwrap();
 
-        let err = install_package(&root, &bytes).unwrap_err();
+        let colliding = PACKAGED_MANIFEST.replace(
+            r#""files":["main.js","assets/data.txt"]"#,
+            r#""files":["main.js","assets","assets/data.txt"]"#,
+        );
+        let second = zip_of(&[
+            ("manifest.json", colliding.as_bytes()),
+            ("main.js", b"export default 2;"),
+            ("assets", b"in the way"),
+            ("assets/data.txt", b"payload"),
+        ]);
+        let err = install_package(&root, &second).unwrap_err();
         assert!(err.contains("cannot create"), "unexpected error: {err}");
+        assert_eq!(
+            fs::read_to_string(root.join("com.x.pkg").join("main.js")).unwrap(),
+            "export default 1;"
+        );
+        assert!(!root.join(".staging-com.x.pkg").exists());
         let _ = fs::remove_dir_all(&root);
     }
 
+    /// A file the previous version declared and the new one does not is
+    /// gone after the install, since the folder is replaced whole.
     #[test]
-    fn install_package_reports_an_unwritable_declared_file() {
-        let root = temp_root("pkg_write_collision");
-        // A directory sits exactly where the entry file must be written.
-        fs::create_dir_all(root.join("com.x.pkg").join("main.js")).unwrap();
+    fn install_package_replaces_the_installed_folder_whole() {
+        let root = temp_root("pkg_replace_whole");
+        let first = zip_of(&[
+            ("manifest.json", PACKAGED_MANIFEST.as_bytes()),
+            ("main.js", b"export default 1;"),
+            ("assets/data.txt", b"payload"),
+        ]);
+        install_package(&root, &first).unwrap();
+        fs::write(root.join("com.x.pkg").join("stale.txt"), "old").unwrap();
+
+        install_package(&root, &first).unwrap();
+        assert!(!root.join("com.x.pkg").join("stale.txt").exists());
+        assert!(root.join("com.x.pkg").join("assets/data.txt").is_file());
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn install_package_refuses_a_destination_that_is_a_link() {
+        let root = temp_root("pkg_dest_link");
+        let elsewhere = root.join("elsewhere");
+        fs::create_dir_all(&elsewhere).unwrap();
+        std::os::unix::fs::symlink(&elsewhere, root.join("com.x.pkg")).unwrap();
         let bytes = zip_of(&[
             ("manifest.json", PACKAGED_MANIFEST.as_bytes()),
             ("main.js", b"export default {};"),
             ("assets/data.txt", b"payload"),
         ]);
-
         let err = install_package(&root, &bytes).unwrap_err();
-        assert!(err.contains("cannot write"), "unexpected error: {err}");
+        assert!(err.contains("is a link"), "unexpected error: {err}");
+        assert!(!elsewhere.join("main.js").exists());
         let _ = fs::remove_dir_all(&root);
     }
 
-    /// A deflate entry whose header understates its size would otherwise
-    /// unpack past the cap into memory: the read stops at the declared size.
     #[test]
     fn install_package_stops_reading_an_entry_at_the_size_its_header_declares() {
         let root = temp_root("pkg_header_lies");

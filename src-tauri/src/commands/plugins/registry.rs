@@ -24,15 +24,25 @@ pub(crate) const MAX_PACKAGE_BYTES: usize = MAX_TOTAL_BYTES as usize;
 /// Where a package may be downloaded from: the registry's own org on GitHub
 /// and the hosts GitHub serves release assets from, including the redirects
 /// it answers an asset URL with. The same list the http capability held when
-/// the renderer did the download.
+/// the renderer did the download. Judged on the parsed URL, as the client
+/// will send it: a `..` segment or userinfo in the spelling is resolved
+/// first, not matched as text.
 pub(crate) fn is_marketplace_url(url: &str) -> bool {
-    const PREFIXES: [&str; 4] = [
-        "https://raw.githubusercontent.com/glyph-md/",
-        "https://github.com/glyph-md/",
-        "https://release-assets.githubusercontent.com/",
-        "https://objects.githubusercontent.com/",
-    ];
-    PREFIXES.iter().any(|prefix| url.starts_with(prefix))
+    let Ok(parsed) = url::Url::parse(url) else {
+        return false;
+    };
+    if parsed.scheme() != "https"
+        || !parsed.username().is_empty()
+        || parsed.password().is_some()
+        || parsed.port().is_some()
+    {
+        return false;
+    }
+    match parsed.host_str() {
+        Some("raw.githubusercontent.com" | "github.com") => parsed.path().starts_with("/glyph-md/"),
+        Some("release-assets.githubusercontent.com" | "objects.githubusercontent.com") => true,
+        _ => false,
+    }
 }
 
 /// The fields of a registry entry an install needs.
@@ -287,6 +297,13 @@ mod tests {
             "https://github.com/glyph-md.attacker.example/x.zip",
             "http://github.com/glyph-md/x.zip",
             "https://objects.githubusercontent.com.attacker.example/x",
+            // Resolved before it is judged: the client would fetch /other/.
+            "https://github.com/glyph-md/../other/x.zip",
+            "https://github.com/glyph-md/%2E%2E/other/x.zip",
+            "https://github.com@attacker.example/glyph-md/x.zip",
+            "https://github.com:8443/glyph-md/x.zip",
+            "https://github.com/glyph-md",
+            "not a url",
         ] {
             assert!(!is_marketplace_url(url), "{url}");
         }

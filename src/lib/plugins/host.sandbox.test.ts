@@ -123,6 +123,46 @@ describe("sandboxed plugins", () => {
     errors.mockRestore();
   });
 
+  it("drops a sandboxed site theme that would make requests, like a stylesheet", async () => {
+    const worker = new FakeWorker();
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    const host = createPluginHost(vi.fn(), undefined, undefined, undefined, spawnerFor(worker));
+
+    await host.load(boxed());
+    // A theme lands in the exported site's stylesheet, in every visitor's browser.
+    worker.emit({
+      type: "register-site-theme",
+      id: "beacon",
+      label: "B",
+      css: "body{background:url(https://attacker.example/b.png)}",
+    });
+    worker.emit({ type: "register-site-theme", id: "plain", label: "P", css: "body{color:red}" });
+
+    expect(host.siteThemes.list().map((t) => t.id)).toEqual(["plain"]);
+    expect(errors).toHaveBeenCalledTimes(1);
+    errors.mockRestore();
+  });
+
+  it("ignores a settings key of __proto__, which would re-parent the map", async () => {
+    const worker = new FakeWorker();
+    const save = vi.fn();
+    const host = createPluginHost(
+      vi.fn(),
+      undefined,
+      undefined,
+      { load: () => Promise.resolve({}), save },
+      spawnerFor(worker),
+    );
+
+    await host.load(boxed());
+    worker.emit({ type: "settings-set", key: "__proto__", value: { polluted: true } });
+    worker.emit({ type: "settings-set", key: "theme", value: "dark" });
+
+    expect(save).toHaveBeenCalledTimes(1);
+    expect(save).toHaveBeenCalledWith("com.x.demo", { theme: "dark" });
+    expect(({} as Record<string, unknown>).polluted).toBeUndefined();
+  });
+
   it("drops a sandboxed stylesheet that would make requests", async () => {
     const worker = new FakeWorker();
     const errors = vi.spyOn(console, "error").mockImplementation(() => {});

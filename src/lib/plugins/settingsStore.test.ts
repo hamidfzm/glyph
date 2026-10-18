@@ -18,6 +18,14 @@ describe("loadPluginSettings", () => {
     expect(await loadPluginSettings("a.b")).toEqual({ size: 12 });
   });
 
+  // The map is keyed by plugin id; an id the prototype answers for must not
+  // read as a stored map (`__proto__` would hand the plugin Object.prototype).
+  it("returns {} for an id that is only a prototype property", async () => {
+    get.mockResolvedValue({ "com.x.a": { k: 1 } });
+    await expect(loadPluginSettings("__proto__")).resolves.toEqual({});
+    await expect(loadPluginSettings("constructor")).resolves.toEqual({});
+  });
+
   it("returns {} for an unknown plugin or empty store", async () => {
     get.mockResolvedValue(null);
     expect(await loadPluginSettings("a.b")).toEqual({});

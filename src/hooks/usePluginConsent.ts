@@ -7,7 +7,7 @@ import {
   consentTitle,
   grantAfterConsent,
 } from "@/lib/plugins/consent";
-import { loadGrants, type PluginGrant, saveGrants } from "@/lib/plugins/grantsStore";
+import { grantOf, loadGrants, type PluginGrant, saveGrants } from "@/lib/plugins/grantsStore";
 
 /** The identity and declared surface consent is asked for. */
 export interface ConsentSubject {
@@ -39,14 +39,22 @@ export function usePluginConsent() {
     return hydrationRef.current;
   }, []);
 
-  const hasFullTrust = useCallback((id: string) => grantsRef.current[id]?.fullTrust === true, []);
+  const hasFullTrust = useCallback(
+    (id: string) => grantOf(grantsRef.current, id)?.fullTrust === true,
+    [],
+  );
 
   const writeGrant = useCallback((id: string, grant: PluginGrant | undefined) => {
     const next = { ...grantsRef.current };
     if (grant === undefined) {
       delete next[id];
     } else {
-      next[id] = grant;
+      Object.defineProperty(next, id, {
+        value: grant,
+        enumerable: true,
+        writable: true,
+        configurable: true,
+      });
     }
     grantsRef.current = next;
     void saveGrants(next);
@@ -56,7 +64,7 @@ export function usePluginConsent() {
     async (subject: ConsentSubject): Promise<boolean> => {
       await hydrationRef.current;
       const permissions = subject.permissions ?? [];
-      const grant = grantsRef.current[subject.id];
+      const grant = grantOf(grantsRef.current, subject.id);
       const request = consentRequest(subject.sandbox, permissions, grant);
       if (!request) {
         // A sandboxed version retires an older full-trust grant, so a later
@@ -107,9 +115,24 @@ export function usePluginConsent() {
     [writeGrant],
   );
 
+  /**
+   * Whether loading `subject` as it is on disk would run on something the
+   * user never accepted: a full-trust plugin without its grant, or a sandboxed
+   * one whose manifest declares a permission its grant does not hold (a
+   * partial update, a hand-edited folder). A sandboxed plugin with no grant
+   * and no permissions runs, as an install before grants existed does.
+   */
+  const needsConsent = useCallback((subject: ConsentSubject) => {
+    const grant = grantOf(grantsRef.current, subject.id);
+    if (!subject.sandbox) return grant?.fullTrust !== true;
+    const granted = grant?.permissions ?? [];
+    return (subject.permissions ?? []).some((permission) => !granted.includes(permission));
+  }, []);
+
   return {
     hydrateGrants,
     hasFullTrust,
+    needsConsent,
     ensureConsent,
     consentToInstall,
     revokeGrant,

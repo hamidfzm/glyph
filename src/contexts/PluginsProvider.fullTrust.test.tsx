@@ -157,6 +157,48 @@ describe("PluginsProvider full-trust plugins", () => {
     );
   });
 
+  // The manifest on disk decides what a sandboxed plugin reaches at load time,
+  // so one that declares more than its grant holds (a partial update, a
+  // hand-edited folder) is parked until the user answers the dialog.
+  it("parks a sandboxed plugin whose manifest declares a permission its grant lacks", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const store = {
+      get: vi.fn((key: string) =>
+        Promise.resolve(key === "grants" ? { "com.x.demo": { permissions: [] } } : null),
+      ),
+      set: vi.fn((_key: string, _value: unknown) => Promise.resolve()),
+    };
+    vi.mocked(getStore).mockResolvedValue(store as never);
+    vi.mocked(invoke).mockImplementation((cmd) =>
+      Promise.resolve(
+        cmd === "list_plugins"
+          ? [installedPlugin({ sandbox: true, permissions: ["workspace:read"] })]
+          : undefined,
+      ),
+    );
+
+    function ManageProbe() {
+      const p = usePluginsOptional();
+      if (!p) return null;
+      return (
+        <div>
+          <span data-testid="installed">{p.installed.map((x) => x.id).join(",")}</span>
+          <span data-testid="disabled">{p.disabled.join(",")}</span>
+        </div>
+      );
+    }
+
+    render(
+      <PluginsProvider>
+        <ManageProbe />
+      </PluginsProvider>,
+    );
+    await waitFor(() => expect(screen.getByTestId("installed")).toHaveTextContent("com.x.demo"));
+    expect(screen.getByTestId("disabled")).toHaveTextContent("com.x.demo");
+    expect(store.set).not.toHaveBeenCalledWith("disabled", expect.anything());
+    spy.mockRestore();
+  });
+
   it("loads sandboxed plugins without a grant and uninstalls them without touching grants", async () => {
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
     const store = {

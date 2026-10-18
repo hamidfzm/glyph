@@ -67,6 +67,15 @@ pub(crate) fn parse_files(value: &serde_json::Value, main: &str) -> Result<Vec<S
                     "manifest \"files\" must include the entry file \"{main}\""
                 ));
             }
+            // Two names that differ in case alone are one file on a volume
+            // that ignores case, and the later write would replace the first.
+            let mut folded: Vec<String> = files.iter().map(|f| f.to_lowercase()).collect();
+            folded.sort_unstable();
+            if folded.windows(2).any(|pair| pair[0] == pair[1]) {
+                return Err(String::from(
+                    "manifest \"files\" lists the same path twice (case is ignored)",
+                ));
+            }
             Ok(files)
         }
         Some(_) => Err("manifest \"files\" must be an array of strings".into()),
@@ -128,10 +137,11 @@ pub(crate) fn required_str(value: &serde_json::Value, key: &str) -> Result<Strin
 const CORE_PLUGIN_ID_PREFIX: &str = "glyph.core.";
 
 /// The characters any plugin id may use, core ones included: safe as a folder
-/// name on every filesystem and as a key in the files the app writes.
+/// name on every filesystem and as a key in the files the app writes. The
+/// first character is a letter or digit, so an id is never `__proto__`, which
+/// as a key in those files would reach `Object.prototype` in the renderer.
 pub(crate) fn is_well_formed_id(id: &str) -> bool {
-    !id.is_empty()
-        && !id.starts_with('.')
+    id.starts_with(|c: char| c.is_ascii_alphanumeric())
         && id
             .chars()
             .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'))
@@ -249,7 +259,19 @@ mod tests {
         let with_id = |id: &str| {
             format!(r#"{{"id":"{id}","name":"n","version":"1.0.0","apiVersion":"^1.0.0"}}"#)
         };
-        for id in ["../evil", "a/b", "a\\b", ".hidden", "spa ce"] {
+        // `__proto__` as a key in the files the renderer keeps per id would
+        // reach Object.prototype, so an id starts with a letter or digit.
+        for id in [
+            "../evil",
+            "a/b",
+            "a\\b",
+            ".hidden",
+            "spa ce",
+            "__proto__",
+            "_x",
+            "-x",
+            "",
+        ] {
             assert!(
                 parse_manifest(&with_id(id)).is_err(),
                 "should reject id {id}"

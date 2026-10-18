@@ -226,12 +226,22 @@ export function createPluginHost(
             registerExporter(exporter) {
               tracked(exporters.register, bag)({ ...exporter, pluginId: plugin.id });
             },
-            registerSiteTheme: tracked(siteThemes.register, bag),
+            registerSiteTheme(theme) {
+              // A theme is written into the exported site's stylesheet, where
+              // it runs in every visitor's browser; fenced like page styles.
+              if (cssReachesOutside(theme.css)) {
+                console.error(`Plugin ${plugin.id} site theme was dropped: it references URLs`);
+                return;
+              }
+              tracked(siteThemes.register, bag)(theme);
+            },
             registerFileType: tracked(registerFileType, bag),
             registerDictionary: tracked(registerDictionarySource, bag),
             notify,
             registerTranslations: registerOwnTranslations,
             settingsSet(key, value) {
+              // Assigning `__proto__` would re-parent the map, not add a key.
+              if (key === "__proto__") return;
               settings[key] = value;
               settingsBackend.save(plugin.id, settings);
             },

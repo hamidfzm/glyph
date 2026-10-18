@@ -32,7 +32,7 @@ interface UsePluginLibraryOptions {
  */
 export function usePluginLibrary({ host, pushToast, coreReady = true }: UsePluginLibraryOptions) {
   const { t } = useTranslation("plugins");
-  const { hydrateGrants, hasFullTrust, ensureConsent, consentToInstall, revokeGrant } =
+  const { hydrateGrants, needsConsent, ensureConsent, consentToInstall, revokeGrant } =
     usePluginConsent();
   const [installed, setInstalled] = useState<InstalledPlugin[]>([]);
   const [initialLoadDone, setInitialLoadDone] = useState(false);
@@ -57,14 +57,14 @@ export function usePluginLibrary({ host, pushToast, coreReady = true }: UsePlugi
       } catch (err) {
         console.error("Failed to list installed plugins:", err);
       }
-      // Full-trust plugins never run on an implicit grant: without one they
-      // are parked as disabled for this session, and re-enabling routes
-      // through the warning. Parking is recomputed each launch rather than
-      // persisted, so a transient grants-store read failure cannot overwrite
-      // the user's saved enable choices.
-      const ungranted = all
-        .filter((p) => !p.sandbox && !dis.includes(p.id) && !hasFullTrust(p.id))
-        .map((p) => p.id);
+      // No plugin runs on an implicit grant: a full-trust one without its
+      // grant, or a sandboxed one whose manifest on disk now declares more
+      // than was granted (a partial update, a hand-edited folder), is parked
+      // as disabled for this session, and re-enabling routes through the
+      // dialog. Parking is recomputed each launch rather than persisted, so
+      // a transient grants-store read failure cannot overwrite the user's
+      // saved enable choices.
+      const ungranted = all.filter((p) => !dis.includes(p.id) && needsConsent(p)).map((p) => p.id);
       const nextDisabled = [...dis, ...ungranted];
       for (const plugin of all) {
         if (cancelled) return;
@@ -92,7 +92,7 @@ export function usePluginLibrary({ host, pushToast, coreReady = true }: UsePlugi
       cancelled = true;
       host.unloadAll();
     };
-  }, [host, hydrateGrants, hasFullTrust, coreReady]);
+  }, [host, hydrateGrants, needsConsent, coreReady]);
 
   const updates = useMemo(() => findUpdates(installed, registry), [installed, registry]);
 

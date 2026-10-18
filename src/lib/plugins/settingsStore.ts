@@ -18,7 +18,9 @@ function readAll(): Promise<AllSettings> {
 /** Read one plugin's persisted settings map. Missing/unreadable yields {}. */
 export async function loadPluginSettings(pluginId: string): Promise<Record<string, unknown>> {
   const all = await readAll();
-  const own = all[pluginId];
+  // An own entry only: for an id like `constructor` the map would otherwise
+  // answer from Object.prototype.
+  const own = Object.hasOwn(all, pluginId) ? all[pluginId] : undefined;
   return own && typeof own === "object" ? own : {};
 }
 
