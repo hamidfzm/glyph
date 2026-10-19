@@ -245,6 +245,8 @@ export interface CorePluginSettings {
   backlinks: boolean;
   /** Open Today's Note, with its per-workspace folder, file name pattern, and template. */
   dailyNotes: boolean;
+  /** Ready-made color schemes (Sepia, Solarized, High contrast), picked under its Settings row. */
+  themePresets: boolean;
 }
 
 export interface Settings {
@@ -348,5 +350,6 @@ export const DEFAULT_SETTINGS: Settings = {
     tags: true,
     backlinks: true,
     dailyNotes: true,
+    themePresets: true,
   },
 };

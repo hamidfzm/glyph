@@ -66,6 +66,10 @@
     "dailyNotes": {
       "name": "Daily notes",
       "description": "Open or create today's note from the File menu, the palette, or a shortcut. Its folder, file name pattern, and template are set per workspace in Workspace Settings."
+    },
+    "themePresets": {
+      "name": "Theme presets",
+      "description": "Ready-made color schemes beyond light and dark: Sepia, Solarized, and High contrast, each with a light and a dark variant."
     }
   }
 }

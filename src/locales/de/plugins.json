@@ -66,6 +66,10 @@
     "dailyNotes": {
       "name": "Tägliche Notizen",
       "description": "Die heutige Notiz über das Menü Datei, die Palette oder ein Tastenkürzel öffnen oder anlegen. Ordner, Dateinamenmuster und Vorlage werden pro Arbeitsbereich in den Arbeitsbereich-Einstellungen festgelegt."
+    },
+    "themePresets": {
+      "name": "Farbschemata",
+      "description": "Fertige Farbschemata über Hell und Dunkel hinaus: Sepia, Solarized und Hoher Kontrast, jeweils mit heller und dunkler Variante."
     }
   }
 }

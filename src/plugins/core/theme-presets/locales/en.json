@@ -1,0 +1,9 @@
+{
+  "label": "Preset",
+  "presets": {
+    "none": "None",
+    "sepia": "Sepia",
+    "solarized": "Solarized",
+    "high-contrast": "High contrast"
+  }
+}

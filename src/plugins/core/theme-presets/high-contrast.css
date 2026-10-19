@@ -1,0 +1,59 @@
+/* High contrast: black on white and white on black, with opaque chrome. The
+   dark accent is as light as white button labels on it allow (4.6:1), which
+   keeps links on black at 4.5:1 but lower on the raised surfaces. */
+
+:root {
+  --color-surface: #ffffff;
+  --color-surface-secondary: #f0f0f0;
+  --color-surface-tertiary: #e0e0e0;
+  --glyph-canvas-group-bg: rgba(240, 240, 240, 0.6);
+  --glyph-canvas-selection: rgba(0, 55, 179, 0.45);
+  --color-text-primary: #000000;
+  --color-text-secondary: #333333;
+  --color-text-tertiary: #555555;
+  --color-border: #595959;
+  --color-accent: #0037b3;
+  --color-accent-hover: #002a8a;
+  --color-banner-bg: #dde6ff;
+  --color-alert-note: #0040c0;
+  --color-alert-tip: #0a5c1f;
+  --color-alert-important: #5b1fa8;
+  --color-alert-warning: #6b4500;
+  --color-alert-caution: #a3000f;
+  --color-error: #a3000f;
+  --color-error-bg: rgba(163, 0, 15, 0.1);
+  --glyph-material-bg: rgba(255, 255, 255, 0.97);
+  --glyph-material-edge: rgba(0, 0, 0, 0.5);
+}
+
+:root.dark {
+  --color-surface: #000000;
+  --color-surface-secondary: #121212;
+  --color-surface-tertiary: #262626;
+  --glyph-canvas-group-bg: rgba(18, 18, 18, 0.6);
+  --glyph-canvas-selection: rgba(59, 108, 238, 0.45);
+  --color-text-primary: #ffffff;
+  --color-text-secondary: #e0e0e0;
+  --color-text-tertiary: #b3b3b3;
+  --color-border: #a6a6a6;
+  --color-accent: #3b6cee;
+  --color-accent-hover: #2f5ad6;
+  --color-banner-bg: #0a1a40;
+  --color-alert-note: #79b8ff;
+  --color-alert-tip: #56d364;
+  --color-alert-important: #d2a8ff;
+  --color-alert-warning: #ffd33d;
+  --color-alert-caution: #ff7b72;
+  --color-error: #ff7b72;
+  --color-error-bg: rgba(255, 123, 114, 0.16);
+  --glyph-material-bg: rgba(18, 18, 18, 0.97);
+  --glyph-material-edge: rgba(255, 255, 255, 0.5);
+}
+
+:root[data-platform="macos"] {
+  --glyph-sidebar-bg: #f0f0f0;
+}
+
+:root.dark[data-platform="macos"] {
+  --glyph-sidebar-bg: #121212;
+}

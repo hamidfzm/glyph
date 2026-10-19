@@ -1,5 +1,7 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { PluginStyles } from "@/components/plugins/PluginStyles";
+import { PluginsContext } from "@/contexts/PluginsContext";
 import { TabsContext, type TabsContextValue } from "@/contexts/TabsContext";
 import { useZoomApi } from "@/contexts/ZoomContext";
 import { ZoomProvider } from "@/contexts/ZoomProvider";
@@ -16,8 +18,11 @@ import {
 import { ALPHA_DIMMED } from "@/lib/graphDraw";
 import type { GraphLayout, LayoutNode } from "@/lib/graphSimulation";
 import { clearGraphView, loadGraphView } from "@/lib/graphViewStore";
+import { createRegistry } from "@/lib/plugins/registry";
+import type { StyleContribution } from "@/lib/plugins/types";
 import type { VaultSnapshot } from "@/lib/vault";
 import { graphOf } from "@/test/fixtures/graph";
+import { pluginsContextValue } from "@/test/fixtures/pluginsContext";
 import { restoreMatchMedia, stubMatchMedia } from "@/test/matchMedia";
 import { restoreRaf, stubRaf } from "@/test/raf";
 import { GraphView } from "./GraphView";
@@ -183,6 +188,24 @@ describe("GraphView", () => {
     renderGraph();
     expect(ctx.clearRect).toHaveBeenCalled();
     expect(ctx.arc).toHaveBeenCalledTimes(2);
+  });
+
+  it("redraws in the colors a plugin stylesheet sets, such as a theme preset", () => {
+    const styles = createRegistry<StyleContribution>();
+    const fills: string[] = [];
+    Object.defineProperty(ctx, "fillStyle", { set: (value: string) => fills.push(value) });
+    render(
+      <PluginsContext.Provider value={pluginsContextValue({ styles })}>
+        <GraphView graph={GRAPH} onOpenFile={vi.fn()} />
+        <PluginStyles />
+      </PluginsContext.Provider>,
+    );
+    expect(fills).not.toContain("#123456");
+
+    act(() => {
+      styles.register({ css: ":root { --color-text-primary: #123456; }" });
+    });
+    expect(fills).toContain("#123456");
   });
 
   it("hides itself from print output", () => {

@@ -48,6 +48,11 @@ export const CORE_PLUGINS: readonly CorePlugin[] = [
     permissions: ["workspace:read", "workspace:write"],
     load: () => import("@/plugins/core/daily-notes/dailyNotesPlugin"),
   },
+  {
+    id: "glyph.core.theme-presets",
+    settingsKey: "themePresets",
+    load: () => import("@/plugins/core/theme-presets/themePresetsPlugin"),
+  },
 ];
 
 /** The host entry for a core plugin: bundled, so there is no folder or source text. */

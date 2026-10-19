@@ -57,7 +57,7 @@ The [`samples/`](samples) directory is a tiny demo workspace. Open it as a folde
 - Per-workspace, Git-backed Cloud Sync to any remote you control, with a status-bar ahead/behind/dirty pill
 
 ### Appearance
-- System / Light / Dark themes and platform-native styling (macOS vibrancy, Windows Mica)
+- System / Light / Dark themes, Sepia, Solarized, and High contrast presets, and platform-native styling (macOS vibrancy, Windows Mica)
 - Localized, RTL-aware UI; customizable fonts, size, line height, and content width
 
 ### AI (optional)

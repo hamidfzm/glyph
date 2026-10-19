@@ -631,11 +631,13 @@ the way a renderer-supplied path is.
   boundary itself: the first never replaces a file and refuses hidden paths
   such as `.git/hooks`, the second writes one size-capped block keyed by the
   plugin's id. Sandboxed plugins get none of it. Core plugins (the compiled-in
-  `CORE_PLUGINS` list: D2, Mermaid, math, tags, backlinks, and daily notes
-  today) are app code shipped in the signed binary: they load with full trust
-  and no consent prompt, take the permissions they need (`workspace:read` for
-  tags and backlinks, and `workspace:write` as well for daily notes) from that
-  same list rather than from disk, and only their on/off state lives in
-  `settings.json`. The backend
+  `CORE_PLUGINS` list: D2, Mermaid, math, tags, backlinks, daily notes, and
+  theme presets today) are app code shipped in the signed binary: they load
+  with full trust and no consent prompt, take the permissions they need
+  (`workspace:read` for tags and backlinks, and `workspace:write` as well for
+  daily notes) from that same list rather than from disk, and only their on/off
+  state lives in `settings.json`. A core plugin's own preferences (the chosen
+  theme preset) sit in `plugins.json` like any plugin's `ctx.settings`, and the
+  plugin checks them against its own allowlist when it reads them. The backend
   reserves the `glyph.core.` id prefix, so an installed plugin cannot take a
   core plugin's settings, grants, or host slot.
