@@ -60,6 +60,43 @@ function activeMarkIndex(container: ParentNode) {
   return marks.findIndex((mark) => mark.classList.contains("search-highlight-active"));
 }
 
+interface ParagraphProps {
+  lead?: boolean;
+  text?: string;
+}
+
+// The <code> sibling gives the text a fiber of its own, the node React removes and inserts beside.
+function renderDocument(props: ParagraphProps) {
+  const search = { current: null as ReturnType<typeof useSearch> | null };
+  function SearchableParagraph({ lead, text }: ParagraphProps) {
+    const contentRef = useRef<HTMLDivElement>(null);
+    search.current = useSearch({ containerRef: contentRef });
+    return (
+      <div ref={contentRef}>
+        <p>
+          {lead && <em>new </em>}
+          {text}
+          <code>x</code>
+        </p>
+      </div>
+    );
+  }
+  const view = render(<SearchableParagraph {...props} />);
+  const highlight = (query: string) => {
+    act(() => search.current?.setQuery(query));
+    act(() => {
+      vi.advanceTimersByTime(150);
+    });
+  };
+  const rerender = async (next: ParagraphProps) => {
+    view.rerender(<SearchableParagraph {...next} />);
+    await nextFrame();
+  };
+  const paragraph = () => view.container.querySelector("p");
+  const marks = () => view.container.querySelectorAll("mark.search-highlight");
+  return { search, highlight, rerender, paragraph, marks };
+}
+
 describe("useSearch", () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -303,5 +340,87 @@ describe("useSearch", () => {
     });
 
     expect(result.current.matchCount).toBe(1);
+  });
+
+  describe("in a document React keeps rendering", () => {
+    it("lets React remove a highlighted text node", async () => {
+      const doc = renderDocument({ text: "alpha beta" });
+      doc.highlight("beta");
+      expect(doc.marks()).toHaveLength(1);
+
+      await doc.rerender({});
+
+      expect(doc.paragraph()).toHaveTextContent(/^x$/);
+      expect(doc.marks()).toHaveLength(0);
+      expect(doc.search.current?.matchCount).toBe(0);
+    });
+
+    it("lets React insert before a highlighted text node", async () => {
+      const doc = renderDocument({ text: "alpha beta" });
+      doc.highlight("beta");
+
+      await doc.rerender({ lead: true, text: "alpha beta" });
+
+      expect(doc.paragraph()).toHaveTextContent(/^new alpha betax$/);
+      expect(doc.marks()).toHaveLength(1);
+      expect(doc.search.current?.matchCount).toBe(1);
+    });
+
+    it("lets React remove a text node the search highlighted before it was closed", async () => {
+      const doc = renderDocument({ text: "alpha beta" });
+      doc.highlight("beta");
+      act(() => doc.search.current?.clear());
+      expect(doc.paragraph()).toHaveTextContent(/^alpha betax$/);
+
+      await doc.rerender({});
+
+      expect(doc.paragraph()).toHaveTextContent(/^x$/);
+    });
+
+    it("keeps the text React wrote over a highlighted node", async () => {
+      const doc = renderDocument({ text: "alpha beta" });
+      doc.highlight("beta");
+
+      await doc.rerender({ text: "alpha gamma" });
+
+      expect(doc.paragraph()).toHaveTextContent(/^alpha gammax$/);
+      expect(doc.search.current?.matchCount).toBe(0);
+    });
+
+    it("replaces the previous query's highlights when the query changes", () => {
+      const doc = renderDocument({ text: "alpha beta" });
+      doc.highlight("beta");
+      doc.highlight("alp");
+
+      expect(doc.marks()).toHaveLength(1);
+      expect(doc.marks()[0]).toHaveTextContent("alp");
+      expect(doc.paragraph()).toHaveTextContent(/^alpha betax$/);
+    });
+
+    it("restores the text when the query is emptied", async () => {
+      const doc = renderDocument({ text: "alpha beta" });
+      doc.highlight("beta");
+      doc.highlight("");
+
+      expect(doc.marks()).toHaveLength(0);
+      expect(doc.search.current?.matchCount).toBe(0);
+      expect(doc.paragraph()).toHaveTextContent(/^alpha betax$/);
+
+      await doc.rerender({});
+
+      expect(doc.paragraph()).toHaveTextContent(/^x$/);
+    });
+
+    it("highlights a match at the start of a text node and restores it on clear", () => {
+      const doc = renderDocument({ text: "alpha beta" });
+      doc.highlight("alpha");
+      expect(doc.marks()).toHaveLength(1);
+      expect(doc.paragraph()).toHaveTextContent(/^alpha betax$/);
+
+      act(() => doc.search.current?.clear());
+
+      expect(doc.marks()).toHaveLength(0);
+      expect(doc.paragraph()).toHaveTextContent(/^alpha betax$/);
+    });
   });
 });
