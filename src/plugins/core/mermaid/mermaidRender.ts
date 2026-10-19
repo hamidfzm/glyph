@@ -37,8 +37,15 @@ function renderWith(config: MermaidConfig, source: string): Promise<string> {
   const pending = queue.then(async () => {
     const mermaid = await loadMermaid();
     // `strict` is Mermaid's default today; named so a future default cannot
-    // widen what diagram source may put in the page.
-    mermaid.initialize({ startOnLoad: false, securityLevel: "strict", ...config });
+    // widen what diagram source may put in the page. Without
+    // `suppressErrorRendering`, a parse error leaves Mermaid's own error diagram
+    // in `document.body`, outside any document; every caller shows its own.
+    mermaid.initialize({
+      startOnLoad: false,
+      securityLevel: "strict",
+      suppressErrorRendering: true,
+      ...config,
+    });
     // Always pass a fresh id. Mermaid v11 keeps internal state keyed by id,
     // and a reused id returns a tiny stub SVG that paints as a blank preview.
     const { svg } = await mermaid.render(`mermaid-diagram-${idCounter++}`, source);
@@ -106,9 +113,9 @@ export async function renderMermaidStatic(source: string): Promise<string> {
   return svgMarkup(fragment);
 }
 
-/** The static render for a screen without a plugin host (the Windows Explorer
- *  preview): text labels and sanitized like the page render, in the given
- *  theme, with the label backgrounds kept. */
+/** The static render for a screen without a plugin host (the Explorer, Quick
+ *  Look and web previews): text labels and sanitized like the page render, in
+ *  the given theme, with the label backgrounds kept. */
 export async function renderMermaidPreview(source: string, dark: boolean): Promise<string> {
   return svgMarkup(await renderTextLabels(source, dark));
 }

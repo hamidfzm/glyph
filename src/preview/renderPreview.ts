@@ -13,8 +13,8 @@ import { rehypePreviewImages } from "./previewImages";
 
 export interface PreviewOptions {
   dark: boolean;
-  /** Where the previewed file's folder is served, for relative images. */
-  baseUrl: string;
+  /** Where the previewed file's folder is served, for relative images; null when nothing is. */
+  baseUrl: string | null;
 }
 
 // KaTeX and its stylesheet load only for a file containing math, as in the app.

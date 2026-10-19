@@ -1,4 +1,5 @@
 import { Trans, useTranslation } from "react-i18next";
+import { PRIMARY_BUTTON_CLASS, SECONDARY_BUTTON_CLASS } from "@/components/layout/emptyStateStyles";
 import { ShowOn } from "@/components/ShowOn";
 import type { Platform } from "@/hooks/usePlatform";
 import { modKey } from "@/lib/platform";
@@ -56,52 +57,28 @@ export function EmptyState({
       </div>
       {folderEmpty && (
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={onNewNote}
-            className="pressable px-4 py-2 text-sm font-medium text-white bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] rounded-[var(--glyph-radius)] transition-colors"
-          >
+          <button type="button" onClick={onNewNote} className={PRIMARY_BUTTON_CLASS}>
             {t("emptyState.newNote")}
           </button>
-          <button
-            type="button"
-            onClick={onNewCanvas}
-            className="pressable px-4 py-2 text-sm font-medium text-[var(--color-text-primary)] bg-[var(--color-surface-secondary)] hover:bg-[var(--color-surface-tertiary)] border border-[var(--color-border)] rounded-[var(--glyph-radius)] transition-colors"
-          >
+          <button type="button" onClick={onNewCanvas} className={SECONDARY_BUTTON_CLASS}>
             {t("emptyState.newCanvas")}
           </button>
         </div>
       )}
       {!folderEmpty && (
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={onNewDocument}
-            className="pressable px-4 py-2 text-sm font-medium text-white bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] rounded-[var(--glyph-radius)] transition-colors"
-          >
+          <button type="button" onClick={onNewDocument} className={PRIMARY_BUTTON_CLASS}>
             {t("emptyState.newDocument")}
           </button>
-          <button
-            type="button"
-            onClick={onOpenFile}
-            className="pressable px-4 py-2 text-sm font-medium text-[var(--color-text-primary)] bg-[var(--color-surface-secondary)] hover:bg-[var(--color-surface-tertiary)] border border-[var(--color-border)] rounded-[var(--glyph-radius)] transition-colors"
-          >
+          <button type="button" onClick={onOpenFile} className={SECONDARY_BUTTON_CLASS}>
             {t("emptyState.openFile")}
           </button>
           {/* No folder workspaces on mobile. */}
           <ShowOn on="desktop">
-            <button
-              type="button"
-              onClick={onOpenFolder}
-              className="pressable px-4 py-2 text-sm font-medium text-[var(--color-text-primary)] bg-[var(--color-surface-secondary)] hover:bg-[var(--color-surface-tertiary)] border border-[var(--color-border)] rounded-[var(--glyph-radius)] transition-colors"
-            >
+            <button type="button" onClick={onOpenFolder} className={SECONDARY_BUTTON_CLASS}>
               {t("emptyState.openFolder")}
             </button>
-            <button
-              type="button"
-              onClick={onNewWorkspace}
-              className="pressable px-4 py-2 text-sm font-medium text-[var(--color-text-primary)] bg-[var(--color-surface-secondary)] hover:bg-[var(--color-surface-tertiary)] border border-[var(--color-border)] rounded-[var(--glyph-radius)] transition-colors"
-            >
+            <button type="button" onClick={onNewWorkspace} className={SECONDARY_BUTTON_CLASS}>
               {t("emptyState.newWorkspace")}
             </button>
           </ShowOn>
