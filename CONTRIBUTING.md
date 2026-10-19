@@ -350,6 +350,7 @@ Rules:
 - **Never add a `uses:` on a tag or branch.** Resolve it first: `gh api repos/<owner>/<repo>/commits/<tag> --jq .sha`. Pin the SHA of a published release, not of a moving branch head, so the comment names a real version.
 - **Keep the `# vX.Y.Z` comment accurate.** Dependabot parses it to know the current version, and it is the only readable signal of what a SHA is.
 - **Local composite actions** (`./.github/actions/…`) are referenced by path and are not pinned; they live in this repo and are reviewed with the rest of the diff.
+- **Every checkout drops the token** (`persist-credentials: false`). The jobs build the whole npm and cargo dependency tree, whose lifecycle and build scripts would otherwise find a push credential in `.git/config`. A step that pushes gets its token through `env`.
 - **Updates come through Dependabot**, weekly, under `chore(ci)`. Dependabot rewrites the SHA and the comment together. Review the upstream diff between the old and new tag (`https://github.com/<owner>/<repo>/compare/<old>...<new>`) before merging, especially for actions used by `release.yml`, which holds publishing secrets.
 - **Some actions need the tool name spelled out.** `taiki-e/install-action` is normally used as `@cargo-llvm-cov`, where the tag name selects the tool; pinned by SHA that shorthand is gone, so pass `with: { tool: … }` explicitly.
 

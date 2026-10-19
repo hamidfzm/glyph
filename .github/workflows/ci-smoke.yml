@@ -20,6 +20,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
       - uses: ./.github/actions/pnpm-setup
       - run: pnpm install --frozen-lockfile
       - name: Install Playwright WebKit
@@ -41,6 +43,7 @@ jobs:
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
+          persist-credentials: false
           # Every commit, but no file contents beyond the checkout: the
           # commit check walks the PR's commits back to its base branch.
           fetch-depth: 0
@@ -49,14 +52,18 @@ jobs:
       - run: bash scripts/bump-version.test.sh
       - run: bash scripts/release-changelog.test.sh
       - run: bash scripts/check-ai-attribution.test.sh
+      # The title and body are read live, not from the event payload: a
+      # re-run replays the payload the run started with, so a description
+      # fixed afterwards would fail the same way until the next push.
       - name: Check the PR's commits, title and description
         if: github.event_name == 'pull_request'
         env:
+          GH_TOKEN: ${{ github.token }}
+          NUMBER: ${{ github.event.pull_request.number }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           BASE_REF: ${{ github.event.pull_request.base.ref }}
-          TITLE: ${{ github.event.pull_request.title }}
-          BODY: ${{ github.event.pull_request.body }}
         run: |
           sh scripts/check-ai-attribution.sh commits "$HEAD_SHA" --not "origin/$BASE_REF"
-          printf '%s\n\n%s\n' "$TITLE" "$BODY" > "$RUNNER_TEMP/pr.md"
+          gh api "repos/$GITHUB_REPOSITORY/pulls/$NUMBER" \
+            --jq '.title + "\n\n" + (.body // "") + "\n"' > "$RUNNER_TEMP/pr.md"
           sh scripts/check-ai-attribution.sh text "$RUNNER_TEMP/pr.md"
