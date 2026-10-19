@@ -44,14 +44,6 @@ export function initSyncRepo(
   return invoke("sync_init_repo", { workspacePath, defaultBranch, remoteUrl });
 }
 
-export function cloneSyncRemote(
-  workspacePath: string,
-  remoteUrl: string,
-  token: string | null,
-): Promise<void> {
-  return invoke("sync_clone_remote", { workspacePath, remoteUrl, token });
-}
-
 /**
  * Write `[remote "origin"] url = <remoteUrl>` into the workspace's
  * `.git/config`. Called from the modal's Save flow when the workspace
