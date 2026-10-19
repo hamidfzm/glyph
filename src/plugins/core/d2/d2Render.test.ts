@@ -37,9 +37,19 @@ describe("renderD2", () => {
     renderSvg.mockResolvedValue("<svg><script>x</script></svg>");
     const out = await renderD2("wire-key", false);
     expect(sanitize).toHaveBeenCalledWith("<svg><script>x</script></svg>", {
-      FORBID_TAGS: ["foreignObject"],
+      FORBID_TAGS: ["foreignObject", "a"],
     });
     expect(out).toBe("CLEAN:<svg><script>x</script></svg>");
+  });
+
+  // A shape's `link` renders as an SVG anchor that no link component sees, so
+  // a click would navigate the webview itself to it, with no prompt.
+  it("forbids the anchor a shape's link renders as", async () => {
+    const linked =
+      '<svg xmlns:xlink="http://www.w3.org/1999/xlink"><a xlink:href="https://attacker.example"><text>x</text></a></svg>';
+    renderSvg.mockResolvedValue(linked);
+    await renderD2("x: { link: https://attacker.example }", false);
+    expect(sanitize).toHaveBeenCalledWith(linked, { FORBID_TAGS: ["foreignObject", "a"] });
   });
 
   it("serves an unchanged (source, theme) from cache without recompiling", async () => {

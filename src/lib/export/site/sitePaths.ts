@@ -71,18 +71,6 @@ export function relativeHref(fromPage: string, to: string): string {
   return [...ups, ...toSegs.slice(common)].join("/");
 }
 
-/**
- * Undo micromark's percent-encoding on a link destination so it can be
- * resolved against the filesystem. Malformed sequences pass through verbatim.
- */
-export function decodeHref(href: string): string {
-  try {
-    return decodeURIComponent(href);
-  } catch {
-    return href;
-  }
-}
-
 /** Percent-encode each segment of a site-relative href (spaces, unicode). */
 export function encodeHref(href: string): string {
   return href

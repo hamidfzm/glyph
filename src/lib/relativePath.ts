@@ -71,6 +71,17 @@ export function clampRootFor(
   return root;
 }
 
+// Undo micromark's percent-encoding on a link destination (a file path or a
+// heading id). A malformed sequence (`#%E0`) passes through verbatim instead of
+// throwing: a link is document content, never a reason to crash.
+export function decodeHref(href: string): string {
+  try {
+    return decodeURIComponent(href);
+  } catch {
+    return href;
+  }
+}
+
 // Whether an `href` is a relative local path (and therefore a candidate for
 // in-workspace resolution) rather than an external URL, an in-document anchor,
 // or an already-absolute path.

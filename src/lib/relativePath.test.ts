@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   clampRootFor,
+  decodeHref,
   isOpenableRelativeHref,
   isRelativeLocalHref,
   normalizeRelativePath,
@@ -161,5 +162,15 @@ describe("isOpenableRelativeHref", () => {
     undefined,
   ])("does not open %s in the workspace", (href) => {
     expect(isOpenableRelativeHref(href)).toBe(false);
+  });
+});
+
+describe("decodeHref", () => {
+  it("undoes percent-encoding", () => {
+    expect(decodeHref("my%20pics/a%20b.png")).toBe("my pics/a b.png");
+  });
+
+  it.each(["50%-off.md", "%E0", "%"])("passes the malformed %s through verbatim", (href) => {
+    expect(decodeHref(href)).toBe(href);
   });
 });
