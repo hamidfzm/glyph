@@ -162,7 +162,11 @@ test("a link inside a diagram renders inert and leaves the viewer in place", asy
   await expect(diagram.locator("a")).toHaveCount(0);
   const node = diagram.locator("svg .node").first();
   await expect(node).toContainText("B");
-  await node.click();
+  // A dispatched click rather than a pointer click: a real click on the SVG group hung in
+  // WebKit's actionability checks, and the question is what a click reaching the node does.
+  // An anchor would still act on it, so the wait gives any navigation time to show up.
+  await node.dispatchEvent("click");
+  await page.waitForTimeout(500);
   expect(page.context().pages()).toHaveLength(1);
   expect(page.url()).toBe(viewerUrl);
   expect(offOrigin).toEqual([]);
