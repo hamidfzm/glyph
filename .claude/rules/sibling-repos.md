@@ -2,7 +2,7 @@
 
 Rules for working across the Glyph ecosystem's satellite repositories.
 
-The main repo is `hamidfzm/glyph`. Every satellite (Homebrew tap, Scoop bucket, apt/rpm repos, plugin marketplace, plugin template, export-website action, org profile, the `glyph-md.github.io` website, and the `view` web viewer deploy, which each release's `publish-web-viewer` job starts) lives in the **glyph-md** GitHub org.
+The main repo is `hamidfzm/glyph`. Every satellite (Homebrew tap, Scoop bucket, apt/rpm repos, plugin marketplace, plugin template, export-website action, org profile, the `glyph-md.github.io` website, and the `view` web viewer deploy; the highest release's `dispatch-satellites` job starts the view deploy and the export action's release) lives in the **glyph-md** GitHub org.
 
 - **Clone all satellites into `../glyph-md/<repo>`**, a `glyph-md/` directory **adjacent to this repo** (i.e. next to the `glyph` checkout), not inside a worktree or a temp dir. Make cross-repo changes there so the working copies persist between sessions instead of re-cloning each time.
 
@@ -30,4 +30,5 @@ The main repo is `hamidfzm/glyph`. Every satellite (Homebrew tap, Scoop bucket, 
 ## Satellite gotchas
 
 - **PR APIs 404 on repos with Issues disabled** (`homebrew-tap`, `scoop-bucket`): GitHub's `/pulls` endpoints ride on the issues subsystem, so `gh pr create` fails even with admin. Enable Issues first, then open the PR: the never-push-to-`main` rule in [github.md](./github.md) covers satellites too.
+- **Only a browser can list `export-website-action` on the Marketplace.** The checkbox has no API, and the first listing (category, Developer Agreement, 2FA) and any re-listing happen on a release's edit page. Its Release workflow creates each release with `RELEASE_TOKEN`, the publisher's own token, because GitHub does not list a release authored by `GITHUB_TOKEN`. Never swap that token for `GITHUB_TOKEN`; if a release is missing from the listing, edit it, tick "Publish this Action to the GitHub Marketplace", and save.
 - **Plugin API phases ship ecosystem-wide**: any change to `ctx.*`, manifest fields, or registry entry fields also updates `glyph-md/plugin-template` (`types/glyph.d.ts`, "API vX.Y" header) and `glyph-md/plugins` (`docs/api-reference.md`, `index.schema.json`, CONTRIBUTING) in the same delivery, with matching `PLUGIN_API_VERSION`.
