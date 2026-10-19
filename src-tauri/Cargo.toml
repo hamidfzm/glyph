@@ -72,6 +72,12 @@ tokio = { version = "1", features = ["macros", "rt"] }
 [target."cfg(any(target_os = \"linux\", target_os = \"windows\"))".dependencies]
 tauri-plugin-single-instance = "2"
 
+# The drop handler asks GTK whether the drag it is about to honour began in
+# this process (see src/windows/drag_source.rs). Already in the tree through
+# Tauri, at the version Tauri builds against.
+[target."cfg(target_os = \"linux\")".dependencies]
+gtk = "0.18"
+
 # Desktop-only dependencies. The window-state plugin has no mobile equivalent
 # (no OS window state there); git2's vendored OpenSSL and sentry don't
 # cross-compile for android/ios, and the features they power (workspace sync,

@@ -10,7 +10,8 @@ use tauri::{AppHandle, Emitter, Manager, Runtime, State, WebviewUrl, WebviewWind
 
 use crate::grants::{self, GrantRegistry};
 use crate::windows::{
-    route_open, route_opens, OpenKind, OpenRoute, OpenTarget, PendingOpen, WindowRegistry,
+    route_open, route_opens, DragSources, OpenKind, OpenRoute, OpenTarget, PendingOpen,
+    WindowRegistry,
 };
 
 /// Mint the grant for a backend-observed open and mirror it into the
@@ -33,6 +34,35 @@ fn grant_open<R: Runtime>(app: &AppHandle<R>, kind: OpenKind, path: &str) {
         }
     }
 }
+
+/// Have GTK tell [`DragSources`] whether each drag over `window` began in
+/// this process, so the drop handler can refuse the page's own drags (see
+/// `windows/drag_source.rs`). `drag-motion` fires on the drop target before
+/// wry queues the drop, so the record is written before it is read.
+#[cfg(target_os = "linux")]
+pub fn watch_drag_source<R: Runtime>(window: &tauri::WebviewWindow<R>) {
+    use gtk::prelude::*;
+
+    let app = window.app_handle().clone();
+    let label = window.label().to_string();
+    let _ = window.with_webview(move |webview| {
+        webview
+            .inner()
+            .connect_drag_motion(move |_, context, _, _, _| {
+                if let Some(sources) = app.try_state::<DragSources>() {
+                    sources.record(&label, context.drag_get_source_widget().is_some());
+                }
+                // Not handled here: the webview still decides what the drag
+                // may do.
+                false
+            });
+    });
+}
+
+/// Windows and macOS read only the OS file list from a drop, which a page
+/// cannot write, so there is nothing to record.
+#[cfg(not(target_os = "linux"))]
+pub fn watch_drag_source<R: Runtime>(_window: &tauri::WebviewWindow<R>) {}
 
 /// Tells a window that opens are waiting in its queue. It carries no path:
 /// the frontend answers with `take_pending_opens` (see `windows/pending.rs`).
@@ -182,6 +212,9 @@ fn spawn_window<R: Runtime>(app: &AppHandle<R>, registry: &WindowRegistry, pendi
             builder = builder.menu(menu);
         }
         let built = builder.build();
+        if let Ok(window) = &built {
+            watch_drag_source(window);
+        }
         if built.is_err() {
             // The window will never report back, so drop the phantom registry
             // entry that would swallow future open requests.

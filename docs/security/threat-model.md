@@ -50,7 +50,19 @@ Grants are minted only from backend-observed events, never from a bare
 webview-supplied path:
 
 - CLI launch arguments (every folder and file the launch names, the `export` subcommand's `--format` and `--out`, the `serve` subcommand's `--host` and `--port`)
-- Drag-and-drop onto a window (the OS event carries the path)
+- Drag-and-drop onto a window: the OS hands the dropped paths to the
+  backend, and the renderer never sees them. On Linux that alone is not
+  enough. WebKitGTK serves the page's own drags through the same GTK drag a
+  file manager uses, and wry reads any `text/uri-list` that reaches the
+  webview as a file drop without asking where the drag came from, so a page
+  that writes `file:///home/user` into `dataTransfer` in a `dragstart`
+  listener and is dropped on itself would name the folder the drop handler
+  grants. The backend therefore asks GTK at every `drag-motion` whether the
+  drag began in this process (`gtk_drag_get_source_widget`, which answers
+  only for drags GTK itself started) and refuses the drop when it did
+  (`src-tauri/src/windows/drag_source.rs`). Windows and macOS read only the
+  OS file list (`CF_HDROP`, `NSFilenamesPboardType`), which a page cannot
+  write.
 - macOS `RunEvent::Opened` and second-instance launches, under the same
   per-path rules as a cold start
 - Native pick dialogs run in Rust (`src-tauri/src/commands/pick.rs`): Open

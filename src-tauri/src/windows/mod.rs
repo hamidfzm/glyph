@@ -10,7 +10,10 @@
 // decision. The runtime half (creating/focusing/emitting to real windows)
 // lives in [`crate::windows_runtime`].
 
+mod drag_source;
 mod pending;
+
+pub use drag_source::DragSources;
 
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicU64, Ordering};
