@@ -5,7 +5,7 @@ Thanks for your interest in contributing!
 ## Development Setup
 
 ```bash
-# Prerequisites: Node.js (see .nvmrc), pnpm, Rust stable, plus platform deps (below)
+# Prerequisites: Node.js (see .nvmrc), pnpm, rustup (src-tauri/rust-toolchain.toml picks the Rust version), plus platform deps (below)
 git clone https://github.com/hamidfzm/glyph.git
 cd glyph
 nvm use          # or fnm use (reads .nvmrc)
@@ -354,6 +354,7 @@ Rules:
 - **A reusable workflow is handed the secrets it names, never `secrets: inherit`.** `ci.yml` runs on every pull request, and a pull request from a branch of this repo runs the workflow files it edits, so an inherited secret set would let one read the release tokens without merging. The called workflow declares what it takes under `on.workflow_call.secrets`, and the caller passes exactly that.
 - **Updates come through Dependabot**, weekly, under `chore(ci)`. Dependabot rewrites the SHA and the comment together. Review the upstream diff between the old and new tag (`https://github.com/<owner>/<repo>/compare/<old>...<new>`) before merging, especially for actions used by `release.yml`, which holds publishing secrets.
 - **Some actions need the tool name spelled out.** `taiki-e/install-action` is normally used as `@cargo-llvm-cov`, where the tag name selects the tool; pinned by SHA that shorthand is gone, so pass `with: { tool: … }` explicitly.
+- **The Rust toolchain is pinned too**, in `src-tauri/rust-toolchain.toml`, which rustup follows on its own; every `dtolnay/rust-toolchain` step passes the same version through `toolchain:` so a runner installs it once, with its targets. Dependabot does not bump it: raise `channel` and every `toolchain:` input under `.github` in one commit.
 
 Workflow permissions follow the same minimum-blast-radius rule: each workflow declares `permissions: contents: read` (or `{}`) at the top, and only the individual jobs that need to write declare the extra scope.
 

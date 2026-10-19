@@ -1,5 +1,5 @@
 name: Set up Rust
-description: Install stable Rust and restore the src-tauri cargo cache
+description: Install the pinned Rust toolchain and restore the src-tauri cargo cache
 inputs:
   targets:
     description: Comma-separated extra compilation targets
@@ -12,6 +12,7 @@ runs:
   steps:
     - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
       with:
+        toolchain: "1.97.0" # src-tauri/rust-toolchain.toml
         targets: ${{ inputs.targets }}
         components: ${{ inputs.components }}
     - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2

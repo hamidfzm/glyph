@@ -58,9 +58,10 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/pnpm-setup
-      - name: Install Rust stable
+      - name: Install Rust
         uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
         with:
+          toolchain: "1.97.0" # src-tauri/rust-toolchain.toml
           targets: ${{ github.event_name == 'pull_request' && matrix.targets_pr || matrix.targets_full }}
       - name: Install Linux dependencies
         if: startsWith(matrix.platform, 'ubuntu')

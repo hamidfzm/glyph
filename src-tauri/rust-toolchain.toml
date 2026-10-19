@@ -1,0 +1,6 @@
+# The Rust version every build of src-tauri uses; rustup reads this file on
+# its own, and the `toolchain:` inputs under .github pass the same version so
+# a runner installs it once. Bumps are manual: change both in one commit.
+[toolchain]
+channel = "1.97.0"
+components = ["rustfmt", "clippy"]

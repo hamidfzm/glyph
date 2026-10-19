@@ -147,8 +147,10 @@ function main() {
 
 	if (changed) {
 		writeFileSync(packagePath, `${JSON.stringify(pkg, null, 2)}\n`);
+		// package.json just changed, so the lockfile has to be re-resolved; on CI
+		// pnpm defaults to --frozen-lockfile and would fail instead of updating it.
 		// Through the shell: on Windows pnpm is a .cmd, which Node cannot spawn directly.
-		execSync("pnpm install", { cwd: root, stdio: "inherit" });
+		execSync("pnpm install --frozen-lockfile=false", { cwd: root, stdio: "inherit" });
 		console.log("Updated package.json and lockfile from Cargo resolved versions.");
 	} else {
 		console.log("Already aligned; no changes.");
