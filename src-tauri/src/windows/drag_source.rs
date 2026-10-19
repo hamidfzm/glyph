@@ -35,7 +35,9 @@ pub struct DragSources {
 
 impl DragSources {
     /// Record what GTK said about the drag moving over `label`: `own` when the
-    /// drag began in this process.
+    /// drag began in this process. Only the Linux runtime calls it; the other
+    /// platforms keep the type and its tests but never record.
+    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
     pub fn record(&self, label: &str, own: bool) {
         let mut labels = self.own.lock().unwrap();
         if own {

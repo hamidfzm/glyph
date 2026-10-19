@@ -10,8 +10,7 @@ use tauri::{AppHandle, Emitter, Manager, Runtime, State, WebviewUrl, WebviewWind
 
 use crate::grants::{self, GrantRegistry};
 use crate::windows::{
-    route_open, route_opens, DragSources, OpenKind, OpenRoute, OpenTarget, PendingOpen,
-    WindowRegistry,
+    route_open, route_opens, OpenKind, OpenRoute, OpenTarget, PendingOpen, WindowRegistry,
 };
 
 /// Mint the grant for a backend-observed open and mirror it into the
@@ -41,6 +40,7 @@ fn grant_open<R: Runtime>(app: &AppHandle<R>, kind: OpenKind, path: &str) {
 /// wry queues the drop, so the record is written before it is read.
 #[cfg(target_os = "linux")]
 pub fn watch_drag_source<R: Runtime>(window: &tauri::WebviewWindow<R>) {
+    use crate::windows::DragSources;
     use gtk::prelude::*;
 
     let app = window.app_handle().clone();
