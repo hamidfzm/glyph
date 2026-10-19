@@ -153,16 +153,19 @@ test("an in-document link scrolls without losing the shared document", async ({ 
   await expect(page.locator("article.markdown-body h1")).toHaveText("Hostile");
 });
 
-test("a link inside a diagram opens a new tab and leaves the viewer in place", async ({ page }) => {
+test("a link inside a diagram renders inert and leaves the viewer in place", async ({ page }) => {
   const offOrigin = await serveViewer(page);
   await openHostile(page);
   const viewerUrl = page.url();
-  const popup = page.context().waitForEvent("page");
-  await page.locator(".mermaid-diagram a").first().click();
-  await popup;
-  // The new tab's navigation is the one request that leaves; the route aborts it.
-  await expect.poll(() => offOrigin).toEqual([`${REMOTE}/click`]);
+  const diagram = page.locator(".mermaid-diagram").first();
+  // The sanitizer forbids the anchor Mermaid draws for `click B href`; the node keeps its label.
+  await expect(diagram.locator("a")).toHaveCount(0);
+  const node = diagram.locator("svg .node").first();
+  await expect(node).toContainText("B");
+  await node.click();
+  expect(page.context().pages()).toHaveLength(1);
   expect(page.url()).toBe(viewerUrl);
+  expect(offOrigin).toEqual([]);
 });
 
 // The translations load from lazy chunks whose keys depend on the build's
