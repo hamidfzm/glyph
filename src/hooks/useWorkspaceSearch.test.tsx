@@ -8,7 +8,7 @@ const invoke = vi.hoisted(() => vi.fn());
 vi.mock("@tauri-apps/api/core", () => ({ invoke }));
 
 function results(total: number) {
-  return { files: [], total, truncated: false };
+  return { files: [], total, truncated: false, oversized: 0 };
 }
 
 function wrapper(root: string | null) {

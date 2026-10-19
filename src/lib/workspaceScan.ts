@@ -3,7 +3,7 @@
 // cut it short.
 export interface ScanStatus {
   truncated: boolean;
-  reason: "fileLimit" | "depthLimit" | null;
+  reason: "fileLimit" | "depthLimit" | "linkLimit" | "unresolvedLimit" | null;
   limit: number | null;
 }
 
@@ -45,5 +45,14 @@ export function truncatedScan(status: WorkspaceIndexStatus): ScanStatus | null {
 
 /** Translation key (workspace namespace) describing a truncated scan. */
 export function indexIncompleteKey(reason: ScanStatus["reason"]): string {
-  return reason === "depthLimit" ? "notice.indexIncompleteDepth" : "notice.indexIncompleteFiles";
+  switch (reason) {
+    case "depthLimit":
+      return "notice.indexIncompleteDepth";
+    case "linkLimit":
+      return "notice.indexIncompleteLinks";
+    case "unresolvedLimit":
+      return "notice.indexIncompleteUnresolved";
+    default:
+      return "notice.indexIncompleteFiles";
+  }
 }

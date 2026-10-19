@@ -270,6 +270,12 @@ impl<'a> Relinker<'a> {
     }
 
     fn affects(&self, note: &Note) -> bool {
+        // The index holds only the first links of a note past the cap, so the
+        // one that moved may be among those it dropped; the rewrite scan below
+        // reads the whole note and settles it.
+        if note.links_truncated {
+            return true;
+        }
         // A canvas card's `file` is relative to its board, as the renderer reads it.
         let links = note.links.iter().any(|link| {
             if self.is_canvas(&note.path) {
@@ -297,7 +303,7 @@ impl<'a> Relinker<'a> {
         }
 
         let (_, body_start) = split_frontmatter(content);
-        let found = scan(content, body_start);
+        let found = scan(content, body_start, usize::MAX);
         let mut edits: Vec<(Range<usize>, String)> = found
             .links
             .into_iter()

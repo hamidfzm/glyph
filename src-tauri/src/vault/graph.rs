@@ -1,12 +1,17 @@
 //! The views derived from resolved links: the workspace graph, backlinks per
 //! note, and the links that go nowhere.
 
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap, HashSet};
 
 use serde::Serialize;
 
 use super::note::Note;
 use super::resolve::{compare_paths, dir_of, stem_of, Resolver};
+
+/// Unresolved links kept for a workspace. Each one is a row the renderer
+/// receives with every snapshot, and the per-note link cap alone still leaves
+/// room for millions across a workspace at the file cap.
+pub const MAX_UNRESOLVED_LINKS: usize = 10_000;
 
 #[derive(Debug, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -55,7 +60,10 @@ pub(crate) struct Graph {
     pub incoming: Vec<BTreeSet<usize>>,
     /// Inbound links, indexed by note id.
     pub backlinks: Vec<Vec<Backlink>>,
+    /// One entry per note and target, at the first line that links there.
     pub unresolved: Vec<UnresolvedLink>,
+    /// Set when `unresolved` stopped at [`MAX_UNRESOLVED_LINKS`].
+    pub unresolved_truncated: bool,
     /// Notes with no outgoing resolved link.
     pub dead_ends: Vec<String>,
 }
@@ -66,6 +74,9 @@ pub(crate) fn build(notes: &[Note], resolver: &Resolver) -> Graph {
     let mut backlinks: Vec<Vec<Backlink>> = (0..notes.len()).map(|_| Vec::new()).collect();
     let mut edges: Vec<GraphEdge> = Vec::new();
     let mut unresolved: Vec<UnresolvedLink> = Vec::new();
+    let mut unresolved_truncated = false;
+    // The targets of this note already listed as unresolved.
+    let mut missing: HashSet<&str> = HashSet::new();
     let mut has_outgoing = vec![false; notes.len()];
     let mut seen_edges: BTreeSet<(usize, usize)> = BTreeSet::new();
     // Resolution depends only on the target and the linking file's directory,
@@ -75,12 +86,22 @@ pub(crate) fn build(notes: &[Note], resolver: &Resolver) -> Graph {
     let mut resolved: HashMap<(&str, &str), Option<usize>> = HashMap::new();
 
     for (source, note) in notes.iter().enumerate() {
+        missing.clear();
         for link in &note.links {
             let key = (link.target.as_str(), dir_of(&note.path));
             let hit = *resolved
                 .entry(key)
                 .or_insert_with(|| resolver.resolve(&link.target, Some(&note.path)));
             let Some(target) = hit else {
+                // A note linking the same missing target over and over is
+                // one broken link to fix, not one row per mention.
+                if !missing.insert(link.target.as_str()) {
+                    continue;
+                }
+                if unresolved.len() >= MAX_UNRESOLVED_LINKS {
+                    unresolved_truncated = true;
+                    continue;
+                }
                 unresolved.push(UnresolvedLink {
                     source: note.path.clone(),
                     target: link.target.clone(),
@@ -152,6 +173,7 @@ pub(crate) fn build(notes: &[Note], resolver: &Resolver) -> Graph {
         incoming,
         backlinks,
         unresolved,
+        unresolved_truncated,
         dead_ends,
     }
 }
@@ -211,6 +233,45 @@ mod tests {
         assert_eq!(graph.unresolved.len(), 1);
         assert_eq!(graph.unresolved[0].target, "Missing");
         assert_eq!(graph.unresolved[0].line, 1);
+    }
+
+    #[test]
+    fn a_missing_target_is_listed_once_per_note_at_its_first_line() {
+        let (_, graph) = graph_of(&[
+            ("/w/A.md", "[[Missing]] and [[Other]]\nagain [[Missing]]\n"),
+            ("/w/B.md", "[[Missing]]\n"),
+        ]);
+        let rows: Vec<(&str, &str, u32)> = graph
+            .unresolved
+            .iter()
+            .map(|row| (row.source.as_str(), row.target.as_str(), row.line))
+            .collect();
+        assert_eq!(
+            rows,
+            vec![
+                ("/w/A.md", "Missing", 1),
+                ("/w/A.md", "Other", 1),
+                ("/w/B.md", "Missing", 1),
+            ]
+        );
+        assert!(!graph.unresolved_truncated);
+    }
+
+    #[test]
+    fn the_unresolved_list_stops_at_its_cap_and_says_so() {
+        // Spread over notes so no per-note cap interferes.
+        let bodies: Vec<String> = (0..MAX_UNRESOLVED_LINKS + 1)
+            .map(|i| format!("[[missing{i}]]\n"))
+            .collect();
+        let files: Vec<(String, &str)> = bodies
+            .iter()
+            .enumerate()
+            .map(|(i, body)| (format!("/w/n{i}.md"), body.as_str()))
+            .collect();
+        let pairs: Vec<(&str, &str)> = files.iter().map(|(p, b)| (p.as_str(), *b)).collect();
+        let (_, graph) = graph_of(&pairs);
+        assert_eq!(graph.unresolved.len(), MAX_UNRESOLVED_LINKS);
+        assert!(graph.unresolved_truncated);
     }
 
     #[test]

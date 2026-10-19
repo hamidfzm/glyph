@@ -10,9 +10,28 @@ use tauri::{AppHandle, Manager, Runtime, State};
 
 use crate::grants::{self, is_symlink, GrantRegistry};
 
+/// Documents over this size are refused rather than read. The whole document
+/// crosses IPC and sits in the renderer's editor, so this is the one bound on
+/// what a workspace can make the app hold; a notebook with embedded images is
+/// the largest thing opened in practice, and it fits with room to spare. The
+/// index stops at 5 MiB and the preview handlers at 2 MiB.
+pub const READ_MAX_FILE_BYTES: u64 = 64 * MIB;
+const MIB: u64 = 1024 * 1024;
+
 #[tauri::command]
 pub fn read_file(path: String, grants: State<'_, GrantRegistry>) -> Result<String, String> {
     let path = grants.ensure_readable(&path)?;
+    // Judged from the metadata, so a huge file costs nothing before it is refused.
+    let size = fs::metadata(&path)
+        .map_err(|e| format!("Failed to read file: {e}"))?
+        .len();
+    if size > READ_MAX_FILE_BYTES {
+        return Err(format!(
+            "File is too large to open: {} MiB, the limit is {} MiB",
+            size / MIB,
+            READ_MAX_FILE_BYTES / MIB
+        ));
+    }
     fs::read_to_string(&path).map_err(|e| format!("Failed to read file: {e}"))
 }
 
@@ -484,6 +503,29 @@ mod tests {
         );
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("Failed to read file"));
+    }
+
+    #[test]
+    fn read_file_refuses_a_document_over_the_size_cap() {
+        let dir = std::env::temp_dir().join("glyph_test_read_huge");
+        let _ = fs::create_dir_all(&dir);
+        // A sparse file: the size is what is judged, not what it holds.
+        let file_path = dir.join("huge.md");
+        let file = fs::File::create(&file_path).unwrap();
+        file.set_len(READ_MAX_FILE_BYTES + 1).unwrap();
+
+        let app = app_with_workspace(&dir);
+        let err = read_file(
+            file_path.to_string_lossy().to_string(),
+            app.state::<GrantRegistry>(),
+        )
+        .expect_err("must refuse");
+        assert_eq!(
+            err,
+            "File is too large to open: 64 MiB, the limit is 64 MiB"
+        );
+
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]

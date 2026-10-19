@@ -91,6 +91,8 @@
     "failed": "搜索失败。",
     "locateFailed": "已打开文件，但无法滚动到该匹配项。",
     "truncated": "仅显示前若干匹配项。请缩小搜索范围以查看其余结果。",
+    "oversized_one": "{{count}} 个文件过大，未能搜索。",
+    "oversized_other": "{{count}} 个文件过大，未能搜索。",
     "caseSensitive": "区分大小写",
     "wholeWord": "全字匹配",
     "regex": "使用正则表达式"

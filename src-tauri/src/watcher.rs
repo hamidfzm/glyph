@@ -1,6 +1,6 @@
-use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
+use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard};
 use tauri::{AppHandle, Emitter, Manager, Runtime, State};
 
 use crate::grants::GrantRegistry;
@@ -46,6 +46,37 @@ fn forward_watch_event(
     }
 }
 
+/// A watcher that stays inside the folder it is given. By default `notify`
+/// follows symbolic links when it registers a recursive watch, so a workspace
+/// holding a link to `/` or to the home folder would put a watch on every
+/// directory under it, exhaust the user's watch quota, and re-index on every
+/// change there. The index never follows a link either.
+fn new_watcher<F>(handler: F) -> Result<RecommendedWatcher, String>
+where
+    F: Fn(Result<Event, notify::Error>) + Send + 'static,
+{
+    RecommendedWatcher::new(handler, Config::default().with_follow_symlinks(false))
+        .map_err(|e| format!("Failed to create watcher: {e}"))
+}
+
+fn watchers(
+    state: &FileWatcherState,
+) -> Result<MutexGuard<'_, HashMap<String, RecommendedWatcher>>, String> {
+    state.0.lock().map_err(|e| format!("Lock error: {e}"))
+}
+
+/// Register `watcher` under `path` once it is watching. Two calls for the
+/// same path can get this far together; the first one in keeps its watcher
+/// and the other is dropped, which releases its watches.
+fn register(
+    state: &FileWatcherState,
+    path: String,
+    watcher: RecommendedWatcher,
+) -> Result<(), String> {
+    watchers(state)?.entry(path).or_insert(watcher);
+    Ok(())
+}
+
 /// Release the watches a closing window owned. Nothing else unwatches them:
 /// the frontend's `unwatch_*` calls fire on tab and workspace close, not on
 /// window teardown, so without this every path a window opened keeps a live
@@ -72,28 +103,21 @@ pub fn watch_file<R: Runtime>(
     // frontend's own path spelling so they keep matching its tab paths.
     let canonical = grants.ensure_watchable(&path)?;
     let state = app.state::<FileWatcherState>();
-    let mut watchers = state.0.lock().map_err(|e| format!("Lock error: {e}"))?;
-
-    // Already watching this path
-    if watchers.contains_key(&path) {
+    if watchers(&state)?.contains_key(&path) {
         return Ok(());
     }
 
     let app_handle = app.clone();
     let watched_path = path.clone();
-    let mut watcher = notify::recommended_watcher(move |res: Result<Event, notify::Error>| {
+    let mut watcher = new_watcher(move |res| {
         forward_watch_event(res, is_relevant_file_change, |_| {
             let _ = app_handle.emit("file-changed", &watched_path);
         });
-    })
-    .map_err(|e| format!("Failed to create watcher: {e}"))?;
-
+    })?;
     watcher
         .watch(&canonical, RecursiveMode::NonRecursive)
         .map_err(|e| format!("Failed to watch file: {e}"))?;
-
-    watchers.insert(path, watcher);
-    Ok(())
+    register(&state, path, watcher)
 }
 
 #[tauri::command]
@@ -112,15 +136,13 @@ pub fn watch_directory<R: Runtime>(
 ) -> Result<(), String> {
     let canonical = grants.ensure_watchable(&path)?;
     let state = app.state::<FileWatcherState>();
-    let mut watchers = state.0.lock().map_err(|e| format!("Lock error: {e}"))?;
-
-    if watchers.contains_key(&path) {
+    if watchers(&state)?.contains_key(&path) {
         return Ok(());
     }
 
     let app_handle = app.clone();
     let watched_path = path.clone();
-    let mut watcher = notify::recommended_watcher(move |res: Result<Event, notify::Error>| {
+    let mut watcher = new_watcher(move |res| {
         forward_watch_event(res, is_relevant_directory_change, |event| {
             // Re-index before the frontend hears about the change, so the
             // snapshot it asks for next is already current.
@@ -129,15 +151,13 @@ pub fn watch_directory<R: Runtime>(
             }
             let _ = app_handle.emit("directory-changed", &watched_path);
         });
-    })
-    .map_err(|e| format!("Failed to create watcher: {e}"))?;
-
+    })?;
+    // A recursive watch walks the whole tree to register it, and the lock is
+    // not held meanwhile: every other watch and unwatch call would wait.
     watcher
         .watch(&canonical, RecursiveMode::Recursive)
         .map_err(|e| format!("Failed to watch directory: {e}"))?;
-
-    watchers.insert(path, watcher);
-    Ok(())
+    register(&state, path, watcher)
 }
 
 #[tauri::command]
@@ -681,6 +701,68 @@ mod tests {
         assert_eq!(indexed, 2);
         let _ = std::fs::remove_dir_all(&dir);
     }
+    #[test]
+    fn two_calls_watching_the_same_directory_together_register_it_once() {
+        let dir = unique_tmp("watch_dir_race");
+        let path = dir.to_string_lossy().to_string();
+
+        let app = mock_app_with_state();
+        grant_dir(&app, &dir);
+        // The lock is released while a watch registers, so both calls can
+        // pass the "already watching" check and reach the map with a watcher.
+        std::thread::scope(|scope| {
+            for _ in 0..2 {
+                let handle = app.handle().clone();
+                let path = path.clone();
+                scope.spawn(move || {
+                    watch_directory(path, handle.clone(), handle.state::<GrantRegistry>()).unwrap()
+                });
+            }
+        });
+
+        assert!(is_watched(&app, &path));
+        assert_eq!(watched_count(&app), 1);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // Unix-only: creating a symlink on Windows needs elevation or Developer Mode.
+    #[cfg(unix)]
+    #[test]
+    fn a_directory_watch_does_not_follow_a_link_out_of_the_folder() {
+        let parent = unique_tmp("watch_dir_link");
+        let dir = parent.join("workspace");
+        let outside = parent.join("outside");
+        std::fs::create_dir_all(dir.join("real")).unwrap();
+        std::fs::create_dir_all(&outside).unwrap();
+        std::os::unix::fs::symlink(&outside, dir.join("link")).unwrap();
+        let path = dir.to_string_lossy().to_string();
+
+        let app = mock_app_with_state();
+        grant_dir(&app, &dir);
+        let fired = count_event(&app, "directory-changed");
+        watch_directory(
+            path.clone(),
+            app.handle().clone(),
+            app.state::<GrantRegistry>(),
+        )
+        .unwrap();
+
+        // Written through the link, as the workspace would spell it; with the
+        // link followed, this directory would be watched and the write seen.
+        std::fs::write(dir.join("link").join("new.md"), "# outside").unwrap();
+        std::thread::sleep(Duration::from_millis(500));
+        assert_eq!(
+            *fired.lock().unwrap(),
+            0,
+            "a write behind a link must not reach the watch"
+        );
+
+        // The watch itself is live: a real subfolder still reports.
+        std::fs::write(dir.join("real").join("new.md"), "# inside").unwrap();
+        assert!(wait_for_event(&fired, Duration::from_secs(10)) > 0);
+        let _ = std::fs::remove_dir_all(&parent);
+    }
+
     #[test]
     fn drop_watches_releases_the_paths_a_closing_window_owned() {
         // Nothing else unwatches on window teardown, so these would otherwise

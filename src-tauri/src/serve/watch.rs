@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use std::sync::mpsc::{Receiver, RecvTimeoutError};
 use std::time::{Duration, Instant};
 
-use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
+use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use tauri::{AppHandle, Emitter, Runtime};
 
 /// Event the frontend listens on to know it should export again.
@@ -69,9 +69,16 @@ fn is_ignored(path: &Path, root: &Path) -> bool {
 /// stops the watch.
 pub fn watch<R: Runtime>(app: AppHandle<R>, root: &Path) -> notify::Result<RecommendedWatcher> {
     let (sender, receiver) = std::sync::mpsc::channel();
-    let mut watcher = notify::recommended_watcher(move |result| {
-        let _ = sender.send(result);
-    })?;
+    // The export's walker never follows a link, so neither does the watch:
+    // followed, a link to `/` would register a watch on every directory under
+    // it and rebuild the site on every change there.
+    let config = Config::default().with_follow_symlinks(false);
+    let mut watcher = RecommendedWatcher::new(
+        move |result| {
+            let _ = sender.send(result);
+        },
+        config,
+    )?;
     let root = start_rebuilds(app, receiver, root).map_err(notify::Error::io)?;
     watcher.watch(&root, RecursiveMode::Recursive)?;
     Ok(watcher)
@@ -330,6 +337,42 @@ mod tests {
             std::thread::sleep(Duration::from_millis(20));
         }
         assert_eq!(rebuilds.load(Ordering::SeqCst), 1);
+    }
+
+    // Unix-only: creating a symlink on Windows needs elevation or Developer Mode.
+    #[cfg(unix)]
+    #[test]
+    fn a_change_behind_a_link_does_not_rebuild() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use std::sync::Arc;
+        use tauri::Listener;
+
+        let dir = tempfile::tempdir().expect("temp dir");
+        let served = dir.path().join("site");
+        let outside = dir.path().join("outside");
+        std::fs::create_dir_all(&served).unwrap();
+        std::fs::create_dir_all(&outside).unwrap();
+        std::os::unix::fs::symlink(&outside, served.join("link")).unwrap();
+
+        let app = tauri::test::mock_app();
+        let rebuilds = Arc::new(AtomicUsize::new(0));
+        let counted = Arc::clone(&rebuilds);
+        app.listen(CHANGED_EVENT, move |_| {
+            counted.fetch_add(1, Ordering::SeqCst);
+        });
+
+        let _watcher = watch(app.handle().clone(), &served).expect("watches");
+        std::thread::sleep(Duration::from_millis(300));
+
+        // The export never reads through the link, so a write behind it
+        // changes nothing the site shows.
+        std::fs::write(served.join("link").join("index.md"), "# outside").unwrap();
+        std::thread::sleep(DEBOUNCE + Duration::from_millis(700));
+        assert_eq!(rebuilds.load(Ordering::SeqCst), 0);
+
+        std::fs::write(served.join("index.md"), "# inside").unwrap();
+        std::thread::sleep(DEBOUNCE + Duration::from_millis(700));
+        assert!(rebuilds.load(Ordering::SeqCst) >= 1);
     }
 
     #[test]
