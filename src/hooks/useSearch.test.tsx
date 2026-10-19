@@ -258,6 +258,20 @@ describe("useSearch", () => {
       expect(doc.paragraph()).toHaveTextContent(/^alpha betax$/);
     });
 
+    it("restores the text when the query is emptied", () => {
+      const doc = renderDocument({ text: "alpha beta" });
+      doc.highlight("beta");
+      doc.highlight("");
+
+      expect(doc.marks()).toHaveLength(0);
+      expect(doc.search.current?.matchCount).toBe(0);
+      expect(doc.paragraph()).toHaveTextContent(/^alpha betax$/);
+
+      doc.rerender({});
+
+      expect(doc.paragraph()).toHaveTextContent(/^x$/);
+    });
+
     it("highlights a match at the start of a text node and restores it on clear", () => {
       const doc = renderDocument({ text: "alpha beta" });
       doc.highlight("alpha");
