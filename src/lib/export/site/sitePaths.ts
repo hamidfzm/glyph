@@ -1,4 +1,5 @@
 import GithubSlugger from "github-slugger";
+import { isPathInside } from "@/lib/paths";
 
 // Pure path arithmetic for the static-site exporter. Site paths are always
 // POSIX style ("guide/intro.html") regardless of the host separator, because
@@ -19,6 +20,20 @@ export function relFromRoot(root: string, abs: string): string {
   const r = toPosix(root).replace(/\/+$/, "");
   const a = toPosix(abs);
   return a.startsWith(`${r}/`) ? a.slice(r.length + 1) : a.replace(/^.*\//, "");
+}
+
+/**
+ * Whether the exporter may copy `abs` into the site: inside the workspace,
+ * under no hidden name. The page walk publishes nothing hidden (`.git`,
+ * `.env`, `.glyph`) and nothing above the root, and a reference in a page
+ * must not reach further than the walk: a cloned README's `[](.git/config)`,
+ * or an image climbing into another open workspace, would otherwise publish
+ * files the user never meant to.
+ */
+export function isPublishableAsset(root: string, abs: string): boolean {
+  if (abs === root || !isPathInside(abs, root)) return false;
+  const segments = relFromRoot(root, abs).split("/");
+  return segments.every((segment) => !segment.startsWith("."));
 }
 
 /** Map a workspace-relative markdown path to its generated page path. */

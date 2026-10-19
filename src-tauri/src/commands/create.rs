@@ -51,6 +51,20 @@ fn refuse_git_dir(canonical: &Path, root: &Path) -> Result<(), String> {
     Ok(())
 }
 
+/// The name an entry is renamed to may not be `.git`, in any case. The entry's
+/// own check (`ensure_entry_inside_root`) covers the folder it stays in, so
+/// only the new name can make it git's: a folder renamed `.git` turns a
+/// `hooks/pre-commit` written beside it as an ordinary file into the one git
+/// runs at the user's next commit, and a file so named is a gitfile that sends
+/// git to whatever directory it names.
+fn refuse_git_name(target: &Path) -> Result<(), String> {
+    let name = target.file_name().unwrap_or_default();
+    if crate::grants::names_git_dir(Path::new(name)) {
+        return Err("Refusing to name an entry .git".to_string());
+    }
+    Ok(())
+}
+
 /// Canonicalize an existing `target` and require it to sit strictly inside
 /// `root`. Checking only the parent is not enough: `<root>/..` has parent
 /// `<root>` and would pass, and a symlink inside the workspace can resolve to
@@ -229,6 +243,7 @@ pub async fn rename_path(
     } else {
         unique_path(parent, stem, ext)
     };
+    refuse_git_name(&target)?;
     relocate(&root, source, &target, dry_run, &grants, &store)
 }
 
@@ -464,6 +479,44 @@ mod tests {
         assert!(delete_path(hook, root).is_err());
         assert!(hooks.join("pre-commit").exists());
         let _ = fs::remove_dir_all(&outer);
+    }
+
+    #[test]
+    fn rename_never_lands_an_entry_on_git() {
+        let ws = unique_tmp("rename_git");
+        let sub = ws.join("sub");
+        fs::create_dir_all(&sub).unwrap();
+        let root = ws.to_string_lossy().to_string();
+        let s = |p: &Path| p.to_string_lossy().to_string();
+
+        // A folder built with ordinary writes, then renamed: its hook would run
+        // at the user's next commit, and git finds the name in any case.
+        for (dir, name) in [(&ws, ".git"), (&ws, ".GIT"), (&sub, ".git"), (&sub, ".Git")] {
+            let folder = dir.join("Untitled Folder");
+            fs::create_dir_all(folder.join("hooks")).unwrap();
+            fs::write(folder.join("hooks").join("pre-commit"), "#!/bin/sh\n").unwrap();
+            let err = rename_path(s(&folder), name.to_string(), root.clone()).unwrap_err();
+            assert!(err.contains(".git"), "{err}");
+            assert!(folder.join("hooks").join("pre-commit").is_file());
+            assert!(
+                listed(dir).iter().all(|n| !n.eq_ignore_ascii_case(".git")),
+                "{name} landed in {}",
+                dir.display()
+            );
+            fs::remove_dir_all(&folder).unwrap();
+        }
+        // A file named `.git` is a gitfile: it sends git to the folder it names.
+        let plain = ws.join("notes");
+        fs::write(&plain, "gitdir: ../elsewhere\n").unwrap();
+        assert!(rename_path(s(&plain), ".git".to_string(), root.clone()).is_err());
+        assert!(plain.is_file());
+        assert!(!ws.join(".git").exists());
+        // A note keeps its extension, so the name it lands on is not git's.
+        let note = ws.join("note.md");
+        fs::write(&note, "x").unwrap();
+        let renamed = rename_path(s(&note), ".git".to_string(), root).unwrap();
+        assert_eq!(Path::new(&renamed).file_name().unwrap(), ".git.md");
+        let _ = fs::remove_dir_all(&ws);
     }
 
     #[test]

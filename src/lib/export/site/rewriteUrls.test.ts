@@ -119,6 +119,16 @@ describe("rehypeSiteUrls links", () => {
     expect(ctx.assets.size).toBe(0);
   });
 
+  it("leaves a linked hidden file alone rather than publishing it", async () => {
+    // A cloned README can link what the page walk keeps out of the site.
+    const ctx = makeCtx("/ws/guide/intro.md", "guide/intro.html");
+    const html = await render("[config](../.git/config) [env](./.env) [key](.ssh/id)", ctx);
+    expect(html).toContain('href="../.git/config"');
+    expect(html).toContain('href="./.env"');
+    expect(html).toContain('href=".ssh/id"');
+    expect(ctx.assets.size).toBe(0);
+  });
+
   it("shares one copy between a link and an image pointing at the same file", async () => {
     const ctx = makeCtx("/ws/other.md", "other.html");
     const html = await render("![p](./pic.png) and [p](./pic.png)", ctx);
@@ -154,6 +164,14 @@ describe("rehypeSiteUrls links", () => {
     expect(html).toContain('href="assets/index.html"');
     expect(html).toContain('href="assets/other.html"');
     expect(html).toContain('href="assets/style.css"');
+  });
+
+  it("suffixes a file sent to assets/ when another already took its name there", async () => {
+    const ctx = makeCtx("/ws/README.md", "index.html");
+    ctx.assets.set("/ws/old/index.html", "assets/index.html");
+    const html = await render("[old home](./index.html)", ctx);
+    expect(html).toContain('href="assets/index-1.html"');
+    expect(ctx.assets.get("/ws/index.html")).toBe("assets/index-1.html");
   });
 
   it("percent-encodes spaces in a rewritten link", async () => {
@@ -192,12 +210,43 @@ describe("rehypeSiteUrls images", () => {
     expect(ctx.assets.get("/ws/guide/img/icon.png")).toBe("guide/img/icon.png");
   });
 
-  it("sends out-of-workspace images to assets/ and dedupes name collisions", async () => {
+  it("still copies an ordinary image under a plain folder", async () => {
     const ctx = makeCtx("/ws/other.md", "other.html");
-    ctx.assets.set("/elsewhere/pic.png", "assets/pic.png");
-    const html = await render("![p](../away/pic.png)", ctx);
-    expect(html).toContain('src="assets/pic-1.png"');
-    expect(ctx.assets.get("/away/pic.png")).toBe("assets/pic-1.png");
+    const html = await render("![p](images/x.png)", ctx);
+    expect(html).toContain('src="images/x.png"');
+    expect(ctx.assets.get("/ws/images/x.png")).toBe("images/x.png");
+  });
+
+  it("leaves an image above the workspace as written rather than publishing it", async () => {
+    // With a second workspace open, its files are readable; the site still
+    // publishes only this one.
+    const ctx = makeCtx("/ws/other.md", "other.html");
+    const html = await render("![p](../outside/x.png)", ctx);
+    expect(html).toContain('src="../outside/x.png"');
+    expect(ctx.assets.size).toBe(0);
+  });
+
+  it("leaves an image under a hidden name as written rather than publishing it", async () => {
+    const ctx = makeCtx("/ws/guide/intro.md", "guide/intro.html");
+    const html = await render("![e](../.env) ![c](../.git/config) ![k](.keys/x.png)", ctx);
+    expect(html).toContain('src="../.env"');
+    expect(html).toContain('src="../.git/config"');
+    expect(html).toContain('src=".keys/x.png"');
+    expect(ctx.assets.size).toBe(0);
+  });
+
+  it("holds media, posters, sources and svg images to the same rule", async () => {
+    const ctx = makeCtx("/ws/other.md", "other.html");
+    const html = await render(
+      '<video src="../out/demo.mp4" poster=".cache/cover.png"><source src=".git/x.webm"></video>' +
+        '<svg><image href="../out/icon.png"/></svg>',
+      ctx,
+    );
+    expect(html).toContain('src="../out/demo.mp4"');
+    expect(html).toContain('poster=".cache/cover.png"');
+    expect(html).toContain('src=".git/x.webm"');
+    expect(html).toContain('href="../out/icon.png"');
+    expect(ctx.assets.size).toBe(0);
   });
 
   it("reuses one destination when the same image appears twice", async () => {

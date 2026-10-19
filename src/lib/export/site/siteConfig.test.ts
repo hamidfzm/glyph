@@ -101,6 +101,16 @@ describe("resolveConfigAsset", () => {
       /"socialImage" must stay inside the workspace/,
     );
   });
+
+  it("rejects paths under a hidden name, which the page walk keeps out of the site", () => {
+    expect(() => resolveConfigAsset("/ws", ".env", "favicon")).toThrow(/under no hidden name/);
+    expect(() => resolveConfigAsset("/ws", ".git/logo.png", "socialImage")).toThrow(
+      /under no hidden name/,
+    );
+    expect(() => resolveConfigAsset("/ws", "assets/.hidden/logo.png", "favicon")).toThrow(
+      /under no hidden name/,
+    );
+  });
 });
 
 describe("robotsTxt", () => {
