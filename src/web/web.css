@@ -1,0 +1,85 @@
+/* The web viewer: a toolbar above the document, and an empty state in its
+   place until one opens. Everything here is selected through `body >`, since
+   a document's own ids and classes share the page. */
+
+body {
+  display: flex;
+  flex-direction: column;
+}
+
+body > header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+body > header > button {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* Drops to its own row on a narrow screen rather than squeezing the buttons. */
+body > header > [role="status"] {
+  flex: 1 1 10rem;
+  margin-inline-start: 0.5rem;
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+}
+
+/* The empty state is a second <main>; the page only ever shows one of them. */
+body > main:not(#preview) {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding: 2rem 1rem;
+  text-align: center;
+}
+
+body > main:not(#preview) > h1 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+body > main:not(#preview) > p {
+  max-width: 28rem;
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+}
+
+/* Same specificity as preview.css's rule, which this overrides. `contain`
+   keeps document CSS (a fixed-position overlay, say) painting inside this
+   box, so it cannot cover the toolbar. */
+body > #preview {
+  flex: 1;
+  min-height: 0;
+  height: auto;
+  contain: layout paint;
+}
+
+/* Focusable so the keyboard can scroll it; inset, since the header's border
+   sits against its top edge. */
+body > #preview:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+}
+
+/* The document alone on paper; print.css unscrolls it, and paint containment
+   would clip it to the first page. */
+@media print {
+  body > header,
+  body > main:not(#preview) {
+    display: none;
+  }
+
+  body > #preview {
+    contain: none;
+  }
+}

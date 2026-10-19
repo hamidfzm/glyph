@@ -100,11 +100,12 @@ pnpm check:fix                  # Auto-fix all Biome issues
 pnpm test                       # Run frontend tests (Vitest)
 pnpm test:watch                 # Run frontend tests in watch mode
 pnpm test:coverage              # Run frontend tests with coverage
-pnpm test:e2e                   # WebKit smoke tests (Playwright; run `pnpm exec playwright install webkit` once first)
+pnpm test:e2e                   # WebKit smoke tests (Playwright; run `pnpm exec playwright install webkit` once first, and `pnpm build:web`)
 pnpm test:app                   # Built-app smoke: drives the real binary over WebDriver (setup below)
 pnpm size:check                 # Bundle budget gate against dist/ (see docs/bundle-budgets.md)
 pnpm build:preview-handler      # Windows Explorer preview handler: page + DLL into dist-preview/
 pnpm build:quicklook            # macOS Quick Look extension: page + appex into dist-quicklook/
+pnpm build:web                  # Web viewer: the preview page for browsers into dist-web/
 cd src-tauri && cargo check     # Rust type checking
 cd src-tauri && cargo clippy    # Rust linting
 cd src-tauri && cargo test      # Rust tests
@@ -193,6 +194,24 @@ scripts/dev-quicklook.sh --remove   # unregister and delete the test install
 ```
 
 While it is registered, the test install previews every markdown file you press Space on, not only the repo's. Relative images beside a file in Desktop, Documents or Downloads trigger macOS's one-time folder access prompt for Glyph; that is expected (see the threat model). `pnpm build:quicklook --check` compiles and runs `SelfCheck.swift`, which covers the file reader and the scheme handler's path checks without Quick Look.
+
+### Web viewer
+
+`src/web/` runs the same standalone page in an ordinary browser: a document
+comes from a picked or dropped file, or from the URL fragment (`#v1.` and the
+document, deflate-compressed and base64url-encoded). `pnpm build:web` builds it
+into `dist-web/`. The [glyph-md/view](https://github.com/glyph-md/view) repo
+deploys it to GitHub Pages: each release's `publish-web-viewer` job starts
+that repo's workflow, which builds this repo at the release tag. The page's
+meta CSP is its only network control, so `src/test/e2e/webViewer.spec.ts`
+opens hostile documents in the built page under WebKit (build it first).
+
+To try it, build and serve `dist-web/`:
+
+```bash
+pnpm build:web
+pnpm exec vite preview --config vite.web.config.ts
+```
 
 ### Plugin API contract
 

@@ -50,6 +50,7 @@
       "includes": [
         "src/lib/plugins/corePlugins.ts",
         "src/preview/**",
+        "src/web/**",
         "src/**/*.test.ts",
         "src/**/*.test.tsx"
       ],

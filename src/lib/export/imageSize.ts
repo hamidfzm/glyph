@@ -4,6 +4,8 @@
 // out). Returns null for formats we don't parse (e.g. SVG) so the caller can
 // fall back to alt text.
 
+import { base64ToBytes } from "@/lib/base64";
+
 export interface ImageSize {
   width: number;
   height: number;
@@ -49,13 +51,6 @@ function parseJpeg(b: Uint8Array): ImageSize | null {
   return null;
 }
 
-function decodeBase64(b64: string): Uint8Array {
-  const binary = atob(b64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-  return bytes;
-}
-
 const TYPE_BY_MIME: Record<string, DocxImageType> = {
   "image/png": "png",
   "image/jpeg": "jpg",
@@ -77,7 +72,7 @@ export function decodeDataUri(src: string): DecodedImage | null {
   let data: Uint8Array;
   try {
     data = match[2]
-      ? decodeBase64(match[3])
+      ? base64ToBytes(match[3])
       : new TextEncoder().encode(decodeURIComponent(match[3]));
   } catch {
     return null;

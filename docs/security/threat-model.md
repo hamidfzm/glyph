@@ -250,6 +250,41 @@ The extension's sandbox carries three entitlements (`GlyphQuickLook.entitlements
 
 The app and the extension are ad-hoc signed; there is no Developer ID or notarization. That changes nothing about the extension's sandbox, which macOS enforces from the entitlements in the ad-hoc signature, but it means Gatekeeper does not vouch for the download: users trust the release the same way they trust the rest of the app today.
 
+## Web viewer
+
+The web viewer (`src/web/`, built by `pnpm build:web` and published by the
+`glyph-md/view` repo at `https://glyph-md.github.io/view/`) runs the same
+preview page in an ordinary browser tab. Its exposure is the widest of the
+three: a shared link carries a whole document in its URL fragment, so
+**opening a link** renders a document anyone could have written, on a public
+origin, in whatever browser the reader uses. There is no native host, so every
+control is the page's own:
+
+- **The same sanitizer.** Documents go through `renderPageHtml` and the app's
+  `rehype-sanitize` schema, as in the OS previews.
+- **No network.** A meta CSP, first in the page's head, allows the page's own
+  files, `data:` images and fonts, and no media, workers, frames or objects.
+  It is the only layer: nothing beneath it blocks a request it lets through,
+  so the WebKit smoke suite opens a hostile document in the built page and
+  checks that nothing reaches another origin (and, with the CSP removed, that
+  the same document does). `<img>` elements become their alt text before they
+  reach the DOM; SVG images, posters and CSS `url()` are left to the CSP.
+  `no-referrer` keeps the page URL out of `Referer`, DNS prefetch is off, and
+  nothing on the page reports telemetry, so the document never leaves the tab.
+- **No navigation.** One click handler covers every link in the document,
+  Mermaid's SVG links included: in-document anchors scroll without touching
+  the fragment that holds the document, web links open in a new tab with no
+  opener and no referrer, `mailto:` keeps its default, and everything else (a
+  relative `other.md`, a broken wikilink) is inert.
+- **A size cap.** Files over 2 MiB get a notice without being read. A link's
+  prefix, alphabet and length are checked before decoding, and it is inflated
+  in small chunks that stop once the document passes 2 MiB, so a short link
+  cannot expand into gigabytes.
+- **Isolation.** The browser's sandbox is the process boundary. The page
+  stores nothing (no cookies, storage or service worker), and the document
+  area is `contain: layout paint`, so document CSS cannot draw over the
+  viewer's own controls.
+
 ## Plugin permissions
 
 `capabilities/default.json` grants no permission set whose members resolve
@@ -534,6 +569,25 @@ the way a renderer-supplied path is.
   output directory is published, so the CLI refuses an `--out` that contains,
   or is contained by, the folder being served. The site is derived output, not
   the workspace: serving grants no filesystem access back to the renderer.
+- **The web viewer shares an origin.** GitHub Pages serves every glyph-md
+  repo under `glyph-md.github.io`, so the viewer's `'self'` covers the other
+  sites there, and a script any of them publishes could run on the viewer's
+  page. The viewer holds no secret and no session, so such a script reaches
+  only the document in the tab. A subdomain of its own, once the org has a
+  custom domain, separates it.
+- **The web viewer can be framed.** A meta CSP cannot set `frame-ancestors`,
+  and GitHub Pages sets no headers, so another site can embed the viewer. Its
+  only action is Copy link, which copies what the viewer already shows.
+- **A shared document can look official.** It renders on a Glyph URL with the
+  styles it brings (`style` is allowed, see `style-src` below), so a link can
+  dress up as a Glyph page and point readers at another download. The
+  viewer's toolbar stays outside the document's paint area.
+- **A heavy shared document can hang the tab.** Mermaid and KaTeX render on
+  the main thread, so a link can carry a diagram expensive enough to freeze
+  the reader's tab. Closing the tab ends it.
+- **A shared document lives in browser history.** The URL is the document, so
+  it stays in the reader's history, and in history sync, like any visited
+  link.
 - **`connect-src` breadth.** Arbitrary `http:`/`https:` hosts are reachable
   for the Ollama integration, so a compromised renderer can exfiltrate what
   it can read. The grants bound what that is.

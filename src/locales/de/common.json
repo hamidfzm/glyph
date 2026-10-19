@@ -292,6 +292,12 @@
   "preview": {
     "tooLarge": "Diese Datei ist zu groß für die Vorschau ({{size}}). Öffne sie in Glyph, um sie zu lesen.",
     "unreadable": "Für diese Datei ist keine Vorschau möglich. Sie wurde eventuell verschoben oder ist kein UTF-8-Text.",
-    "failed": "Beim Erstellen der Vorschau ist ein Fehler aufgetreten. Öffne die Datei in Glyph, um sie zu lesen."
+    "failed": "Beim Erstellen der Vorschau ist ein Fehler aufgetreten. Öffne die Datei in Glyph, um sie zu lesen.",
+    "dropHint": "Zieh eine Markdown-Datei an eine beliebige Stelle dieser Seite oder öffne eine von deinem Computer. Sie bleibt in deinem Browser und wird nie hochgeladen.",
+    "copyLink": "Link kopieren",
+    "linkCopied": "Link kopiert",
+    "copyFailed": "Link konnte nicht kopiert werden",
+    "linkTooLong": "Dieses Dokument ist zu groß, um es als Link zu teilen",
+    "invalidLink": "Dieser Link enthält kein Dokument, das Glyph öffnen kann. Eventuell wurde er beim Teilen gekürzt."
   }
 }

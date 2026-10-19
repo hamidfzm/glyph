@@ -8,13 +8,13 @@ import { rehypePreviewImages } from "./previewImages";
 
 const BASE = "https://glyph-document.example/";
 
-async function render(markdown: string): Promise<string> {
+async function render(markdown: string, baseUrl: string | null = BASE): Promise<string> {
   const file = await unified()
     .use(remarkParse)
     // Raw HTML reaches the plugin in the real pipeline, so it does here too.
     .use(remarkRehype, { allowDangerousHtml: true })
     .use(rehypeRaw)
-    .use(rehypePreviewImages, BASE)
+    .use(rehypePreviewImages, baseUrl)
     .use(rehypeStringify)
     .process(markdown);
   return String(file);
@@ -54,6 +54,12 @@ describe("rehypePreviewImages", () => {
 
   it("drops an image with no alt text entirely", async () => {
     expect(await render("![](https://example.com/chart.png)")).toBe("<p></p>");
+  });
+
+  it("replaces even a relative image with its alt text when no folder is served", async () => {
+    const html = await render("![shot](screenshot.png)", null);
+    expect(html).not.toContain("<img");
+    expect(html).toContain("shot");
   });
 
   it("drops a raw img that carries neither source nor alt text", async () => {

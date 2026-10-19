@@ -39,10 +39,14 @@ function autoBlock(target: HTMLElement): ScrollLogicalPosition {
   return targetTopInScroller <= maxScroll ? "start" : "end";
 }
 
+export function scrollToElement(target: HTMLElement): void {
+  target.scrollIntoView({ behavior: scrollBehavior(), block: autoBlock(target) });
+}
+
 export function scrollToHeading(id: string): boolean {
   const target = document.getElementById(id);
   if (!target) return false;
-  target.scrollIntoView({ behavior: scrollBehavior(), block: autoBlock(target) });
+  scrollToElement(target);
   window.dispatchEvent(new CustomEvent(ACTIVE_HEADING_EVENT, { detail: { id } }));
   return true;
 }

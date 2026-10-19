@@ -15,23 +15,26 @@ interface UseSearchReturn {
   clear: () => void;
 }
 
-function clearHighlights(container: HTMLElement) {
-  const marks = container.querySelectorAll("mark.search-highlight");
-  for (const mark of marks) {
-    const parent = mark.parentNode;
-    if (parent) {
-      parent.replaceChild(document.createTextNode(mark.textContent ?? ""), mark);
-      parent.normalize();
-    }
+// React keeps using the text nodes it rendered, so a match leaves the node in place, emptied.
+interface SplitText {
+  node: Text;
+  text: string;
+  pieces: ChildNode[];
+}
+
+function restoreText(splits: SplitText[]) {
+  for (const { node, text, pieces } of splits) {
+    for (const piece of pieces) piece.remove();
+    // React renders no empty text node here, so any other value is newer text it wrote.
+    if (node.nodeValue === "") node.nodeValue = text;
   }
 }
 
-function highlightMatches(container: HTMLElement, query: string): number {
-  clearHighlights(container);
-  if (!query) return 0;
+function highlightMatches(container: HTMLElement, query: string): SplitText[] {
+  if (!query) return [];
 
   const lowerQuery = query.toLowerCase();
-  let count = 0;
+  const splits: SplitText[] = [];
 
   const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
     acceptNode(node) {
@@ -60,42 +63,46 @@ function highlightMatches(container: HTMLElement, query: string): number {
     let idx = lowerText.indexOf(lowerQuery);
     if (idx === -1) continue;
 
-    const fragment = document.createDocumentFragment();
+    const pieces: ChildNode[] = [];
     let lastIdx = 0;
 
     while (idx !== -1) {
       if (idx > lastIdx) {
-        fragment.appendChild(document.createTextNode(text.slice(lastIdx, idx)));
+        pieces.push(document.createTextNode(text.slice(lastIdx, idx)));
       }
       const mark = document.createElement("mark");
       mark.className = "search-highlight";
       mark.textContent = text.slice(idx, idx + query.length);
-      fragment.appendChild(mark);
-      count++;
+      pieces.push(mark);
       lastIdx = idx + query.length;
       idx = lowerText.indexOf(lowerQuery, lastIdx);
     }
 
     if (lastIdx < text.length) {
-      fragment.appendChild(document.createTextNode(text.slice(lastIdx)));
+      pieces.push(document.createTextNode(text.slice(lastIdx)));
     }
 
-    textNode.parentNode?.replaceChild(fragment, textNode);
+    textNode.after(...pieces);
+    textNode.nodeValue = "";
+    splits.push({ node: textNode, text, pieces });
   }
 
-  return count;
+  return splits;
 }
 
-function setActiveMatch(container: HTMLElement, index: number) {
+function markActiveMatch(container: HTMLElement, index: number): Element | undefined {
   const marks = container.querySelectorAll("mark.search-highlight");
   for (const mark of marks) {
     mark.classList.remove("search-highlight-active");
   }
   const active = marks[index];
-  if (active) {
-    active.classList.add("search-highlight-active");
-    active.scrollIntoView({ behavior: scrollBehavior(), block: "center" });
-  }
+  active?.classList.add("search-highlight-active");
+  return active;
+}
+
+function setActiveMatch(container: HTMLElement, index: number) {
+  const active = markActiveMatch(container, index);
+  active?.scrollIntoView({ behavior: scrollBehavior(), block: "center" });
 }
 
 export function useSearch({ containerRef }: UseSearchOptions): UseSearchReturn {
@@ -103,18 +110,36 @@ export function useSearch({ containerRef }: UseSearchOptions): UseSearchReturn {
   const [matchCount, setMatchCount] = useState(0);
   const [currentMatch, setCurrentMatch] = useState(0);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const observerRef = useRef<MutationObserver>(undefined);
   const activeQuery = useRef("");
+  const splitsRef = useRef<SplitText[]>([]);
+  const currentMatchRef = useRef(0);
+
+  useEffect(() => {
+    currentMatchRef.current = currentMatch;
+  }, [currentMatch]);
 
   const runHighlight = useCallback(
     (q: string) => {
       const container = containerRef.current;
       if (!container) return;
+      // The same query again is a refresh after the DOM changed, which keeps the user's place.
+      const isRefresh = q === activeQuery.current;
+      const preferredMatch = isRefresh ? currentMatchRef.current : 1;
       activeQuery.current = q;
-      const count = highlightMatches(container, q);
+      restoreText(splitsRef.current);
+      splitsRef.current = highlightMatches(container, q);
+      // Drop the records of these edits, or the observer would re-highlight for them forever.
+      observerRef.current?.takeRecords();
+      const count = container.querySelectorAll("mark.search-highlight").length;
       setMatchCount(count);
       if (count > 0) {
-        setCurrentMatch(1);
-        setActiveMatch(container, 0);
+        const match = Math.min(Math.max(preferredMatch, 1), count);
+        setCurrentMatch(match);
+        // Keeping the same match doesn't scroll: the change may be a click elsewhere (a copy icon).
+        const keepsPlace = isRefresh && match === preferredMatch;
+        if (keepsPlace) markActiveMatch(container, match - 1);
+        else setActiveMatch(container, match - 1);
       } else {
         setCurrentMatch(0);
       }
@@ -149,13 +174,13 @@ export function useSearch({ containerRef }: UseSearchOptions): UseSearchReturn {
 
   const clear = useCallback(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    const container = containerRef.current;
-    if (container) clearHighlights(container);
+    restoreText(splitsRef.current);
+    splitsRef.current = [];
     activeQuery.current = "";
     setQueryState("");
     setMatchCount(0);
     setCurrentMatch(0);
-  }, [containerRef]);
+  }, []);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -164,14 +189,23 @@ export function useSearch({ containerRef }: UseSearchOptions): UseSearchReturn {
     };
   }, []);
 
-  // Re-highlight when content changes (React re-renders the DOM)
+  // Re-highlight when the content's DOM changes, not after every render: most change none of it.
   useEffect(() => {
-    if (!activeQuery.current) return;
-    const q = activeQuery.current;
-    requestAnimationFrame(() => {
-      runHighlight(q);
+    const container = containerRef.current;
+    if (!container) return;
+    let frame = 0;
+    const observer = new MutationObserver(() => {
+      if (!activeQuery.current) return;
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => runHighlight(activeQuery.current));
     });
-  });
+    observer.observe(container, { childList: true, characterData: true, subtree: true });
+    observerRef.current = observer;
+    return () => {
+      observer.disconnect();
+      cancelAnimationFrame(frame);
+    };
+  }, [containerRef, runHighlight]);
 
   return { query, setQuery, matchCount, currentMatch, nextMatch, prevMatch, clear };
 }

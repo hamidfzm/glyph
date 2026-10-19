@@ -443,7 +443,9 @@ mod tests {
         assert_eq!(patched, 2, "local header and central directory");
 
         let err = install_package(&root, &bytes).unwrap_err();
-        assert!(err.contains("larger than its header declares"), "{err}");
+        // zip 9 refuses the entry itself ("larger than its declared
+        // uncompressed size"); the cap here stays as the second line.
+        assert!(err.contains("larger than its"), "{err}");
         assert!(!root.join("com.x.pkg").join("main.js").exists());
         let _ = fs::remove_dir_all(&root);
     }

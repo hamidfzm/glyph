@@ -187,6 +187,16 @@ describe("renderMermaid sanitizing", () => {
     expect(svg).toContain("<svg");
     expect(initialize).toHaveBeenCalledWith(expect.objectContaining({ securityLevel: "strict" }));
   });
+
+  // Mermaid's default on a parse error is to draw its own error diagram into a
+  // node it leaves in document.body, outside whatever document asked.
+  it("asks Mermaid not to draw its own error diagram", async () => {
+    renderSvg.mockRejectedValue(new Error("Parse error"));
+    await expect(renderMermaid("broken-diagram", false)).rejects.toThrow("Parse error");
+    expect(initialize).toHaveBeenCalledWith(
+      expect.objectContaining({ suppressErrorRendering: true }),
+    );
+  });
 });
 
 describe("renderMermaidStatic", () => {
@@ -208,6 +218,7 @@ describe("renderMermaidStatic", () => {
     expect(initialize).toHaveBeenCalledWith({
       startOnLoad: false,
       securityLevel: "strict",
+      suppressErrorRendering: true,
       theme: "default",
       htmlLabels: false,
       flowchart: { htmlLabels: false },
@@ -223,6 +234,7 @@ describe("renderMermaidStatic", () => {
     expect(initialize).toHaveBeenLastCalledWith({
       startOnLoad: false,
       securityLevel: "strict",
+      suppressErrorRendering: true,
       theme: "default",
     });
   });

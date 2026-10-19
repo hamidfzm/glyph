@@ -4,10 +4,12 @@ import { defineConfig } from "vite";
 
 // The preview page (src/preview) for the Windows Explorer preview handler and
 // the macOS Quick Look extension, built on its own so each can load it from
-// disk. `pnpm build:preview-handler` and `pnpm build:quicklook` run this.
+// disk. `pnpm build:preview-handler` and `pnpm build:quicklook` run this; the
+// web viewer's build (vite.web.config.ts) extends it.
 export default defineConfig({
   root: path.resolve(__dirname, "src/preview"),
-  // Relative asset URLs: WebView2 serves the folder from a virtual host.
+  // Relative asset URLs: WebView2 serves the folder from a virtual host, and
+  // the web viewer is served from a subpath.
   base: "./",
   plugins: [tailwindcss()],
   resolve: {

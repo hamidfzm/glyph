@@ -292,6 +292,12 @@
   "preview": {
     "tooLarge": "此文件过大，无法预览（{{size}}）。请在 Glyph 中打开阅读。",
     "unreadable": "无法预览此文件。它可能已被移动，或者不是 UTF-8 文本。",
-    "failed": "生成预览时出错。请在 Glyph 中打开此文件阅读。"
+    "failed": "生成预览时出错。请在 Glyph 中打开此文件阅读。",
+    "dropHint": "将 Markdown 文件拖放到此页面任意位置，或从电脑中打开。文件只留在你的浏览器中，绝不会上传。",
+    "copyLink": "复制链接",
+    "linkCopied": "链接已复制",
+    "copyFailed": "无法复制链接",
+    "linkTooLong": "此文档过大，无法以链接形式分享",
+    "invalidLink": "此链接不包含 Glyph 能打开的文档。它可能在分享时被截断了。"
   }
 }

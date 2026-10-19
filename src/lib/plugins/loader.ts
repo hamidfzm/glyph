@@ -1,3 +1,4 @@
+import { bytesToBase64 } from "@/lib/base64";
 import type { PluginModule } from "./types";
 
 /** Dynamic-import indirection so tests can substitute a fake importer. */
@@ -5,12 +6,8 @@ export type ModuleImporter = (url: string) => Promise<unknown>;
 
 const nativeImporter: ModuleImporter = (url) => import(/* @vite-ignore */ url);
 
-/** Base64-encode UTF-8 text (btoa alone only handles Latin-1). */
 function toBase64(source: string): string {
-  const bytes = new TextEncoder().encode(source);
-  let binary = "";
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary);
+  return bytesToBase64(new TextEncoder().encode(source));
 }
 
 function isPluginModule(value: unknown): value is PluginModule {
