@@ -9,17 +9,16 @@ const read = (file: string) => readFileSync(path.join(process.cwd(), file), "utf
 const customProperties = (block: string) =>
   [...block.matchAll(/(--[\w-]+)\s*:/g)].map(([, name]) => name).sort();
 
-/** The custom properties a rule sets, for the one rule in `css` with exactly this selector. */
-function ruleProperties(css: string, selector: string): string[] {
-  const escaped = selector.replace(/[.[\]]/g, "\\$&");
-  const rule = new RegExp(`^${escaped}\\s*\\{([^}]*)\\}`, "m").exec(css);
-  if (!rule) throw new Error(`no ${selector} rule`);
-  return customProperties(rule[1]);
+/** Each top-level rule's selector, mapped to the custom properties it sets. */
+function rules(css: string): Map<string, string[]> {
+  const found = new Map<string, string[]>();
+  for (const [, selector, body] of css.matchAll(/^([^\s{}][^{}\n]*?)\s*\{([^}]*)\}/gm)) {
+    found.set(selector, customProperties(body));
+  }
+  return found;
 }
 
-const appCss = read("src/styles/app.css");
-const lightTokens = ruleProperties(appCss, ":root");
-const darkTokens = ruleProperties(appCss, ".dark");
+const appRules = rules(read("src/styles/app.css"));
 
 describe("theme presets", () => {
   it("lists None first, then every preset it ships", () => {
@@ -29,16 +28,17 @@ describe("theme presets", () => {
   it.each(Object.keys(PRESET_CSS))(
     "%s sets every token the app's light and dark themes set, and nothing else",
     (preset) => {
-      const css = read(`src/plugins/core/theme-presets/${preset}.css`);
-      expect(ruleProperties(css, ":root")).toEqual(lightTokens);
-      expect(ruleProperties(css, ":root.dark")).toEqual(darkTokens);
+      const presetRules = rules(read(`src/plugins/core/theme-presets/${preset}.css`));
       // The sidebar is translucent only on macOS (platform.css); tinting it
       // anywhere else would let the document show through a sidebar drawer.
-      expect(ruleProperties(css, ':root[data-platform="macos"]')).toEqual(["--glyph-sidebar-bg"]);
-      expect(ruleProperties(css, ':root.dark[data-platform="macos"]')).toEqual([
-        "--glyph-sidebar-bg",
-      ]);
-      expect(css.match(/\{/g)).toHaveLength(4);
+      expect(presetRules).toEqual(
+        new Map([
+          [":root", appRules.get(":root")],
+          [":root.dark", appRules.get(".dark")],
+          [':root[data-platform="macos"]', ["--glyph-sidebar-bg"]],
+          [':root.dark[data-platform="macos"]', ["--glyph-sidebar-bg"]],
+        ]),
+      );
     },
   );
 
