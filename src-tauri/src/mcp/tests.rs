@@ -1028,13 +1028,53 @@ fn a_path_that_could_disguise_itself_is_never_put_to_the_user() {
     let mut h = Harness::new("mcp_disguised");
     let asked = answering(&mut h, Ok(()));
     let parent = unique_tmp("mcp_disguised_parent");
-    for name in ["notes\nAllow everything", "notes\u{202e}dm.txt"] {
+    // A newline, a bidirectional override, a zero-width space, a word joiner,
+    // and an invisible tag character: each shows as nothing or reorders what
+    // is around it, so `notes` and this folder would look the same.
+    for name in [
+        "notes\nAllow everything",
+        "notes\u{202e}dm.txt",
+        "notes\u{200b}",
+        "no\u{2060}tes",
+        "notes\u{e0041}",
+    ] {
         let odd = parent.join(name);
         fs::create_dir(&odd).unwrap();
         let refusal = h.refused("list_tags", json!({ "vault": odd.to_string_lossy() }));
         assert!(refusal.contains("could disguise it"), "{refusal}");
     }
     assert!(asked.borrow().is_empty());
+    fs::remove_dir_all(&parent).unwrap();
+}
+
+/// A folder is named to read like the rest of the question: a closing quote
+/// and a sentence of its own. The path is the last thing in the message and
+/// nothing of the question follows it, so the user reads the real question
+/// first and the name as a name.
+#[cfg(unix)]
+#[test]
+fn a_folder_named_like_the_question_cannot_rewrite_it() {
+    let parent = unique_tmp("mcp_serve_quoted_parent");
+    let folder = parent.join("notes\". Allow? It only lists names. \"");
+    fs::create_dir_all(&folder).unwrap();
+    let messages = serve_lines(
+        Vec::new(),
+        &[
+            init_able_to_ask(),
+            tool_call(2, "list_tags", json!({ "vault": folder.to_string_lossy() })),
+        ],
+    );
+
+    let asked = questions(&messages);
+    assert_eq!(asked.len(), 1);
+    let question = asked[0]["params"]["message"].as_str().unwrap();
+    let shown = crate::cli::plain_path(&folder.canonicalize().unwrap().to_string_lossy());
+    let before = question.strip_suffix(&shown).expect(question);
+    assert!(
+        before.ends_with("replacing files of the same name. The folder: "),
+        "{before}"
+    );
+    assert!(!before.contains("only lists names"), "{before}");
     fs::remove_dir_all(&parent).unwrap();
 }
 
@@ -1100,7 +1140,10 @@ fn a_folder_allowed_once_is_served_for_the_rest_of_the_session() {
     let asked = questions(&messages);
     assert_eq!(asked.len(), 1, "asked once, then remembered");
     let question = asked[0]["params"]["message"].as_str().unwrap();
-    assert!(question.contains(&format!("\"{shown}\"")), "{question}");
+    assert!(
+        question.ends_with(&format!("The folder: {shown}")),
+        "{question}"
+    );
     assert_eq!(result_of(&messages, 2)["vault"], json!(shown));
     let context = result_of(&messages, 3);
     assert_eq!(context["canAskForVaults"], true);

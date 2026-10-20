@@ -24,7 +24,7 @@ permissions:
 
 jobs:
   resolve:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
       contents: read
@@ -130,7 +130,7 @@ jobs:
   homebrew-formula:
     needs: resolve
     if: needs.resolve.outputs.run == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     outputs:
       status: ${{ steps.check.outputs.status }}
@@ -171,7 +171,7 @@ jobs:
   apt:
     needs: resolve
     if: needs.resolve.outputs.run == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     outputs:
       status: ${{ steps.check.outputs.status }}
@@ -289,7 +289,7 @@ jobs:
   snap:
     needs: resolve
     if: needs.resolve.outputs.run == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     outputs:
       status: ${{ steps.check.outputs.status }}
@@ -322,7 +322,7 @@ jobs:
   dnf:
     needs: resolve
     if: needs.resolve.outputs.run == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     container: fedora:latest
     timeout-minutes: 20
     outputs:
@@ -367,7 +367,7 @@ jobs:
   aur:
     needs: resolve
     if: needs.resolve.outputs.run == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     container: archlinux:latest
     timeout-minutes: 20
     outputs:
@@ -531,7 +531,7 @@ jobs:
   appimage:
     needs: resolve
     if: needs.resolve.outputs.run == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - name: Extract the AppImage and verify
@@ -607,7 +607,7 @@ jobs:
       - appimage
       - nsis
     if: ${{ !cancelled() && needs.resolve.outputs.run == 'true' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - name: Build channel summary

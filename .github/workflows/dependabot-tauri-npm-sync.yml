@@ -42,7 +42,7 @@ permissions: {}
 
 jobs:
   sync:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
@@ -64,7 +64,7 @@ jobs:
         timeout-minutes: 8
         uses: ./.github/actions/linux-deps
         with:
-          cache-key: apt-webkit-ubuntu-latest-${{ runner.arch }}-v1
+          cache-key: apt-webkit-ubuntu-24.04-${{ runner.arch }}-v1
 
       - run: pnpm install --frozen-lockfile
 
@@ -75,10 +75,14 @@ jobs:
         working-directory: src-tauri
         run: cargo check
 
+      # No Husky hooks: `pnpm install` above wired them, and the pre-commit
+      # hook runs the full test suite from the bumped tree, in this step,
+      # which is the one holding the token.
       - name: Commit and push if changed
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BRANCH: ${{ inputs.branch }}
+          HUSKY: 0
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"

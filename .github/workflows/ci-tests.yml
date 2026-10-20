@@ -6,9 +6,11 @@ on:
 jobs:
   test-frontend:
     name: Frontend
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
       - uses: ./.github/actions/pnpm-setup
       - run: pnpm install --frozen-lockfile
       - name: Run tests with coverage
@@ -28,8 +30,11 @@ jobs:
           flags: frontend
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: true
-          # PyPI uploader: the GPG-verified binary intermittently fails.
+          # PyPI uploader: the GPG-verified binary intermittently fails. PyPI
+          # skips that integrity check, so the version is fixed here rather
+          # than whatever is newest when the job runs.
           use_pypi: true
+          version: v11.3.1
       - name: Upload frontend test results
         if: ${{ !cancelled() }}
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
@@ -39,14 +44,19 @@ jobs:
           report_type: test_results
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: true
-          # PyPI uploader: the GPG-verified binary intermittently fails.
+          # PyPI uploader: the GPG-verified binary intermittently fails. PyPI
+          # skips that integrity check, so the version is fixed here rather
+          # than whatever is newest when the job runs.
           use_pypi: true
+          version: v11.3.1
 
   test-rust:
     name: Rust
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
       - uses: ./.github/actions/rust-setup
         with:
           components: llvm-tools-preview
@@ -54,7 +64,7 @@ jobs:
         timeout-minutes: 8
         uses: ./.github/actions/linux-deps
         with:
-          cache-key: apt-webkit-ubuntu-latest-${{ runner.arch }}-v1
+          cache-key: apt-webkit-ubuntu-24.04-${{ runner.arch }}-v1
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@ab6895351a88b908e96a4697860d4ffea5e57dbe # v2.87.27
         with:
@@ -74,8 +84,11 @@ jobs:
           flags: rust
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: true
-          # PyPI uploader: the GPG-verified binary intermittently fails.
+          # PyPI uploader: the GPG-verified binary intermittently fails. PyPI
+          # skips that integrity check, so the version is fixed here rather
+          # than whatever is newest when the job runs.
           use_pypi: true
+          version: v11.3.1
       - name: Upload Rust test results
         if: ${{ !cancelled() }}
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
@@ -85,8 +98,11 @@ jobs:
           report_type: test_results
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: true
-          # PyPI uploader: the GPG-verified binary intermittently fails.
+          # PyPI uploader: the GPG-verified binary intermittently fails. PyPI
+          # skips that integrity check, so the version is fixed here rather
+          # than whatever is newest when the job runs.
           use_pypi: true
+          version: v11.3.1
 
   # Windows-gated guards (the junction escape test in grants.rs) never compile
   # on the ubuntu coverage job above; this keeps them exercised in CI. The
@@ -98,6 +114,8 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
       - uses: ./.github/actions/rust-setup
         with:
           components: clippy
@@ -115,7 +133,7 @@ jobs:
   # required-checks ruleset.
   plugin-contract:
     name: Plugin contract
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
@@ -147,9 +165,11 @@ jobs:
 
   clippy:
     name: Clippy
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
       - uses: ./.github/actions/rust-setup
         with:
           components: clippy
@@ -157,7 +177,7 @@ jobs:
         timeout-minutes: 8
         uses: ./.github/actions/linux-deps
         with:
-          cache-key: apt-webkit-ubuntu-latest-${{ runner.arch }}-v1
+          cache-key: apt-webkit-ubuntu-24.04-${{ runner.arch }}-v1
       - name: Add Clippy problem matcher
         run: echo "::add-matcher::.github/matchers/rust.json"
       - name: Run Clippy

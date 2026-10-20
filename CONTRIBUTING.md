@@ -350,6 +350,7 @@ Rules:
 - **Never add a `uses:` on a tag or branch.** Resolve it first: `gh api repos/<owner>/<repo>/commits/<tag> --jq .sha`. Pin the SHA of a published release, not of a moving branch head, so the comment names a real version.
 - **Keep the `# vX.Y.Z` comment accurate.** Dependabot parses it to know the current version, and it is the only readable signal of what a SHA is.
 - **Local composite actions** (`./.github/actions/…`) are referenced by path and are not pinned; they live in this repo and are reviewed with the rest of the diff.
+- **Every checkout drops the token** (`persist-credentials: false`). The jobs build the whole npm and cargo dependency tree, whose lifecycle and build scripts would otherwise find a push credential in `.git/config`. A step that pushes gets its token through `env`.
 - **Updates come through Dependabot**, weekly, under `chore(ci)`. Dependabot rewrites the SHA and the comment together. Review the upstream diff between the old and new tag (`https://github.com/<owner>/<repo>/compare/<old>...<new>`) before merging, especially for actions used by `release.yml`, which holds publishing secrets.
 - **Some actions need the tool name spelled out.** `taiki-e/install-action` is normally used as `@cargo-llvm-cov`, where the tag name selects the tool; pinned by SHA that shorthand is gone, so pass `with: { tool: … }` explicitly.
 
@@ -385,7 +386,7 @@ The **Release Smoke Test** workflow (`release-smoke-test.yml`) installs Glyph fr
 
 ### Ecosystem health check
 
-The **Ecosystem Health** workflow (`ecosystem-health.yml`) runs weekly and probes the endpoints a release publishes to without installing anything: the apt and dnf repos (metadata reachable, signed by the release key, advertising the latest release), the website and its locale pages, and the plugin marketplace index (valid against its schema, every package downloadable and matching its checksum). A failed run emails the maintainer. It can be dispatched manually, and runs on PRs that edit it. Locally, with `curl`, `gpg`, `jq`, `python3`, and [`check-jsonschema`](https://pypi.org/project/check-jsonschema/) on PATH:
+The **Ecosystem Health** workflow (`ecosystem-health.yml`) runs weekly and probes the endpoints a release publishes to without installing anything: the apt and dnf repos (metadata reachable, signed by the release key, advertising the latest release), the website and its locale pages, the web viewer (reachable and serving its Content-Security-Policy), and the plugin marketplace index (valid against its schema, every package downloadable and matching its checksum). A failed run emails the maintainer. It can be dispatched manually, and runs on PRs that edit it. Locally, with `curl`, `gpg`, `jq`, `python3`, and [`check-jsonschema`](https://pypi.org/project/check-jsonschema/) on PATH:
 
 ```bash
 bash scripts/ecosystem-health-check.sh 0.21.0   # the latest released version

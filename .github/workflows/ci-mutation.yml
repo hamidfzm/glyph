@@ -28,11 +28,11 @@ jobs:
       matrix:
         include:
           - leg: linux-1
-            os: ubuntu-latest
+            os: ubuntu-24.04
             select: --exclude-re
             shard: 0/2
           - leg: linux-2
-            os: ubuntu-latest
+            os: ubuntu-24.04
             select: --exclude-re
             shard: 1/2
           - leg: windows
@@ -41,13 +41,15 @@ jobs:
             shard: 0/1
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
       - uses: ./.github/actions/rust-setup
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
         timeout-minutes: 8
         uses: ./.github/actions/linux-deps
         with:
-          cache-key: apt-webkit-ubuntu-latest-${{ runner.arch }}-v1
+          cache-key: apt-webkit-ubuntu-24.04-${{ runner.arch }}-v1
       - name: Install cargo-mutants
         uses: taiki-e/install-action@ab6895351a88b908e96a4697860d4ffea5e57dbe # v2.87.27
         with:

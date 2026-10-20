@@ -47,7 +47,12 @@ jobs:
             args_pr: "--bundles msi"
     runs-on: ${{ matrix.platform }}
     steps:
+      # No token in the checkout, here and in every job: `pnpm install` and
+      # the Rust build run every dependency's lifecycle and build scripts, and
+      # a credential in .git/config would be theirs.
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
       - uses: ./.github/actions/pnpm-setup
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
@@ -179,11 +184,13 @@ jobs:
     # Runs on PRs too: this is the only job that compiles a `cfg(mobile)`
     # configuration. Every other gate builds the host target, where
     # `cfg(desktop)` is true, so mobile-only breakage is invisible to them.
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       NDK_VERSION: 29.0.14206865
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
       - uses: ./.github/actions/pnpm-setup
       - uses: ./.github/actions/rust-setup
         with:
@@ -227,6 +234,8 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
       - uses: ./.github/actions/pnpm-setup
       - uses: ./.github/actions/rust-setup
         with:
@@ -247,9 +256,11 @@ jobs:
   docker:
     name: Docker
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
       - uses: ./.github/actions/docker-image
 
       # A ceiling, not a target. WebKitGTK and its Mesa/LLVM stack put the
@@ -271,9 +282,11 @@ jobs:
     # red checks. The rebuild below is a full cache hit from the job above, so
     # the split costs seconds rather than a second build.
     needs: docker
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
       - uses: ./.github/actions/docker-image
         with:
           write-cache: "false"
