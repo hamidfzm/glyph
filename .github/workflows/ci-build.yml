@@ -2,6 +2,10 @@ name: Build
 
 on:
   workflow_call:
+    # Not required: a pull request from a fork runs with no secrets at all.
+    secrets:
+      CODECOV_TOKEN:
+        required: false
 
 jobs:
   build:
