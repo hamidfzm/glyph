@@ -10,6 +10,7 @@ paths:
 Keep the GitHub Actions "Annotations" panel clean. Warnings and notices are real findings, not background noise.
 
 - Treat every `##[warning]` and `##[notice]` annotation as a fix-it item, not a TODO. The Lint job runs Biome with `--error-on-warnings`, so any new warning fails CI.
+- Runner images are pinned by version (`ubuntu-24.04`, and `ubuntu-22.04` where the Linux app build needs the older glibc), never `ubuntu-latest`. GitHub moves `-latest` under running workflows over several weeks (the 26.04 move began 2026-10-19), so two runs of one job can land on different images. Move to a newer image as its own change, in every workflow at once, and cut a release soon after so the release-only workflows are proven on it too.
 - Treat the Codecov PR comment the same way. A red "Patch coverage" line means the diff shipped untested lines: run `pnpm test:coverage` locally, write tests for the flagged lines, and push before asking for review. The usual escapees are event handlers, drag/reset callbacks, keyboard paths, and error branches, which is exactly the code that regresses silently without tests. Do not merge over an unresolved Codecov comment.
 - Apply Biome's suggested fix for lint findings instead of suppressing them (e.g. `useOptionalChain`, `useIndexOf`).
 - Every `actions/checkout` sets `persist-credentials: false`. `pnpm install` and a Rust build run every dependency's lifecycle and build scripts, and a token left in `.git/config` would be theirs. A step that pushes is handed its token through `env`, as `dependabot-tauri-npm-sync.yml` does.

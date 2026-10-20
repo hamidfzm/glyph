@@ -24,7 +24,7 @@ jobs:
   pr-title:
     name: PR title (conventional commits)
     if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Validate PR title
         env:
@@ -54,7 +54,7 @@ jobs:
 
   validate-flatpak:
     name: Validate Flatpak metadata
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:

@@ -15,7 +15,7 @@ jobs:
   # Create the release once before the build matrix; parallel tauri-action
   # jobs racing to create it fail with "already_exists".
   create-release:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
@@ -94,7 +94,7 @@ jobs:
 
   update-release-notes:
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       changelog: ${{ steps.notes.outputs.changelog }}
       latest: ${{ steps.latest.outputs.latest }}
@@ -172,7 +172,7 @@ jobs:
 
   publish-homebrew:
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
@@ -332,7 +332,7 @@ jobs:
 
   publish-scoop:
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
@@ -386,7 +386,7 @@ jobs:
   publish-web-viewer:
     needs: update-release-notes
     if: needs.update-release-notes.outputs.latest == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions: {}
     steps:
       - name: Deploy the web viewer from this tag
@@ -446,7 +446,7 @@ jobs:
 
   publish-aur:
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # AUR's SSH endpoint drops into maintenance for days at a time and refuses
     # every push, which used to fail the whole release. The rendered PKGBUILD
     # is uploaded to the release before the push so Arch users can build with
@@ -530,7 +530,7 @@ jobs:
 
   publish-ppa:
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -626,7 +626,7 @@ jobs:
 
   publish-debian:
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
@@ -772,7 +772,7 @@ jobs:
 
   publish-dnf:
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
@@ -880,7 +880,7 @@ jobs:
 
   publish-flathub:
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
@@ -969,7 +969,7 @@ jobs:
 
   publish-docker:
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       # ghcr.io push, authenticated with the built-in token, so this publish

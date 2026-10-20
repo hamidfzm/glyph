@@ -22,7 +22,7 @@ concurrency:
 
 jobs:
   label:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # Nothing is checked out, so no contents scope: labelling a PR is all
     # this pull_request_target job can do with its base-repo token.
     permissions:

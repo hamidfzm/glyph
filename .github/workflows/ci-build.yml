@@ -184,7 +184,7 @@ jobs:
     # Runs on PRs too: this is the only job that compiles a `cfg(mobile)`
     # configuration. Every other gate builds the host target, where
     # `cfg(desktop)` is true, so mobile-only breakage is invisible to them.
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       NDK_VERSION: 29.0.14206865
     steps:
@@ -256,7 +256,7 @@ jobs:
   docker:
     name: Docker
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
@@ -282,7 +282,7 @@ jobs:
     # red checks. The rebuild below is a full cache hit from the job above, so
     # the split costs seconds rather than a second build.
     needs: docker
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
