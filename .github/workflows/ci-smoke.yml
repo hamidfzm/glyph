@@ -17,7 +17,7 @@ jobs:
     # opens hostile shared documents in the built web viewer, whose meta CSP
     # is the only network control a browser gives it.
     name: WebKit
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
@@ -39,7 +39,7 @@ jobs:
     # pre-push hooks' check over the PR's commits and text, which catches
     # commits made where those hooks never ran.
     name: Release bump
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:

@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Read-only health check of the published ecosystem endpoints (#506): the apt
 # and dnf repos (metadata, GPG signatures, advertised version), the website,
-# and the plugin marketplace index. Run weekly by ecosystem-health.yml; runs
-# anywhere with curl, gpg, jq, python3, and check-jsonschema on PATH.
+# the web viewer, and the plugin marketplace index. Run weekly by
+# ecosystem-health.yml; runs anywhere with curl, gpg, jq, python3, and
+# check-jsonschema on PATH.
 #
 # Every failing assertion is reported (not just the first), then the script
 # exits non-zero if any failed.
@@ -140,7 +141,7 @@ check_website() {
   # The homepage holds the install instructions (#download); the locale roots
   # are the pages the language switcher links to.
   local path
-  for path in / /de/ /es/ /fa/ /zh/ /plugins/; do
+  for path in / /de/ /es/ /fa/ /zh/ /plugins/ /view/; do
     reachable "$WEBSITE$path" && ok "website $path"
   done
   fetch "$WEBSITE/" "$tmp/home.html" || return 0
@@ -148,6 +149,17 @@ check_website() {
     ok "website homepage has the #download section"
   else
     fail "website homepage: no #download section"
+  fi
+}
+
+check_web_viewer() {
+  # The page's meta CSP is the viewer's only network control (a shared link
+  # carries documents anyone can write), so a deploy without it is broken.
+  fetch "$WEBSITE/view/" "$tmp/view.html" || return 0
+  if grep -q 'http-equiv="Content-Security-Policy"' "$tmp/view.html"; then
+    ok "web viewer serves its Content-Security-Policy"
+  else
+    fail "web viewer $WEBSITE/view/: no Content-Security-Policy meta tag"
   fi
 }
 
@@ -179,6 +191,7 @@ check_marketplace() {
 check_apt
 check_dnf
 check_website
+check_web_viewer
 check_marketplace
 
 [ "$failed" -eq 0 ] || exit 1

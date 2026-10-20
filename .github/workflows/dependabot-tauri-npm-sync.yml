@@ -42,7 +42,7 @@ permissions: {}
 
 jobs:
   sync:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
@@ -64,7 +64,7 @@ jobs:
         timeout-minutes: 8
         uses: ./.github/actions/linux-deps
         with:
-          cache-key: apt-webkit-ubuntu-latest-${{ runner.arch }}-v1
+          cache-key: apt-webkit-ubuntu-24.04-${{ runner.arch }}-v1
 
       - run: pnpm install --frozen-lockfile
 
