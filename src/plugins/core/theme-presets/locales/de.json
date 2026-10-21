@@ -1,0 +1,9 @@
+{
+  "label": "Farbschema",
+  "presets": {
+    "none": "Keines",
+    "sepia": "Sepia",
+    "solarized": "Solarized",
+    "high-contrast": "Hoher Kontrast"
+  }
+}
