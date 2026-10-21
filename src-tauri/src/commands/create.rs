@@ -498,11 +498,8 @@ mod tests {
             let err = rename_path(s(&folder), name.to_string(), root.clone()).unwrap_err();
             assert!(err.contains(".git"), "{err}");
             assert!(folder.join("hooks").join("pre-commit").is_file());
-            assert!(
-                listed(dir).iter().all(|n| !n.eq_ignore_ascii_case(".git")),
-                "{name} landed in {}",
-                dir.display()
-            );
+            let landed = listed(dir).iter().any(|n| n.eq_ignore_ascii_case(".git"));
+            assert!(!landed, "{name} landed in {}", dir.display());
             fs::remove_dir_all(&folder).unwrap();
         }
         // A file named `.git` is a gitfile: it sends git to the folder it names.
