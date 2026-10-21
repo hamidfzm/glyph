@@ -264,7 +264,7 @@ Two layers close this:
   renders as its label with nothing to click. That is the intended
   behaviour, not a gap: a diagram is drawn from document source, and a link
   in it would open with no prompt.
-- **The host refuses the navigation.** `src-tauri/src/navigation.rs`
+- **The host refuses the navigation.** `src-tauri/src/navigation_runtime.rs`
   registers a plugin whose navigation handler runs for every webview, the
   main window and the ones `windows_runtime.rs` spawns alike, and allows
   only the app's own origin (`tauri://localhost`, or `http://tauri.localhost`

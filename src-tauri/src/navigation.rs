@@ -4,30 +4,16 @@
 //! a plain `<a>` in it, and wry allows any top-level navigation by default:
 //! the window would then show the remote page in place of the app, where the
 //! init script's `window.__GLYPH_OPEN__` is readable.
+//!
+//! `navigation_runtime::init` registers the guard on the app builder; the
+//! decision lives here so it can be tested without a webview.
 
-use tauri::plugin::{Builder, TauriPlugin};
-use tauri::{Manager, Runtime, Url};
-
-/// Registered on the app builder, so it covers the main window and every
-/// window `windows_runtime::spawn_window` builds.
-pub fn init<R: Runtime>() -> TauriPlugin<R> {
-    Builder::new("navigation-guard")
-        .on_navigation(|webview, url| {
-            // Only a dev build loads the page from `build.devUrl`.
-            let dev_url = if tauri::is_dev() {
-                webview.config().build.dev_url.as_ref()
-            } else {
-                None
-            };
-            is_app_url(url, dev_url)
-        })
-        .build()
-}
+use tauri::Url;
 
 /// Whether `url` is one of the app's own pages: `tauri://localhost` (macOS,
 /// Linux, iOS), `tauri.localhost` (Windows, Android; `https` with
 /// `useHttpsScheme`), or the origin of the dev server when one is in use.
-fn is_app_url(url: &Url, dev_url: Option<&Url>) -> bool {
+pub(crate) fn is_app_url(url: &Url, dev_url: Option<&Url>) -> bool {
     match (url.scheme(), url.host_str(), url.port()) {
         ("tauri", Some("localhost"), None) => true,
         ("http" | "https", Some("tauri.localhost"), None) => true,

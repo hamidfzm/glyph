@@ -21,6 +21,7 @@ mod menu;
 #[cfg(desktop)]
 mod menu_runtime;
 mod navigation;
+mod navigation_runtime;
 mod notebook;
 mod secrets;
 // The preview server behind `glyph serve`; desktop-only, like the CLI
@@ -269,7 +270,7 @@ pub fn run() {
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_store::Builder::new().build())
-        .plugin(navigation::init());
+        .plugin(navigation_runtime::init());
 
     // Window-state restoration, the native menu bar, sync, and telemetry only
     // exist on desktop (see the Cargo.toml target table).
