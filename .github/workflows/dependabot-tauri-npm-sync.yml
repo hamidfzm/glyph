@@ -16,11 +16,22 @@
 # Any changes from either step are committed and pushed back to the branch in a
 # single commit so the PR is self-contained.
 #
-# Uses the default `GITHUB_TOKEN` (workflow_dispatch runs in your repo context,
-# unlike Dependabot-triggered workflows, which cannot access custom secrets or
-# push reliably to Dependabot branches). A push made with that token does not
-# start workflow runs, so CI stays on Dependabot's commit until someone
-# updates the branch.
+# Two jobs, so the bumped dependency tree never runs on a runner that holds a
+# write token. `sync` runs it with a read-only token and no credential in
+# .git/config: `pnpm install` executes every package's lifecycle scripts and
+# `cargo check` every build.rs and proc-macro in the bumped Cargo.lock. All it
+# hands over is a patch of the tracked files the sync may change, as an
+# artifact. `push` starts on a fresh runner that never ran that code, applies
+# the patch to the same commit, and pushes with the default `GITHUB_TOKEN`
+# through the remote URL alone. Anything the bumped tree appended to
+# $GITHUB_PATH (a fake `git`) or $GITHUB_ENV (a GIT_CONFIG_* override) stays
+# in `sync`: those files only carry between steps of one job.
+#
+# The default `GITHUB_TOKEN` works here because workflow_dispatch runs in your
+# repo context, unlike Dependabot-triggered workflows, which cannot access
+# custom secrets or push reliably to Dependabot branches. A push made with
+# that token does not start workflow runs, so CI stays on Dependabot's commit
+# until someone updates the branch.
 #
 # Input: branch name (e.g. `dependabot/tauri-…`).
 
@@ -42,21 +53,23 @@ permissions: {}
 
 jobs:
   sync:
+    name: Sync
     runs-on: ubuntu-24.04
     permissions:
-      contents: write
+      contents: read
+    outputs:
+      changed: ${{ steps.diff.outputs.changed }}
+      head: ${{ steps.diff.outputs.head }}
     steps:
-      # No token in the checkout: `pnpm install` and `cargo check` below run
-      # every dependency's lifecycle and build scripts from the bumped tree,
-      # and a credential in .git/config would be theirs. The push step alone
-      # gets the token, through the remote URL it pushes to.
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           ref: ${{ inputs.branch }}
           persist-credentials: false
 
-      - name: Install Rust stable
+      - name: Install Rust
         uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
+        with:
+          toolchain: "1.97.0" # src-tauri/rust-toolchain.toml
 
       - uses: ./.github/actions/pnpm-setup
 
@@ -75,21 +88,71 @@ jobs:
         working-directory: src-tauri
         run: cargo check
 
-      # No Husky hooks: `pnpm install` above wired them, and the pre-commit
-      # hook runs the full test suite from the bumped tree, in this step,
-      # which is the one holding the token.
-      - name: Commit and push if changed
+      # Only the files the two steps above may touch; the other generated
+      # schemas are gitignored, and intent-to-add keeps a new one in the diff.
+      - name: Collect the changes as a patch
+        id: diff
+        run: |
+          echo "head=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          git add --intent-to-add src-tauri/gen/schemas/
+          git diff --binary -- package.json pnpm-lock.yaml src-tauri/gen/schemas/ > "$RUNNER_TEMP/sync.patch"
+          if [ -s "$RUNNER_TEMP/sync.patch" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            git diff --stat -- package.json pnpm-lock.yaml src-tauri/gen/schemas/
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "No changes from sync (already aligned)"
+          fi
+
+      - name: Upload the patch
+        if: steps.diff.outputs.changed == 'true'
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: tauri-sync-patch
+          path: ${{ runner.temp }}/sync.patch
+          if-no-files-found: error
+          retention-days: 1
+
+  push:
+    name: Push
+    needs: sync
+    if: needs.sync.outputs.changed == 'true'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      # The exact commit `sync` diffed against, so the patch applies as made;
+      # if the branch moved meanwhile, the push below is rejected as
+      # non-fast-forward instead of overwriting anything.
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: ${{ needs.sync.outputs.head }}
+          persist-credentials: false
+
+      - name: Download the patch
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: tauri-sync-patch
+          path: ${{ runner.temp }}/sync
+
+      # No pnpm or cargo here, so nothing from the bumped tree runs next to
+      # the token. The patch was made on the runner that did run it, so only
+      # the paths the sync may change are accepted. Hooks are off as well,
+      # although a fresh checkout has none, so the commit depends on nothing.
+      - name: Apply, commit, and push
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BRANCH: ${{ inputs.branch }}
           HUSKY: 0
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add package.json pnpm-lock.yaml src-tauri/gen/schemas/
-          if git diff --cached --quiet; then
-            echo "No changes from sync (already aligned)"
-            exit 0
+          patch="$RUNNER_TEMP/sync/sync.patch"
+          if git apply --numstat "$patch" | cut -f3 | grep -vE '^(package\.json|pnpm-lock\.yaml|src-tauri/gen/schemas/[^/]+)$'; then
+            echo "::error::the patch touches files outside the sync's allowlist (listed above)"
+            exit 1
           fi
-          git commit -m "chore(deps): align @tauri-apps plugins and regenerate schemas"
+          git apply --index "$patch"
+          git -c user.name="github-actions[bot]" \
+              -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+              -c core.hooksPath=/dev/null \
+              commit -m "chore(deps): align @tauri-apps plugins and regenerate schemas"
           git push "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:refs/heads/${BRANCH}"

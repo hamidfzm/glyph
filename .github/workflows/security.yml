@@ -44,6 +44,8 @@ jobs:
         with:
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
+        with:
+          toolchain: "1.97.0" # src-tauri/rust-toolchain.toml
       - name: Install cargo-audit
         uses: taiki-e/install-action@ab6895351a88b908e96a4697860d4ffea5e57dbe # v2.87.27
         with:
@@ -60,6 +62,27 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/pnpm-setup
       - run: pnpm install --frozen-lockfile
-      # TODO: Revert to `pnpm audit --prod` when pnpm fixes bulk endpoint support
-      # Workaround: https://github.com/pnpm/pnpm/issues/11265
-      - run: pnpm audit --prod --ignore-registry-errors
+      # The whole tree, not `--prod`: the devDependencies (vite and its Sentry
+      # and Codecov plugins, @tauri-apps/cli) run at release time with the
+      # publishing secrets. A registry failure (pnpm retries connection
+      # errors itself, not a bad response from the bulk advisory endpoint,
+      # https://github.com/pnpm/pnpm/issues/11265) is retried here, then
+      # fails the job instead of passing as a clean audit.
+      - name: pnpm audit
+        run: |
+          report="$RUNNER_TEMP/audit.json"
+          for attempt in 1 2 3; do
+            if pnpm audit --json > "$report"; then
+              echo "No known vulnerabilities found"
+              exit 0
+            fi
+            # A report means findings: show them readably and fail.
+            if jq -e .metadata "$report" > /dev/null 2>&1; then
+              pnpm audit
+              exit 1
+            fi
+            echo "pnpm audit returned no report (attempt $attempt of 3)"
+            cat "$report"
+            sleep 15
+          done
+          exit 1

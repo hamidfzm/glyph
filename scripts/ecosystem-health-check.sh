@@ -48,12 +48,18 @@ ok() { echo "ok: $*"; }
 # the sections after it; https only, including across redirects.
 CURL=(curl -fsSL --retry 3 --retry-all-errors --connect-timeout 20 --max-time 120 --proto =https --proto-redir =https)
 
+# The marketplace index supplies the package URLs, so a URL is data: `--`
+# keeps one starting with `-` from becoming a curl option.
 fetch() { # fetch <url> <out>
-  "${CURL[@]}" -o "$2" "$1" || { fail "$1: download failed"; return 1; }
+  case "$1" in
+    https://*) ;;
+    *) fail "$1: not an https:// URL, not downloaded"; return 1 ;;
+  esac
+  "${CURL[@]}" -o "$2" -- "$1" || { fail "$1: download failed"; return 1; }
 }
 
 reachable() { # reachable <url>
-  "${CURL[@]}" -I -o /dev/null "$1" || { fail "$1: unreachable"; return 1; }
+  "${CURL[@]}" -I -o /dev/null -- "$1" || { fail "$1: unreachable"; return 1; }
 }
 
 import_signing_key() { # import_signing_key <url>
