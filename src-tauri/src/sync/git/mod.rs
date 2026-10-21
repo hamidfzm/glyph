@@ -28,7 +28,7 @@
 //! The implementation is split across sibling files: [`backend`] holds the
 //! `GitBackend` type and its `SyncBackend` impl, [`message`] the GitHub-style
 //! auto-commit subject, [`credentials`] the libgit2 credential callback, and
-//! [`repo`] the repository-lifecycle helpers (`init` / `clone` / `set_origin`),
+//! [`repo`] the repository-lifecycle helpers (`init` / `set_origin`),
 //! and [`plumbing`] the low-level git operations `backend` orchestrates.
 //! `pointers` is the check a repository's own files pass before any of these
 //! opens it.
@@ -47,7 +47,7 @@ pub use credentials::{https_authority, make_credentials_callback, select_credent
 pub use message::auto_commit_message;
 #[cfg(windows)]
 pub use pointers::{refuse_remote_pointers, refuse_remote_pointers_with_submodules, Judge};
-pub use repo::{clone_repo, init_repo, set_origin};
+pub use repo::{init_repo, set_origin};
 
 use std::time::{SystemTime, UNIX_EPOCH};
 

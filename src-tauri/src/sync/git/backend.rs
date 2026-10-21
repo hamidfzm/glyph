@@ -165,8 +165,17 @@ impl SyncBackend for GitBackend {
             if analysis.is_up_to_date() {
                 // Local already contains everything from upstream — no-op.
             } else if analysis.is_fast_forward() {
-                // Fast-forward: move local branch pointer to upstream
-                // and check out the new tree.
+                // Fast-forward: check out the upstream tree while HEAD still
+                // names the old commit, then move the branch. libgit2 works
+                // out what to remove by diffing HEAD against the target, so
+                // with HEAD moved first a symlink entry that the new commit
+                // turns into a directory is never deleted, and the files
+                // below it are written through the link to wherever it
+                // points.
+                let mut co = git2::build::CheckoutBuilder::default();
+                co.force();
+                repo.checkout_tree(upstream_commit.as_object(), Some(&mut co))
+                    .map_err(|e| SyncError::Backend(e.message().to_string()))?;
                 let local_ref_name = format!("refs/heads/{}", self.config.remote_branch);
                 let mut local_ref = repo
                     .find_reference(&local_ref_name)
@@ -179,10 +188,6 @@ impl SyncBackend for GitBackend {
                     )
                     .map_err(|e| SyncError::Backend(e.message().to_string()))?;
                 repo.set_head(&local_ref_name)
-                    .map_err(|e| SyncError::Backend(e.message().to_string()))?;
-                let mut co = git2::build::CheckoutBuilder::default();
-                co.force();
-                repo.checkout_head(Some(&mut co))
                     .map_err(|e| SyncError::Backend(e.message().to_string()))?;
                 pulled_count = 1;
             } else {

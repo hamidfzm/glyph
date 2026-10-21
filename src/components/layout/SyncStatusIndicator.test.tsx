@@ -35,7 +35,6 @@ function ctxValue(over: Partial<SyncConfigContextValue> = {}): SyncConfigContext
     setToken: vi.fn(),
     clearToken: vi.fn(),
     initRepo: vi.fn(),
-    cloneRemote: vi.fn(),
     setOrigin: vi.fn(),
     commitConfig: vi.fn(),
     runSync: vi.fn(),

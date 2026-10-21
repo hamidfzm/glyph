@@ -1,41 +1,23 @@
 use std::path::{Path, PathBuf};
 
-use git2::{FetchOptions, RemoteCallbacks, Repository};
+use git2::Repository;
 
 use crate::sync::SyncError;
 
-use super::{https_authority, make_credentials_callback, map_remote_error, BoundToken, ORIGIN};
+use super::ORIGIN;
 
 /// Initialise a new git repository at `path` with the default branch
 /// set to the supplied name. Convenience wrapper around `git2::Repository::init_opts`.
 pub fn init_repo(path: &Path, default_branch: &str) -> Result<PathBuf, SyncError> {
+    // The name is written into `.git/HEAD` as given, and the renderer picks it.
+    let valid = git2::Branch::name_is_valid(default_branch)
+        .map_err(|e| SyncError::Backend(e.message().to_string()))?;
+    if !valid {
+        return Err(SyncError::Backend("invalid default branch name".into()));
+    }
     let mut opts = git2::RepositoryInitOptions::new();
     opts.initial_head(default_branch);
     Repository::init_opts(path, &opts).map_err(|e| SyncError::Backend(e.message().to_string()))?;
-    Ok(path.to_path_buf())
-}
-
-/// Clone `url` into `path`. The destination must not exist yet (libgit2's
-/// rule). When `token` is supplied it's used as the HTTPS basic-auth
-/// password with the `x-access-token` username (the GitHub PAT shape,
-/// also accepted by GitLab / Codeberg). Without a token, we fall back
-/// to the SSH agent for `git@` URLs and unauthenticated HTTPS for public
-/// remotes. The token is bound to `url`'s own host, so a redirect elsewhere
-/// does not carry it.
-pub fn clone_repo(url: &str, path: &Path, token: Option<&str>) -> Result<PathBuf, SyncError> {
-    let bound = token.and_then(|token| {
-        https_authority(url).map(|host| BoundToken {
-            token: token.to_string(),
-            host,
-        })
-    });
-    let mut callbacks = RemoteCallbacks::new();
-    callbacks.credentials(make_credentials_callback(bound));
-    let mut fo = FetchOptions::new();
-    fo.remote_callbacks(callbacks);
-    let mut builder = git2::build::RepoBuilder::new();
-    builder.fetch_options(fo);
-    builder.clone(url, path).map_err(map_remote_error)?;
     Ok(path.to_path_buf())
 }
 
@@ -52,12 +34,10 @@ pub fn set_origin(path: &Path, url: &str) -> Result<(), SyncError> {
 
 #[cfg(test)]
 mod tests {
-    use super::super::test_support::Fixture;
     use super::*;
-    use crate::sync::SyncBackend;
     use git2::Repository;
-    use std::fs;
     use tempfile::TempDir;
+
     #[test]
     fn init_repo_creates_a_repository_with_the_requested_default_branch() {
         let tmp = TempDir::new().unwrap();
@@ -70,38 +50,20 @@ mod tests {
     }
 
     #[test]
-    fn clone_repo_clones_an_unauthenticated_local_remote() {
-        // Seed: build a working repo, push a file, then clone the bare
-        // remote into a fresh path. The clone should contain the file.
-        let f = Fixture::new();
-        f.write_file("seed.md", "# seed\n");
-        f.backend().sync(None).unwrap();
-
-        let dest = f._tmp.path().join("cloned");
-        let resolved = clone_repo(f.remote.to_str().unwrap(), &dest, None).unwrap();
-        assert_eq!(resolved, dest);
-        assert!(dest.join("seed.md").exists());
-        assert!(dest.join(".git").exists());
-    }
-
-    #[test]
-    fn clone_repo_errors_when_target_exists_and_is_not_empty() {
-        let f = Fixture::new();
-        f.write_file("seed.md", "# seed\n");
-        f.backend().sync(None).unwrap();
-
-        // libgit2 refuses to clone into a non-empty directory.
-        let dest = f._tmp.path().join("existing");
-        fs::create_dir_all(&dest).unwrap();
-        fs::write(dest.join("blocker.txt"), "x").unwrap();
-        let err = clone_repo(f.remote.to_str().unwrap(), &dest, None).unwrap_err();
-        // Local-path bare remotes go through libgit2 directly without
-        // hitting the network classifier; we just confirm it failed
-        // with some backend-mapped error.
-        assert!(
-            matches!(err, SyncError::Backend(_) | SyncError::Network(_)),
-            "got {err:?}"
-        );
+    fn init_repo_refuses_a_default_branch_that_is_not_a_reference_name() {
+        for name in [
+            "",
+            "HEAD",
+            "-trunk",
+            "../../etc/passwd",
+            "a b",
+            "refs/heads/x..y",
+        ] {
+            let tmp = TempDir::new().unwrap();
+            let err = init_repo(tmp.path(), name).unwrap_err();
+            assert!(matches!(err, SyncError::Backend(_)), "{name}: {err:?}");
+            assert!(!tmp.path().join(".git").exists(), "{name}");
+        }
     }
 
     #[test]

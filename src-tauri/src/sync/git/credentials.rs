@@ -21,10 +21,10 @@ pub fn https_authority(url: &str) -> Option<String> {
 }
 
 /// Build the FnMut closure libgit2 hands to `credentials()`. Returns
-/// `impl FnMut` directly so it's reusable from fetch/push and
-/// clone, and the body is reachable from tests (call the returned
-/// closure with synthetic args). The token is offered only for the
-/// authority it is bound to; any other URL gets the tokenless path.
+/// `impl FnMut` directly so it's reusable from fetch and push, and the
+/// body is reachable from tests (call the returned closure with synthetic
+/// args). The token is offered only for the authority it is bound to; any
+/// other URL gets the tokenless path.
 pub fn make_credentials_callback(
     token: Option<BoundToken>,
 ) -> impl FnMut(&str, Option<&str>, git2::CredentialType) -> Result<git2::Cred, git2::Error> {
@@ -39,8 +39,8 @@ pub fn make_credentials_callback(
 }
 
 /// Select libgit2 credentials based on what auth method the remote
-/// advertised and what we have stashed. Used by both fetch/push and
-/// clone. Extracted so we can drive it from tests with synthetic
+/// advertised and what we have stashed. Used by both fetch and push.
+/// Extracted so we can drive it from tests with synthetic
 /// `CredentialType` bitflags instead of needing a real authenticated
 /// remote.
 ///
@@ -50,7 +50,12 @@ pub fn make_credentials_callback(
 ///    username because GitHub treats it as a magic PAT username; GitLab
 ///    and Codeberg accept any non-empty username.
 /// 2. SSH agent if the remote wants a key (`git@host:repo.git` style).
-/// 3. libgit2's default (anonymous HTTPS for public remotes, etc.).
+/// 3. Otherwise an error, so the request fails. libgit2 only asks once a
+///    remote has challenged (a public HTTPS remote never does), and
+///    `Cred::default` would answer that challenge with the OS account:
+///    on Windows that is NTLM or Negotiate with the logged-in user's
+///    credentials, sent to whichever host `.git/config` names, which the
+///    renderer can set.
 pub fn select_credentials(
     allowed: git2::CredentialType,
     username_from_url: Option<&str>,
@@ -68,11 +73,16 @@ pub fn select_credentials(
         // stored-key flow.
         return git2::Cred::ssh_key_from_agent(username_from_url.unwrap_or("git"));
     }
-    git2::Cred::default()
+    Err(git2::Error::new(
+        git2::ErrorCode::Auth,
+        git2::ErrorClass::Callback,
+        "the remote asked for authentication and no token is stored for it",
+    ))
 }
 
 #[cfg(test)]
 mod tests {
+    use super::super::map_remote_error;
     use super::*;
     /// portable.
     fn cred_has(cred: &git2::Cred, kind: git2::CredentialType) -> bool {
@@ -100,17 +110,17 @@ mod tests {
         .expect("userpass cred");
         assert!(cred_has(&cred, git2::CredentialType::USER_PASS_PLAINTEXT));
 
-        // Same callback called a second time with no token in scope —
-        // confirms the closure captures and reuses the token via the
-        // FnMut closure trait.
+        // A callback built without a token has nothing to offer the same
+        // challenge.
         let mut cb_no_token = make_credentials_callback(None);
-        let cred = cb_no_token(
+        let err = cb_no_token(
             "https://example.com/repo.git",
             None,
             git2::CredentialType::USER_PASS_PLAINTEXT,
         )
-        .expect("default cred");
-        assert!(cred_has(&cred, git2::CredentialType::DEFAULT));
+        .err()
+        .expect("an error rather than a credential");
+        assert_eq!(err.class(), git2::ErrorClass::Callback);
     }
 
     /// The token goes to the host it was entered for and nowhere else: not
@@ -129,12 +139,8 @@ mod tests {
             "example.com",
         ] {
             let mut cb = make_credentials_callback(bound("example.com"));
-            let cred = cb(url, None, git2::CredentialType::USER_PASS_PLAINTEXT).unwrap();
-            assert!(cred_has(&cred, git2::CredentialType::DEFAULT), "{url}");
-            assert!(
-                !cred_has(&cred, git2::CredentialType::USER_PASS_PLAINTEXT),
-                "{url}"
-            );
+            let result = cb(url, None, git2::CredentialType::USER_PASS_PLAINTEXT);
+            assert!(result.is_err(), "{url}");
         }
         // The host is matched without regard to case, and with its port.
         for (host, url) in [
@@ -151,13 +157,12 @@ mod tests {
         // A token bound to no host (entered before a remote existed) is
         // offered to no one.
         let mut cb = make_credentials_callback(bound(""));
-        let cred = cb(
+        let result = cb(
             "https://example.com/repo.git",
             None,
             git2::CredentialType::USER_PASS_PLAINTEXT,
-        )
-        .unwrap();
-        assert!(cred_has(&cred, git2::CredentialType::DEFAULT));
+        );
+        assert!(result.is_err());
     }
 
     #[test]
@@ -193,23 +198,29 @@ mod tests {
         assert!(cred_has(&cred, git2::CredentialType::USER_PASS_PLAINTEXT));
     }
 
+    /// An HTTPS challenge with no token to answer it fails, and never falls
+    /// back to the OS account's credentials: `Cred::default` would send those
+    /// to whatever host the remote URL names. The error is one
+    /// `map_remote_error` reports as an authentication failure.
     #[test]
-    fn select_credentials_falls_through_to_default_when_no_token_for_https() {
-        // Remote will accept userpass but we have nothing to give. With
-        // only USER_PASS_PLAINTEXT advertised, we end up at the libgit2
-        // default cred, which is what unauthenticated HTTPS uses.
-        let cred = select_credentials(git2::CredentialType::USER_PASS_PLAINTEXT, None, None)
-            .expect("default cred");
-        assert!(cred_has(&cred, git2::CredentialType::DEFAULT));
+    fn select_credentials_fails_when_https_is_challenged_without_a_token() {
+        let err = select_credentials(git2::CredentialType::USER_PASS_PLAINTEXT, None, None)
+            .err()
+            .expect("an error rather than a credential");
+        assert_eq!(err.class(), git2::ErrorClass::Callback);
+        assert!(matches!(
+            map_remote_error(err),
+            crate::sync::SyncError::AuthFailed(_)
+        ));
     }
 
     #[test]
-    fn select_credentials_returns_default_when_no_supported_methods_are_allowed() {
-        // Remote advertises something we don't handle (e.g. NTLM). Falls
-        // through to libgit2's default credential.
-        let cred =
-            select_credentials(git2::CredentialType::USERNAME, None, None).expect("default cred");
-        assert!(cred_has(&cred, git2::CredentialType::DEFAULT));
+    fn select_credentials_fails_when_no_supported_method_is_allowed() {
+        // Remote advertises something we don't handle (e.g. NTLM alone).
+        let err = select_credentials(git2::CredentialType::USERNAME, None, None)
+            .err()
+            .expect("an error rather than a credential");
+        assert_eq!(err.class(), git2::ErrorClass::Callback);
     }
 
     // `ssh_key_from_agent` only builds the credential; the agent handshake
