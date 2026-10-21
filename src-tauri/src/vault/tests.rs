@@ -969,6 +969,51 @@ fn the_depth_cap_truncates_and_says_so() {
 }
 
 #[test]
+fn a_note_over_the_link_cap_is_reported_rather_than_fully_linked() {
+    let root = unique_tmp("link_cap");
+    let body: String = (0..super::note::MAX_LINKS_PER_NOTE + 1)
+        .map(|i| format!("[[Note{i}]]\n"))
+        .collect();
+    fs::write(root.join("Hub.md"), body).unwrap();
+    fs::write(root.join("Note0.md"), "").unwrap();
+    let vault = build(&root);
+    let snapshot = vault.snapshot();
+
+    // Every file is indexed; the reason names the cap that cut the links.
+    assert_eq!(snapshot.files.len(), 2);
+    assert!(snapshot.status.truncated);
+    assert_eq!(snapshot.status.reason, Some("linkLimit"));
+    assert_eq!(snapshot.status.limit, Some(super::note::MAX_LINKS_PER_NOTE));
+    fs::remove_dir_all(&root).unwrap();
+}
+
+#[test]
+fn more_unresolved_links_than_the_graph_lists_are_reported() {
+    let root = unique_tmp("unresolved_cap");
+    // Each note stays under its own link cap, so only the graph's list of
+    // links to missing notes overflows.
+    let per_note = 1_000;
+    let notes = super::graph::MAX_UNRESOLVED_LINKS / per_note + 1;
+    for n in 0..notes {
+        let body: String = (0..per_note)
+            .map(|i| format!("[[Missing{n}-{i}]]\n"))
+            .collect();
+        fs::write(root.join(format!("Hub{n}.md")), body).unwrap();
+    }
+    let vault = build(&root);
+    let snapshot = vault.snapshot();
+
+    assert_eq!(snapshot.files.len(), notes);
+    assert!(snapshot.status.truncated);
+    assert_eq!(snapshot.status.reason, Some("unresolvedLimit"));
+    assert_eq!(
+        snapshot.status.limit,
+        Some(super::graph::MAX_UNRESOLVED_LINKS)
+    );
+    fs::remove_dir_all(&root).unwrap();
+}
+
+#[test]
 fn building_a_vault_over_a_file_is_an_error() {
     let root = fixture_vault("not_a_dir");
     let result = Vault::build(&root.join("Index.md"));
