@@ -388,8 +388,6 @@ pub fn run() {
             #[cfg(desktop)]
             sync::commands::sync_init_repo,
             #[cfg(desktop)]
-            sync::commands::sync_clone_remote,
-            #[cfg(desktop)]
             sync::commands::sync_set_origin,
             #[cfg(desktop)]
             sync::commands::sync_commit_config,

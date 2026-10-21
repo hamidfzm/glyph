@@ -229,6 +229,64 @@ fn sync_fast_forwards_when_remote_advanced() {
     assert!(other.join("b.md").exists());
 }
 
+/// A remote can replace a symlink entry with a directory of the same name
+/// between two syncs. The second fast-forward has to unlink the symlink before
+/// it writes the files below that name; checked out with the branch already
+/// moved, libgit2 sees nothing to delete and writes them through the link.
+#[cfg(unix)]
+#[test]
+fn sync_fast_forward_replaces_a_symlink_entry_instead_of_writing_through_it() {
+    let f = Fixture::new();
+    let outside = f._tmp.path().join("outside");
+    fs::create_dir_all(&outside).unwrap();
+    let remote = Repository::open_bare(&f.remote).unwrap();
+    let branch = format!("refs/heads/{}", crate::sync::DEFAULT_REMOTE_BRANCH);
+    let signature = git2::Signature::now("Remote User", "remote@example.com").unwrap();
+
+    // Commit 1: `link` is a symlink entry pointing outside the workspace.
+    let target = remote.blob(outside.to_str().unwrap().as_bytes()).unwrap();
+    let mut tree = remote.treebuilder(None).unwrap();
+    tree.insert("link", target, 0o120000).unwrap();
+    let tree = remote.find_tree(tree.write().unwrap()).unwrap();
+    let first = remote
+        .commit(Some(&branch), &signature, &signature, "link", &tree, &[])
+        .unwrap();
+
+    f.backend().sync(None).unwrap();
+    assert!(fs::symlink_metadata(f.workspace.join("link"))
+        .unwrap()
+        .file_type()
+        .is_symlink());
+
+    // Commit 2: a directory of the same name holding a file.
+    let planted = remote.blob(b"owned").unwrap();
+    let mut dir = remote.treebuilder(None).unwrap();
+    dir.insert("planted.txt", planted, 0o100644).unwrap();
+    let dir = dir.write().unwrap();
+    let mut tree = remote.treebuilder(None).unwrap();
+    tree.insert("link", dir, 0o040000).unwrap();
+    let tree = remote.find_tree(tree.write().unwrap()).unwrap();
+    let first = remote.find_commit(first).unwrap();
+    remote
+        .commit(
+            Some(&branch),
+            &signature,
+            &signature,
+            "dir",
+            &tree,
+            &[&first],
+        )
+        .unwrap();
+
+    f.backend().sync(None).unwrap();
+
+    assert_eq!(fs::read_dir(&outside).unwrap().count(), 0);
+    assert!(fs::symlink_metadata(f.workspace.join("link"))
+        .unwrap()
+        .is_dir());
+    assert!(f.workspace.join("link").join("planted.txt").is_file());
+}
+
 #[test]
 fn sync_merges_when_local_and_remote_have_diverged() {
     // Seed a shared base, then let each copy commit a *different* file

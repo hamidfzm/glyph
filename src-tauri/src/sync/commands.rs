@@ -140,19 +140,6 @@ pub async fn sync_init_repo(
     ops::init_repo(workspace_path, default_branch, remote_url).await
 }
 
-#[tauri::command]
-pub async fn sync_clone_remote(
-    workspace_path: String,
-    remote_url: String,
-    token: Option<String>,
-    grants: State<'_, GrantRegistry>,
-) -> Result<(), SyncError> {
-    // The clone lands INSIDE the workspace path, so the same grant applies.
-    ensure_workspace(&grants, &workspace_path)?;
-    ops::validate_remote_url(&remote_url)?;
-    ops::clone_remote(workspace_path, remote_url, token).await
-}
-
 /// Write `[remote "origin"] url = <remote_url>` into the workspace's
 /// `.git/config`. The modal's Save flow calls this when the repo
 /// already exists so libgit2's fetch/push uses Glyph's configured URL
@@ -524,27 +511,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn sync_clone_remote_wrapper_refuses_a_local_path_remote() {
-        // libgit2 clones local paths happily; the wrapper is where a renderer
-        // naming an arbitrary local repository is stopped. The clone itself is
-        // covered at the ops layer against the same local fixture.
-        let ws = Workspace::new();
-        let dest = ws.tmp.path().join("clone-via-wrapper");
-        ws.grant_dir(&dest);
-
-        let result = sync_clone_remote(
-            dest.to_string_lossy().into(),
-            ws.remote_path.clone(),
-            None,
-            ws.grants(),
-        )
-        .await;
-
-        assert!(matches!(result, Err(SyncError::InvalidRemoteUrl)));
-        assert!(!dest.join(".git").exists());
-    }
-
-    #[tokio::test]
     async fn sync_init_repo_and_set_origin_wrappers_refuse_a_local_path_remote() {
         let ws = Workspace::new();
 
@@ -728,7 +694,6 @@ mod tests {
                 sync_clear_token,
                 sync_has_token,
                 sync_init_repo,
-                sync_clone_remote,
                 sync_set_origin,
                 sync_commit_config,
                 sync_status,
@@ -776,19 +741,6 @@ mod tests {
         let response = get_ipc_response(webview, ipc_request(cmd, args))
             .unwrap_or_else(|e| panic!("ipc call `{cmd}` failed: {e}"));
         response.deserialize().expect("response deserialises")
-    }
-
-    /// Send `cmd` over IPC and return the rendered error payload; panics on
-    /// `Ok` so a gate that stopped refusing shows up as a test failure.
-    fn invoke_ipc_err(
-        webview: &tauri::WebviewWindow<tauri::test::MockRuntime>,
-        cmd: &str,
-        args: serde_json::Value,
-    ) -> String {
-        match get_ipc_response(webview, ipc_request(cmd, args)) {
-            Ok(_) => panic!("ipc call `{cmd}` unexpectedly succeeded"),
-            Err(e) => e.to_string(),
-        }
     }
 
     #[test]
@@ -920,23 +872,6 @@ mod tests {
         let repo = git2::Repository::open(&ws.workspace_path).unwrap();
         let remote = repo.find_remote("origin").unwrap();
         assert_eq!(remote.url().unwrap(), "https://example.com/ipc-set.git");
-
-        // sync_clone_remote refuses the local fixture path at the IPC boundary
-        // (a successful clone is covered at the ops layer).
-        let dest = ws.tmp.path().join("ipc-clone");
-        std::fs::create_dir_all(&dest).unwrap();
-        app.state::<GrantRegistry>().grant_workspace(&dest).unwrap();
-        let err = invoke_ipc_err(
-            &webview,
-            "sync_clone_remote",
-            serde_json::json!({
-                "workspacePath": dest.to_string_lossy(),
-                "remoteUrl": ws.remote_path,
-                "token": null,
-            }),
-        );
-        assert!(err.contains("invalid-remote-url"), "{err}");
-        assert!(!dest.join(".git").exists());
 
         // sync_has_token, then sync_clear_token flips it back to false.
         let has: bool = invoke_ipc(
