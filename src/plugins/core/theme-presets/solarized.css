@@ -1,0 +1,57 @@
+/* Solarized, on Ethan Schoonover's light (base3) and dark (base03) grounds. */
+
+:root {
+  --color-surface: #fdf6e3;
+  --color-surface-secondary: #eee8d5;
+  --color-surface-tertiary: #e4ddc8;
+  --glyph-canvas-group-bg: rgba(238, 232, 213, 0.6);
+  --glyph-canvas-selection: rgba(38, 139, 210, 0.45);
+  --color-text-primary: #586e75;
+  --color-text-secondary: #657b83;
+  --color-text-tertiary: #93a1a1;
+  --color-border: #d9d2bd;
+  --color-accent: #268bd2;
+  --color-accent-hover: #1f73ad;
+  --color-banner-bg: #e3e9e1;
+  --color-alert-note: #268bd2;
+  --color-alert-tip: #859900;
+  --color-alert-important: #6c71c4;
+  --color-alert-warning: #b58900;
+  --color-alert-caution: #dc322f;
+  --color-error: #dc322f;
+  --color-error-bg: rgba(220, 50, 47, 0.08);
+  --glyph-material-bg: rgba(238, 232, 213, 0.85);
+  --glyph-material-edge: rgba(255, 255, 255, 0.35);
+}
+
+:root.dark {
+  --color-surface: #002b36;
+  --color-surface-secondary: #073642;
+  --color-surface-tertiary: #0e4150;
+  --glyph-canvas-group-bg: rgba(7, 54, 66, 0.6);
+  --glyph-canvas-selection: rgba(38, 139, 210, 0.45);
+  --color-text-primary: #93a1a1;
+  --color-text-secondary: #839496;
+  --color-text-tertiary: #586e75;
+  --color-border: #1a4a56;
+  --color-accent: #268bd2;
+  --color-accent-hover: #2180c4;
+  --color-banner-bg: #0a3a4d;
+  --color-alert-note: #268bd2;
+  --color-alert-tip: #859900;
+  --color-alert-important: #6c71c4;
+  --color-alert-warning: #b58900;
+  --color-alert-caution: #dc322f;
+  --color-error: #dc322f;
+  --color-error-bg: rgba(220, 50, 47, 0.14);
+  --glyph-material-bg: rgba(7, 54, 66, 0.85);
+  --glyph-material-edge: rgba(255, 255, 255, 0.08);
+}
+
+:root[data-platform="macos"] {
+  --glyph-sidebar-bg: rgba(238, 232, 213, 0.8);
+}
+
+:root.dark[data-platform="macos"] {
+  --glyph-sidebar-bg: rgba(7, 54, 66, 0.8);
+}

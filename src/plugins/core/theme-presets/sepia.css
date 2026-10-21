@@ -1,0 +1,57 @@
+/* Sepia: warm paper and brown ink for long reading. */
+
+:root {
+  --color-surface: #f4ecd8;
+  --color-surface-secondary: #ebe1c9;
+  --color-surface-tertiary: #e0d4b8;
+  --glyph-canvas-group-bg: rgba(235, 225, 201, 0.6);
+  --glyph-canvas-selection: rgba(156, 74, 26, 0.45);
+  --color-text-primary: #433422;
+  --color-text-secondary: #6f5c45;
+  --color-text-tertiary: #a08f74;
+  --color-border: #d6c8a8;
+  --color-accent: #9c4a1a;
+  --color-accent-hover: #833c12;
+  --color-banner-bg: #ecd9bf;
+  --color-alert-note: #1f5f99;
+  --color-alert-tip: #3d6b1f;
+  --color-alert-important: #7a3f8f;
+  --color-alert-warning: #8a5a00;
+  --color-alert-caution: #b0301c;
+  --color-error: #b0301c;
+  --color-error-bg: rgba(176, 48, 28, 0.08);
+  --glyph-material-bg: rgba(235, 225, 201, 0.85);
+  --glyph-material-edge: rgba(255, 250, 235, 0.35);
+}
+
+:root.dark {
+  --color-surface: #221c15;
+  --color-surface-secondary: #2d261d;
+  --color-surface-tertiary: #3a3126;
+  --glyph-canvas-group-bg: rgba(45, 38, 29, 0.6);
+  --glyph-canvas-selection: rgba(201, 120, 58, 0.45);
+  --color-text-primary: #e8dcc4;
+  --color-text-secondary: #b3a48a;
+  --color-text-tertiary: #7a6d5a;
+  --color-border: #4a3f31;
+  --color-accent: #c9783a;
+  --color-accent-hover: #b3672d;
+  --color-banner-bg: #3d2c1d;
+  --color-alert-note: #6aa8e0;
+  --color-alert-tip: #8fbf5a;
+  --color-alert-important: #c79be0;
+  --color-alert-warning: #e0b04a;
+  --color-alert-caution: #f07a62;
+  --color-error: #f07a62;
+  --color-error-bg: rgba(240, 122, 98, 0.14);
+  --glyph-material-bg: rgba(45, 38, 29, 0.85);
+  --glyph-material-edge: rgba(255, 240, 220, 0.08);
+}
+
+:root[data-platform="macos"] {
+  --glyph-sidebar-bg: rgba(235, 225, 201, 0.8);
+}
+
+:root.dark[data-platform="macos"] {
+  --glyph-sidebar-bg: rgba(45, 38, 29, 0.8);
+}

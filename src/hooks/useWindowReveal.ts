@@ -1,5 +1,6 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
+import { usePluginsOptional } from "@/contexts/PluginsContext";
 import { useSettings } from "@/hooks/useSettings";
 import { getCliExportRequest } from "@/lib/cliExport";
 import { getCliServeRequest } from "@/lib/cliServe";
@@ -10,14 +11,18 @@ import { getCliServeRequest } from "@/lib/cliServe";
  * The window is created hidden (`visible: false` in tauri.conf.json) so the
  * user never sees the blank white native window before the webview paints, nor
  * the geometry jump from the window-state plugin restoring size/position. We
- * wait until the persisted settings (and therefore the theme) are loaded, let
- * the browser paint one themed frame, then show and focus the window.
+ * wait until the persisted settings and the plugins (a theme preset or another
+ * plugin stylesheet restyles the app) are loaded, let the browser paint one
+ * themed frame, then show and focus the window.
  *
- * A timeout acts as a safety net so the window is never left hidden if anything
- * above stalls.
+ * A timeout from the settings load acts as a safety net so the window is never
+ * left hidden if anything above stalls.
  */
 export function useWindowReveal() {
   const { loaded } = useSettings();
+  const pluginsLoaded = usePluginsOptional()?.initialLoadDone ?? true;
+  // Survives the effect re-running when the plugins finish after the timeout.
+  const revealedRef = useRef(false);
 
   useEffect(() => {
     if (!loaded) return;
@@ -25,10 +30,9 @@ export function useWindowReveal() {
     let cancelled = false;
     let raf = 0;
     let timer = 0;
-    let revealed = false;
     const reveal = () => {
-      if (revealed || cancelled) return;
-      revealed = true;
+      if (revealedRef.current || cancelled) return;
+      revealedRef.current = true;
       try {
         const win = getCurrentWindow();
         void win
@@ -48,7 +52,7 @@ export function useWindowReveal() {
     void Promise.all([getCliExportRequest(), getCliServeRequest()]).then(
       ([cliExport, cliServe]) => {
         if (cliExport || cliServe || cancelled) return;
-        raf = requestAnimationFrame(() => requestAnimationFrame(reveal));
+        if (pluginsLoaded) raf = requestAnimationFrame(() => requestAnimationFrame(reveal));
         timer = window.setTimeout(reveal, 1000);
       },
     );
@@ -58,5 +62,5 @@ export function useWindowReveal() {
       cancelAnimationFrame(raf);
       window.clearTimeout(timer);
     };
-  }, [loaded]);
+  }, [loaded, pluginsLoaded]);
 }

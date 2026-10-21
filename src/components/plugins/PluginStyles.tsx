@@ -15,7 +15,8 @@ export function PluginStyles() {
   return (
     <>
       {styles.map((style, index) => (
-        // Entries are append-only per activation; index keys are stable enough.
+        // A sheet removed mid-list shifts the rest, and React rewrites each
+        // reused element's text, so index keys still yield the right sheets.
         // biome-ignore lint/suspicious/noArrayIndexKey: no stable id on CSS text
         <style data-plugin-style key={index}>
           {style.css}

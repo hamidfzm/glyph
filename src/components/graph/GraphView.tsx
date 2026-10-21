@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { FitIcon } from "@/components/icons/FitIcon";
+import { usePluginsOptional } from "@/contexts/PluginsContext";
 import { useWorkspaceRoot } from "@/contexts/TabsContext";
 import { useElementSize } from "@/hooks/useElementSize";
 import { useGraphCamera } from "@/hooks/useGraphCamera";
@@ -9,6 +10,7 @@ import { useGraphPointer } from "@/hooks/useGraphPointer";
 import { useGraphSimulation } from "@/hooks/useGraphSimulation";
 import { useGraphZoomCommands } from "@/hooks/useGraphZoomCommands";
 import { useIsDarkMode } from "@/hooks/useIsDarkMode";
+import { useRegistryEntries } from "@/hooks/usePluginRegistry";
 import { type Camera, fitCameraToNodes } from "@/lib/graphCanvas";
 import { drawGraph, readGraphTheme } from "@/lib/graphDraw";
 import { neighborIndex } from "@/lib/graphNeighbors";
@@ -45,8 +47,12 @@ export function GraphView({ graph, onOpenFile }: GraphViewProps) {
   const { layout, version, reheat } = useGraphSimulation(graph, { persistKey });
   const camera = useGraphCamera(persistKey);
   const isDark = useIsDarkMode();
-  // biome-ignore lint/correctness/useExhaustiveDependencies: re-read CSS variables when the theme flips
-  const theme = useMemo(() => readGraphTheme(document.documentElement), [isDark]);
+  // Theme presets and other plugin stylesheets restyle the app too. Read after
+  // commit, once a new sheet is in the document.
+  const pluginStyles = useRegistryEntries(usePluginsOptional()?.styles);
+  const [theme, setTheme] = useState(() => readGraphTheme(document.documentElement));
+  // biome-ignore lint/correctness/useExhaustiveDependencies: re-read CSS variables when the theme flips or a stylesheet changes
+  useLayoutEffect(() => setTheme(readGraphTheme(document.documentElement)), [isDark, pluginStyles]);
 
   // Auto-fit follows the live layout until the user takes manual control.
   // Only honour a stored auto-fit when the layout actually resumed the shape it

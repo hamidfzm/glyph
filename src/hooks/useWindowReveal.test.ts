@@ -24,8 +24,16 @@ vi.mock("@/lib/cliExport", () => ({ getCliExportRequest: getCliExportRequestMock
 const { getCliServeRequestMock } = vi.hoisted(() => ({ getCliServeRequestMock: vi.fn() }));
 vi.mock("@/lib/cliServe", () => ({ getCliServeRequest: getCliServeRequestMock }));
 
+// No provider (null) counts as plugins loaded; tests that gate on them set it.
+const { usePluginsMock } = vi.hoisted(() => ({ usePluginsMock: vi.fn() }));
+vi.mock("@/contexts/PluginsContext", () => ({ usePluginsOptional: usePluginsMock }));
+
 function setLoaded(loaded: boolean) {
   useSettingsMock.mockReturnValue({ loaded });
+}
+
+function setPluginsLoaded(initialLoadDone: boolean) {
+  usePluginsMock.mockReturnValue({ initialLoadDone });
 }
 
 describe("useWindowReveal", () => {
@@ -34,6 +42,7 @@ describe("useWindowReveal", () => {
     show.mockClear();
     setFocus.mockClear();
     setLoaded(false);
+    usePluginsMock.mockReturnValue(null);
     getCliExportRequestMock.mockResolvedValue(null);
     getCliServeRequestMock.mockResolvedValue(null);
   });
@@ -72,6 +81,36 @@ describe("useWindowReveal", () => {
     setLoaded(true);
     rerender();
     await vi.advanceTimersByTimeAsync(50);
+
+    expect(show).toHaveBeenCalledTimes(1);
+  });
+
+  it("waits for the plugins, whose stylesheets can restyle the app, before the painted frame", async () => {
+    setLoaded(true);
+    setPluginsLoaded(false);
+    const { rerender } = renderHook(() => useWindowReveal());
+
+    await vi.advanceTimersByTimeAsync(50);
+    expect(show).not.toHaveBeenCalled();
+
+    setPluginsLoaded(true);
+    rerender();
+    await vi.advanceTimersByTimeAsync(50);
+
+    expect(show).toHaveBeenCalledTimes(1);
+  });
+
+  it("reveals on the timeout when the plugins stall, and only once when they finish later", async () => {
+    setLoaded(true);
+    setPluginsLoaded(false);
+    const { rerender } = renderHook(() => useWindowReveal());
+
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(show).toHaveBeenCalledTimes(1);
+
+    setPluginsLoaded(true);
+    rerender();
+    await vi.advanceTimersByTimeAsync(2000);
 
     expect(show).toHaveBeenCalledTimes(1);
   });
