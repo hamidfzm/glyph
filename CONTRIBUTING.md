@@ -351,6 +351,7 @@ Rules:
 - **Keep the `# vX.Y.Z` comment accurate.** Dependabot parses it to know the current version, and it is the only readable signal of what a SHA is.
 - **Local composite actions** (`./.github/actions/…`) are referenced by path and are not pinned; they live in this repo and are reviewed with the rest of the diff.
 - **Every checkout drops the token** (`persist-credentials: false`). The jobs build the whole npm and cargo dependency tree, whose lifecycle and build scripts would otherwise find a push credential in `.git/config`. A step that pushes gets its token through `env`.
+- **A reusable workflow is handed the secrets it names, never `secrets: inherit`.** `ci.yml` runs on every pull request, and a pull request from a branch of this repo runs the workflow files it edits, so an inherited secret set would let one read the release tokens without merging. The called workflow declares what it takes under `on.workflow_call.secrets`, and the caller passes exactly that.
 - **Updates come through Dependabot**, weekly, under `chore(ci)`. Dependabot rewrites the SHA and the comment together. Review the upstream diff between the old and new tag (`https://github.com/<owner>/<repo>/compare/<old>...<new>`) before merging, especially for actions used by `release.yml`, which holds publishing secrets.
 - **Some actions need the tool name spelled out.** `taiki-e/install-action` is normally used as `@cargo-llvm-cov`, where the tag name selects the tool; pinned by SHA that shorthand is gone, so pass `with: { tool: … }` explicitly.
 
