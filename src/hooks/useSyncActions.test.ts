@@ -185,33 +185,6 @@ describe("useSyncActions commands", () => {
     expect(invoke).not.toHaveBeenCalled();
   });
 
-  it("cloneRemote() forwards to sync_clone_remote and is a no-op without a workspace", async () => {
-    routeInvoke({
-      sync_get_config: () => null,
-      sync_default_author: () => ({ name: null, email: null }),
-      sync_repo_present: () => true,
-      sync_clone_remote: () => null,
-    });
-    const { result } = renderHook(() => useSyncConfig("/w"));
-    await waitFor(() => expect(result.current.loading).toBe(false));
-
-    await act(async () => {
-      await result.current.cloneRemote("https://x.com/r.git", "tok");
-    });
-    expect(invoke).toHaveBeenCalledWith("sync_clone_remote", {
-      workspacePath: "/w",
-      remoteUrl: "https://x.com/r.git",
-      token: "tok",
-    });
-
-    vi.mocked(invoke).mockClear();
-    const { result: noWs } = renderHook(() => useSyncConfig(null));
-    await act(async () => {
-      await noWs.current.cloneRemote("https://x.com/r.git", null);
-    });
-    expect(invoke).not.toHaveBeenCalled();
-  });
-
   it("remove() / initRepo() are no-ops once the workspace path has cleared", async () => {
     // After the workspace path flips to null mid-session, the cached
     // imperative actions still hold their old workspacePath in closure

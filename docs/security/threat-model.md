@@ -147,7 +147,7 @@ looked up (see "Network paths" below).
 | `workspace_get_last_file`, `workspace_set_last_file` | granted workspace. `.glyph/state.json`, `.glyph/config.json` (the Cloud Sync settings and the plugin settings below), and the `.gitignore` written beside them are read and written only when neither `.glyph` nor the file itself is a symbolic link, a dangling one included: a cloned workspace can ship either one pointing outside itself. A JSON object behind such a link would parse as a config or a state, and so be replaced, unless a key those formats define holds a value of another type (unknown keys are ignored, and a file that fails to parse is left as it is). `.glyph/site.json` (the Website tab) is not one of these: it is read and written through `read_file` and `write_file`, so the grant check decides |
 | `workspace_get_plugin_settings`, `workspace_set_plugin_settings` | granted workspace, and a well-formed plugin id (it becomes a key in the committed `.glyph/config.json`). The settings are an opaque JSON object capped at 64 KiB per plugin; nothing in the backend treats a value as a path. The symbolic-link refusal in the row above applies |
 | `create_workspace_file` | `root` must be a granted workspace. The path is workspace-relative (`..`, a drive letter, or a backslash is refused) and must canonicalize strictly inside that workspace, so a symlink resolving outside it, or into another granted workspace, is refused. A hidden name anywhere in the resolved path is refused too, which keeps `.git/hooks` and `.glyph` out of reach. The file is opened with `create_new`: one that already exists is reported back and never written to |
-| `sync_*` | granted workspace (`sync_clone_remote` clones into the workspace path itself); `sync_init_repo`, `sync_clone_remote`, and `sync_set_origin` accept only `https://` without credentials, `ssh://`, or scp-like `user@host:path` remotes, since libgit2 would also take a local path or `file://` (pulling any local repository into a granted workspace) and cleartext `http://`/`git://`. The HTTPS token is bound, when `sync_set_token` stores it, to the authority (host, and port if named) of the remote the workspace is configured with at that moment, and the credential callback offers it to that authority alone: `sync_set_origin`, and `.git/config` with it, can name any `https://` host, and a token sent wherever that points would reach whoever runs it. A token entered before a remote is configured binds to the first `https://` remote it is used against, and a token stored by an earlier build binds the same way at its first use. Changing the remote to another host means entering the token again. The binding is kept in the keychain beside the token, never in a file the renderer writes |
+| `sync_*` | granted workspace; `sync_init_repo` and `sync_set_origin` accept only `https://` without credentials, `ssh://`, or scp-like `user@host:path` remotes, since libgit2 would also take a local path or `file://` (pulling any local repository into a granted workspace) and cleartext `http://`/`git://`. The HTTPS token is bound, when `sync_set_token` stores it, to the authority (host, and port if named) of the remote the workspace is configured with at that moment, and the credential callback offers it to that authority alone: `sync_set_origin`, and `.git/config` with it, can name any `https://` host, and a token sent wherever that points would reach whoever runs it. A token entered before a remote is configured binds to the first `https://` remote it is used against, and a token stored by an earlier build binds the same way at its first use. Changing the remote to another host means entering the token again. The binding is kept in the keychain beside the token, never in a file the renderer writes. A challenge the bound token does not answer fails the fetch or push: the callback never falls back to libgit2's default credential, which on Windows answers with the signed-in account's own credentials (NTLM or Negotiate) to whatever host the remote names. SSH remotes ask the agent as before. `sync_init_repo` also refuses a default branch that is not a valid reference name, since the name is written into `.git/HEAD` as given |
 | `install_plugin` | consumes the pending picked folder; no path argument |
 | `install_plugin_from_registry` | takes a plugin id and nothing else. The backend fetches the registry index from its fixed URL, finds the entry, downloads the package the entry names (the marketplace hosts alone, a redirect included, 50 MiB at most), and verifies the sha256 and the manifest id before anything is written, so a package that lies about itself never lands on another installed plugin |
 | `finish_cli_export` | ends the process, so it is refused unless a CLI export is in progress: the command is registered in every session, and a renderer could otherwise end an interactive one |
@@ -350,11 +350,11 @@ host it likes. libgit2 has no switch that forbids it.
 - **Cloud Sync judges the repository first.** On Windows every `sync_*`
   command that hands the workspace to libgit2 first reads those files as text
   and passes each path they name to the registry's network-path check, which
-  looks nothing up. That is every sync command but the config and token ones
-  and `sync_clone_remote`, whose destination must be empty, and it includes
-  the two that run unprompted when a workspace opens (`sync_repo_present`,
-  `sync_default_author`). A repository naming a network or device path is
-  refused with an error, unless a grant already sits on that share.
+  looks nothing up. That is every sync command but the config and token ones,
+  and it includes the two that run unprompted when a workspace opens
+  (`sync_repo_present`, `sync_default_author`). A repository naming a network
+  or device path is refused with an error, unless a grant already sits on that
+  share.
 - **Submodules get the same check.** Status, staging and checkout open each
   submodule, so `sync_status`, `sync_run` and `sync_commit_config` also judge
   `.gitmodules` and the `.git` of every submodule libgit2 lists, and of
@@ -362,6 +362,14 @@ host it likes. libgit2 has no switch that forbids it.
   merely sits in the working tree, in none of the places libgit2 learns
   submodules from, is not judged: status does not open it, and staging fails
   on it before opening it.
+- **A pull removes before it writes.** A fast-forward checks out the
+  upstream tree while the branch still names the old commit and moves the
+  branch afterwards. libgit2 decides what to delete by diffing the two, so a
+  symlink entry that the new commit replaces with a directory is unlinked
+  before the files below that name are written. With the branch moved first
+  there is nothing to diff, the link stays, and those files land wherever it
+  points, which the remote chose when it committed the link. A merge checks
+  out against the old tree by construction.
 - **The config is judged as text, not parsed.** A value that begins with two
   path separators is refused under any key, once quotes are dropped and an
   escaped backslash is read as one. How libgit2 joins a value continued over

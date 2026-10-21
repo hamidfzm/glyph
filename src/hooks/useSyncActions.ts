@@ -2,7 +2,6 @@ import { type Dispatch, type SetStateAction, useCallback } from "react";
 import type { StatusReport, SyncResult, WorkspaceSyncConfig } from "@/lib/sync";
 import {
   clearSyncToken as clearSyncTokenCommand,
-  cloneSyncRemote,
   commitSyncConfig,
   getSyncStatus,
   initSyncRepo,
@@ -79,14 +78,6 @@ export function useSyncActions({
     [guarded, workspacePath, setRepoPresent],
   );
 
-  const cloneRemote = useCallback(
-    async (remoteUrl: string, token: string | null) => {
-      if (!workspacePath) return;
-      await guarded(() => cloneSyncRemote(workspacePath, remoteUrl, token));
-    },
-    [guarded, workspacePath],
-  );
-
   const setOrigin = useCallback(
     async (remoteUrl: string) => {
       if (!workspacePath) return;
@@ -150,7 +141,6 @@ export function useSyncActions({
     setToken,
     clearToken,
     initRepo,
-    cloneRemote,
     setOrigin,
     commitConfig,
     runSync,

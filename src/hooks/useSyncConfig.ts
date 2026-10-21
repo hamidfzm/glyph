@@ -3,8 +3,8 @@
 // Components shouldn't talk to the Tauri commands directly — they go
 // through this hook, which:
 // - lazily loads the stored config when the workspace path changes
-// - exposes `save`, `remove`, `setToken`, `clearToken`, `init`, `clone`,
-//   `runSync`, `refreshStatus` as imperative actions
+// - exposes `save`, `remove`, `setToken`, `clearToken`, `init`, `runSync`,
+//   `refreshStatus` as imperative actions
 // - tracks loading / error state so the form can render busy and
 //   surface failures inline
 //
@@ -50,7 +50,6 @@ export interface UseSyncConfigActions {
   setToken: (token: string) => Promise<void>;
   clearToken: () => Promise<void>;
   initRepo: (defaultBranch: string | null, remoteUrl: string | null) => Promise<void>;
-  cloneRemote: (remoteUrl: string, token: string | null) => Promise<void>;
   setOrigin: (remoteUrl: string) => Promise<void>;
   commitConfig: () => Promise<boolean>;
   runSync: (message?: string | null) => Promise<SyncResult>;

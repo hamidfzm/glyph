@@ -76,26 +76,6 @@ pub async fn init_repo(
     .map_err(|e| SyncError::Backend(format!("task join error: {e}")))?
 }
 
-/// Clone `remote_url` into `workspace_path`. Destination must not exist
-/// yet (libgit2 rule). When `token` is provided it's used as HTTPS
-/// basic-auth.
-pub async fn clone_remote(
-    workspace_path: String,
-    remote_url: String,
-    token: Option<String>,
-) -> Result<(), SyncError> {
-    tauri::async_runtime::spawn_blocking(move || {
-        git::clone_repo(
-            &remote_url,
-            &PathBuf::from(&workspace_path),
-            token.as_deref(),
-        )
-        .map(|_| ())
-    })
-    .await
-    .map_err(|e| SyncError::Backend(format!("task join error: {e}")))?
-}
-
 /// Write the remote URL into `<workspace>/.git/config` under
 /// `[remote "origin"]`. The Save flow in the modal calls this so that
 /// when the user edits the Remote URL field on an existing repo, the
@@ -440,32 +420,6 @@ mod tests {
 
         // Already tracked → no second commit.
         assert!(!commit_config(&state, &ws.workspace_path).await.unwrap());
-    }
-
-    #[tokio::test]
-    async fn clone_remote_populates_a_fresh_workspace_from_the_remote() {
-        let ws = Workspace::new();
-        init_repo(
-            ws.workspace_path.clone(),
-            None,
-            Some(ws.remote_path.clone()),
-        )
-        .await
-        .unwrap();
-        fs::write(
-            std::path::Path::new(&ws.workspace_path).join("seed.md"),
-            "# seed\n",
-        )
-        .unwrap();
-        let state = SyncState::new();
-        set_config(ws.config()).unwrap();
-        run_sync(&state, &ws.workspace_path, None).await.unwrap();
-
-        let dest = ws.tmp.path().join("clone-into-me");
-        clone_remote(dest.to_string_lossy().into(), ws.remote_path.clone(), None)
-            .await
-            .unwrap();
-        assert!(dest.join("seed.md").exists());
     }
 
     #[tokio::test]
