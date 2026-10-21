@@ -148,9 +148,27 @@ describe("scrubBreadcrumb", () => {
     expect(scrubBreadcrumb({ category: "xhr" })).toBeNull();
   });
 
+  it("drops DOM breadcrumbs, which name the clicked element by the document's own words", () => {
+    expect(scrubBreadcrumb({ category: "ui.click", message: "h2#quarterly-plan" })).toBeNull();
+    expect(scrubBreadcrumb({ category: "ui.input", message: "input[name=x]" })).toBeNull();
+  });
+
+  it("drops the raw arguments of a console breadcrumb", () => {
+    const result = scrubBreadcrumb({
+      category: "console",
+      message: "Failed to read directory /Users/jane/notes:",
+      data: {
+        arguments: ["Failed to read directory /Users/jane/notes:", "denied"],
+        logger: "console",
+      },
+    });
+    expect(result?.message).toBe("Failed to read directory [redacted-path]:");
+    expect(result?.data).toEqual({ logger: "console" });
+  });
+
   it("redacts paths in the message and url data", () => {
     const result = scrubBreadcrumb({
-      category: "ui.click",
+      category: "console",
       message: "opened /Users/jane/a.md",
       data: { url: "https://example.com/secret" },
     });
@@ -161,24 +179,24 @@ describe("scrubBreadcrumb", () => {
 
   it("redacts a relative document name in the message", () => {
     const result = scrubBreadcrumb({
-      category: "ui.click",
+      category: "console",
       message: "opened workflows/routing.md",
     });
     expect(result?.message).toBe("opened [redacted-path]");
   });
 
   it("keeps a plain breadcrumb as-is", () => {
-    const crumb: Breadcrumb = { category: "ui.click", message: "clicked button" };
+    const crumb: Breadcrumb = { category: "app", message: "opened settings" };
     expect(scrubBreadcrumb(crumb)).toEqual(crumb);
   });
 
   it("keeps a breadcrumb that has no message", () => {
-    const crumb: Breadcrumb = { category: "ui.click" };
-    expect(scrubBreadcrumb(crumb)).toEqual({ category: "ui.click" });
+    const crumb: Breadcrumb = { category: "app" };
+    expect(scrubBreadcrumb(crumb)).toEqual({ category: "app" });
   });
 
   it("leaves non-string url data untouched", () => {
-    const crumb: Breadcrumb = { category: "ui.click", data: { count: 3 } };
+    const crumb: Breadcrumb = { category: "app", data: { count: 3 } };
     expect(scrubBreadcrumb(crumb)?.data).toEqual({ count: 3 });
   });
 });
@@ -236,7 +254,7 @@ describe("scrubEvent", () => {
     const event = {
       breadcrumbs: [
         { category: "navigation", message: "/Users/jane" },
-        { category: "ui.click", message: "open /Users/jane/a.md" },
+        { category: "console", message: "open /Users/jane/a.md" },
       ],
     } as unknown as ErrorEvent;
 

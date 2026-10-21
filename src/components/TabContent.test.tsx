@@ -285,17 +285,34 @@ describe("TabContent", () => {
     expect(screen.getByTestId("lazy-split")).toBeInTheDocument();
   });
 
-  it("routes wikilink clicks through openFile", () => {
+  it("routes wikilink clicks to a workspace member through openFile", () => {
     const tab = makeFileTab("split");
     const openFile = vi.fn();
     const { getByTestId } = renderTabContent({
       activeTab: tab,
       activeTabId: tab.id,
       activeFile: tab.file,
+      workspaceFiles: ["/note.md"],
       openFile,
     });
     getByTestId("split-wikilink").click();
     expect(openFile).toHaveBeenCalledWith("/note.md");
+  });
+
+  // The path rides on a data attribute the sanitizer keeps, so raw HTML in a
+  // note can name any file the session holds a grant for.
+  it("ignores a wikilink to a path outside the workspace listing", () => {
+    const tab = makeFileTab("split");
+    const openFile = vi.fn();
+    const { getByTestId } = renderTabContent({
+      activeTab: tab,
+      activeTabId: tab.id,
+      activeFile: tab.file,
+      workspaceFiles: ["/other.md"],
+      openFile,
+    });
+    getByTestId("split-wikilink").click();
+    expect(openFile).not.toHaveBeenCalled();
   });
 
   it("renders the notebook viewer for an .ipynb tab in view mode", () => {

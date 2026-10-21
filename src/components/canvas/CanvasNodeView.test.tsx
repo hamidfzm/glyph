@@ -1,11 +1,13 @@
+import { ask } from "@tauri-apps/plugin-dialog";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { CanvasNode } from "@/lib/canvas/types";
 import { renderInWorkspace } from "@/test/renderInWorkspace";
 import { CanvasNodeView } from "./CanvasNodeView";
 
 vi.mock("@tauri-apps/plugin-opener", () => ({ openUrl: vi.fn(() => Promise.resolve()) }));
+vi.mock("@tauri-apps/plugin-dialog", () => ({ ask: vi.fn(() => Promise.resolve(true)) }));
 
 vi.mock("@tauri-apps/api/core", () => ({
   convertFileSrc: (path: string) => `asset://${path}`,
@@ -33,13 +35,35 @@ describe("CanvasNodeView", () => {
     expect(screen.getByText("hello")).toBeInTheDocument();
   });
 
-  it("renders a link node showing its url and opens it on click", () => {
+  it("renders a link node showing its url and opens it on click, behind the prompt", async () => {
     const node: CanvasNode = { ...base, type: "link", url: "https://glyph.dev" };
     render(<CanvasNodeView node={node} />);
     const url = screen.getByText("https://glyph.dev");
     expect(url).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button"));
-    expect(openUrl).toHaveBeenCalledWith("https://glyph.dev");
+    await waitFor(() => expect(openUrl).toHaveBeenCalledWith("https://glyph.dev"));
+    expect(ask).toHaveBeenCalled();
+  });
+
+  it("keeps a declined link closed", async () => {
+    vi.mocked(openUrl).mockClear();
+    vi.mocked(ask).mockResolvedValueOnce(false);
+    const node: CanvasNode = { ...base, type: "link", url: "https://glyph.dev" };
+    render(<CanvasNodeView node={node} />);
+    fireEvent.click(screen.getByRole("button"));
+    await waitFor(() => expect(ask).toHaveBeenCalled());
+    expect(openUrl).not.toHaveBeenCalled();
+  });
+
+  // A board file is document content: its link card may carry any string.
+  it("renders a link node with a scheme the opener does not take as text, without a title", () => {
+    vi.mocked(openUrl).mockClear();
+    const node: CanvasNode = { ...base, type: "link", url: "javascript:alert(1)" };
+    const { container } = render(<CanvasNodeView node={node} />);
+    expect(screen.queryByRole("button")).toBeNull();
+    expect(screen.getByText("javascript:alert(1)")).toBeInTheDocument();
+    expect(container.querySelector(".glyph-canvas-node-link")).not.toHaveAttribute("title");
+    expect(openUrl).not.toHaveBeenCalled();
   });
 
   it("renders an image for an image file node", async () => {

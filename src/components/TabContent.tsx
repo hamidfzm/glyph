@@ -55,16 +55,21 @@ export function TabContent({ searchOpen, onSearchClose }: TabContentProps) {
     [activeTabId, updateEditContent],
   );
 
-  // Wikilink and graph-node navigation: the target resolved against the
-  // window's workspace, so it opens as a regular document tab (activating the
-  // existing tab when the note is already open).
+  // Wikilink navigation: the target resolved against the window's workspace,
+  // so it opens as a regular document tab (activating the existing tab when
+  // the note is already open). A graph node names a file the index holds and
+  // opens through openFile directly.
   // TODO: cross-file heading scroll — `heading` is plumbed through but not yet
   // applied after the target file finishes loading.
+  // The target must be a workspace member: the path rides on a data attribute
+  // the sanitizer keeps, so raw HTML in a note can name any file (mirrors the
+  // gate on embeds and previews).
   const handleOpenWikilink = useCallback(
     (path: string, _heading?: string) => {
+      if (!workspaceFiles?.includes(path)) return;
       openFile(path);
     },
-    [openFile],
+    [openFile, workspaceFiles],
   );
 
   if (!activeTab) return null;
@@ -75,7 +80,7 @@ export function TabContent({ searchOpen, onSearchClose }: TabContentProps) {
     return (
       // Keyed by root so a workspace change remounts rather than swapping the
       // key underneath hooks that seed from it once.
-      <GraphView key={activeTab.root} graph={snapshot.graph} onOpenFile={handleOpenWikilink} />
+      <GraphView key={activeTab.root} graph={snapshot.graph} onOpenFile={openFile} />
     );
   }
 

@@ -1,4 +1,4 @@
-import { streamLines } from "@/lib/ai/stream";
+import { errorBody, streamLines } from "@/lib/ai/stream";
 import type { AIProvider, ChatMessage, ChatOptions } from "@/lib/ai/types";
 
 export class OllamaProvider implements AIProvider {
@@ -24,7 +24,7 @@ export class OllamaProvider implements AIProvider {
     });
 
     if (!response.ok) {
-      const err = await response.text();
+      const err = await errorBody(response);
       throw new Error(`Ollama error (${response.status}): ${err}`);
     }
 
