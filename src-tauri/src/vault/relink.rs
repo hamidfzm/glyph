@@ -523,6 +523,26 @@ mod tests {
     }
 
     #[test]
+    fn a_link_past_the_index_cap_still_follows_the_move() {
+        // The index keeps only a note's first links, so the moved note may be
+        // linked only among those it dropped; the note is read whole anyway.
+        let filler: String = (0..crate::vault::note::MAX_LINKS_PER_NOTE)
+            .map(|i| format!("[[Other{i}]]\n"))
+            .collect();
+        let root = workspace(
+            "past_cap",
+            &[
+                ("Notes/Travel.md", "# Travel"),
+                ("Index.md", &format!("{filler}[[Travel]]\n")),
+            ],
+        );
+        assert_eq!(
+            planned(&root, "Notes/Travel.md", "Notes/Trip.md"),
+            one("Index.md", &format!("{filler}[[Trip]]\n"))
+        );
+    }
+
+    #[test]
     fn a_same_named_note_elsewhere_keeps_its_links() {
         let root = workspace(
             "same_stem",

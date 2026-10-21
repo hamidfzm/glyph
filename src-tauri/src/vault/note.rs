@@ -461,10 +461,10 @@ mod tests {
         for (line, links) in &lines {
             let started = std::time::Instant::now();
             let found = scan(line, 0, usize::MAX);
+            let took = started.elapsed();
             assert!(
-                started.elapsed() < std::time::Duration::from_secs(2),
-                "a hostile line took {:?}",
-                started.elapsed()
+                took < std::time::Duration::from_secs(2),
+                "a hostile line took {took:?}"
             );
             assert_eq!(found.links.len(), *links);
         }

@@ -73,12 +73,10 @@ pub fn watch<R: Runtime>(app: AppHandle<R>, root: &Path) -> notify::Result<Recom
     // followed, a link to `/` would register a watch on every directory under
     // it and rebuild the site on every change there.
     let config = Config::default().with_follow_symlinks(false);
-    let mut watcher = RecommendedWatcher::new(
-        move |result| {
-            let _ = sender.send(result);
-        },
-        config,
-    )?;
+    let on_event = move |result| {
+        let _ = sender.send(result);
+    };
+    let mut watcher = RecommendedWatcher::new(on_event, config)?;
     let root = start_rebuilds(app, receiver, root).map_err(notify::Error::io)?;
     watcher.watch(&root, RecursiveMode::Recursive)?;
     Ok(watcher)

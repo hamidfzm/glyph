@@ -341,10 +341,10 @@ mod tests {
             let started = std::time::Instant::now();
             let spans = code_spans(line);
             relative_destinations(line, &spans, usize::MAX);
+            let took = started.elapsed();
             assert!(
-                started.elapsed() < std::time::Duration::from_secs(2),
-                "a hostile line took {:?}",
-                started.elapsed()
+                took < std::time::Duration::from_secs(2),
+                "a hostile line took {took:?}"
             );
         }
     }

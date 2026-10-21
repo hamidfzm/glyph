@@ -551,11 +551,8 @@ mod tests {
         let results = search(&dir, "needle", &literal());
         assert_eq!(results.total, MAX_MATCHES);
         assert!(results.truncated);
-        assert!(
-            started.elapsed() < std::time::Duration::from_secs(2),
-            "took {:?}",
-            started.elapsed()
-        );
+        let took = started.elapsed();
+        assert!(took < std::time::Duration::from_secs(2), "took {took:?}");
         let _ = fs::remove_dir_all(&dir);
     }
 
