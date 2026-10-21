@@ -169,6 +169,18 @@ mod tests {
     }
 
     #[test]
+    fn a_destroyed_window_leaves_the_routing_registry() {
+        let (app, window) = app_with_main();
+        let registry = app.state::<WindowRegistry>();
+        registry.set_files("main", vec!["/w/note.md".to_string()]);
+        assert_eq!(registry.documents().0, vec!["/w/note.md".to_string()]);
+
+        handle_window_event(&window, &WindowEvent::Destroyed);
+
+        assert!(registry.documents().0.is_empty());
+    }
+
+    #[test]
     fn another_window_s_own_drag_does_not_block_this_one() {
         let dir = unique_tmp("other_window");
         let (app, window) = app_with_main();
