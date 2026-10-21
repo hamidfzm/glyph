@@ -11,7 +11,7 @@ use tauri::Manager;
 use tauri_plugin_store::StoreExt;
 
 #[cfg(desktop)]
-use crate::{cli, commands, data_dir, grants, menu, open_launch, windows};
+use crate::{cli, commands, data_dir, grants, menu, open_launch, windows, windows_runtime};
 
 /// Renderer-facing stores, opened here because the renderer holds no
 /// `store:allow-load` (see docs/security/threat-model.md). The session store
@@ -61,6 +61,12 @@ pub fn setup_app(
         // as soon as it mounts and learns about the active tab and settings.
         let _ = menu::apply_menu_state(&menu_refs, &menu::MenuStateFlags::default());
         app.manage(menu::MenuRegistry::with_main(menu_refs));
+
+        // The window from tauri.conf.json already exists here; spawned
+        // windows are watched where they are built.
+        if let Some(main) = app.get_webview_window("main") {
+            windows_runtime::watch_drag_source(&main);
+        }
 
         // Decide what this launch does from its arguments. The pure selection
         // and classification logic lives in `cli` (tested there); this block

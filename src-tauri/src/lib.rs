@@ -180,6 +180,7 @@ fn manage_state<R: tauri::Runtime>(builder: tauri::Builder<R>) -> tauri::Builder
         ))))
         .manage(commands::CliExport(Mutex::new(None)))
         .manage(windows::WindowRegistry::new())
+        .manage(windows::DragSources::default())
         .manage(grants::GrantRegistry::default())
         .manage(commands::plugins::Marketplace::default())
         .manage(vault::VaultStore::default())
