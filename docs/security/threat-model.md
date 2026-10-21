@@ -583,6 +583,10 @@ the way a renderer-supplied path is.
   output directory is published, so the CLI refuses an `--out` that contains,
   or is contained by, the folder being served. The site is derived output, not
   the workspace: serving grants no filesystem access back to the renderer.
+  What that renderer reports to the terminal (a build warning or failure)
+  is printed with control characters escaped: it shows the served workspace,
+  so a warning carries file names from it, and a terminal obeys an escape
+  sequence wherever it comes from.
 - **The web viewer shares an origin.** GitHub Pages serves every glyph-md
   repo under `glyph-md.github.io`, so the viewer's `'self'` covers the other
   sites there, and a script any of them publishes could run on the viewer's
