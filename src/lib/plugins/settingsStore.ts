@@ -6,6 +6,10 @@ import { readPluginsKey, writePluginsKey } from "./pluginsFile";
 // fire-and-forget.
 const KEY = "settings";
 
+// Each save rewrites the whole key, so saves run one at a time in call order:
+// a save reads the key only after the previous save has finished.
+let lastSave: Promise<void> = Promise.resolve();
+
 type AllSettings = Record<string, Record<string, unknown>>;
 
 const isSettingsMap = (value: unknown): value is AllSettings =>
@@ -23,10 +27,22 @@ export async function loadPluginSettings(pluginId: string): Promise<Record<strin
 }
 
 /** Persist one plugin's settings map (replaces that plugin's entry only). */
-export async function savePluginSettings(
+export function savePluginSettings(
   pluginId: string,
   settings: Record<string, unknown>,
 ): Promise<void> {
+  const save = saveAfter(lastSave, pluginId, settings);
+  lastSave = save;
+  return save;
+}
+
+async function saveAfter(
+  previous: Promise<void>,
+  pluginId: string,
+  settings: Record<string, unknown>,
+): Promise<void> {
+  // A failed save rejects only its own caller; this save still runs.
+  await previous.catch(() => {});
   const all = await readAll();
   await writePluginsKey(KEY, { ...all, [pluginId]: settings });
 }
