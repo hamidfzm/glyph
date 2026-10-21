@@ -87,7 +87,7 @@ pub fn serve_ready<R: tauri::Runtime>(
         .try_state::<ServeState>()
         .ok_or_else(|| "not serving".to_string())?;
     if let Some(warning) = warning {
-        eprintln!("{warning}");
+        eprintln!("{}", escape_for_terminal(&warning));
     }
     if state.take_first_build() {
         println!("Serving {} at {}", state.display_root, state.url);
@@ -110,8 +110,29 @@ pub fn serve_failed<R: tauri::Runtime>(
     // it liked to this process's stderr.
     app.try_state::<ServeState>()
         .ok_or_else(|| "not serving".to_string())?;
-    eprintln!("{message}");
+    eprintln!("{}", escape_for_terminal(&message));
     Ok(())
+}
+
+/// Spell text the renderer reported so the terminal prints it rather than
+/// obeys it. The serve process's renderer shows the served workspace, so a
+/// warning carries file names from it, and a compromised renderer sends
+/// whatever it likes; a terminal acts on a control character wherever it
+/// comes from (retitling itself, clearing the screen, or, after a bare
+/// newline, showing a line that looks like one of ours). Each one is written
+/// as its Rust escape, so the line still says what arrived. The line and
+/// paragraph separators are not control characters but break lines all the
+/// same.
+fn escape_for_terminal(text: &str) -> String {
+    let mut printed = String::with_capacity(text.len());
+    for c in text.chars() {
+        if c.is_control() || matches!(c, '\u{2028}' | '\u{2029}') {
+            printed.extend(c.escape_default());
+        } else {
+            printed.push(c);
+        }
+    }
+    printed
 }
 
 /// Keeps the folder watch alive for the life of the process. A named type
@@ -257,6 +278,49 @@ mod tests {
             serve_failed(app.handle().clone(), "anything".to_string()),
             Err("not serving".to_string())
         );
+    }
+
+    #[test]
+    fn a_terminal_escape_sequence_is_printed_as_text() {
+        // An OSC title change, ESC ] 0 ; title BEL. Printed raw, the terminal
+        // obeys it; escaped, the user sees that it was sent.
+        let escaped = escape_for_terminal("Warning: \u{1b}]0;owned\u{7} 1 file skipped");
+        assert_eq!(escaped, "Warning: \\u{1b}]0;owned\\u{7} 1 file skipped");
+    }
+
+    #[test]
+    fn a_newline_cannot_forge_a_second_line() {
+        // A failure message that ends in a newline and a fake ready line
+        // would read as two lines from this process.
+        let escaped = escape_for_terminal("Rebuild failed\nServing /etc at http://evil.example");
+        assert!(!escaped.contains('\n'), "got {escaped}");
+        assert_eq!(
+            escaped,
+            "Rebuild failed\\nServing /etc at http://evil.example"
+        );
+    }
+
+    #[test]
+    fn every_control_character_is_escaped() {
+        // C0, DEL, C1 and the Unicode line and paragraph separators: a Linux
+        // file name can hold any of them, and a compromised renderer all.
+        let escaped = escape_for_terminal("a\u{0}b\u{7f}c\u{85}d\u{9b}e\u{2028}f\u{2029}g\r");
+        assert_eq!(
+            escaped,
+            "a\\u{0}b\\u{7f}c\\u{85}d\\u{9b}e\\u{2028}f\\u{2029}g\\r"
+        );
+    }
+
+    #[test]
+    fn ordinary_text_passes_through_unchanged() {
+        for text in [
+            "Warning: cleanup after the export failed",
+            "Rebuild failed: café, naïve, 日本語, Привет, 🎉",
+            "quotes \"and\" 'ticks' and a \\ backslash",
+            "",
+        ] {
+            assert_eq!(escape_for_terminal(text), text);
+        }
     }
 
     #[test]

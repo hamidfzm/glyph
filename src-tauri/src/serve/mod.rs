@@ -37,16 +37,22 @@ type ServeBody = http_body_util::combinators::UnsyncBoxBody<Bytes, std::io::Erro
 /// grew an allowed-hosts list).
 #[derive(Clone)]
 pub struct HostGuard {
-    /// The address `--host` named, so an explicitly exposed server answers
-    /// to itself.
+    /// The address `--host` named, spelled the way a browser spells it in
+    /// `Host` (an IPv6 literal in brackets), so an explicitly exposed server
+    /// answers to itself.
     bound: String,
 }
 
 impl HostGuard {
     pub fn new(bound: std::net::IpAddr) -> Self {
-        Self {
-            bound: bound.to_string(),
-        }
+        // `IpAddr`'s own Display leaves the brackets off, and `fd00::5` is
+        // not the `[fd00::5]` a browser sends, so a server bound to an IPv6
+        // address would refuse every request made to it.
+        let bound = match bound {
+            std::net::IpAddr::V4(v4) => v4.to_string(),
+            std::net::IpAddr::V6(v6) => format!("[{v6}]"),
+        };
+        Self { bound }
     }
 
     /// Whether a request's `Host` header names this server rather than a
@@ -67,7 +73,7 @@ impl HostGuard {
             // it cannot also insist on one name: the machine is reached by
             // whatever address or name the visitor has for it.
             || self.bound == "0.0.0.0"
-            || self.bound == "::"
+            || self.bound == "[::]"
     }
 }
 
@@ -596,6 +602,42 @@ mod tests {
         // it cannot also insist on the name the visitor used to get here.
         let dir = fixture();
         let guard = HostGuard::new("0.0.0.0".parse().unwrap());
+        let response = request(dir.path(), "/", "my-laptop.local:4173", &guard).await;
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn a_server_bound_to_an_ipv6_address_answers_to_it() {
+        // A browser writes an IPv6 literal in brackets and `IpAddr`'s Display
+        // does not, so a guard holding the bare address refused `--host
+        // fd00::5` its own requests, and the way out was `--host ::`, which
+        // gives up the check altogether.
+        let dir = fixture();
+        let guard = HostGuard::new("fd00::5".parse().unwrap());
+        for host in [
+            "[fd00::5]:4173",
+            "[fd00::5]",
+            "localhost:4173",
+            "[::1]:4173",
+        ] {
+            let response = request(dir.path(), "/", host, &guard).await;
+            assert_eq!(response.status(), StatusCode::OK, "{host} should be served");
+        }
+        for host in ["attacker.example", "[fd00::6]:4173"] {
+            let response = request(dir.path(), "/", host, &guard).await;
+            assert_eq!(
+                response.status(),
+                StatusCode::FORBIDDEN,
+                "{host} should be refused"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn an_explicitly_exposed_ipv6_server_answers_to_any_name() {
+        // `--host ::` is the IPv6 spelling of 0.0.0.0, and the same opt-in.
+        let dir = fixture();
+        let guard = HostGuard::new("::".parse().unwrap());
         let response = request(dir.path(), "/", "my-laptop.local:4173", &guard).await;
         assert_eq!(response.status(), StatusCode::OK);
     }

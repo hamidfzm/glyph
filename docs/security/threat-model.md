@@ -400,8 +400,14 @@ the way a renderer-supplied path is.
   never from the model. The grant is the path the user saw, not resolved
   again, so a link swapped in while they decide leads nowhere. The folder is
   resolved once, to match it against the vaults already open; past that,
-  nothing is looked up on disk until the server knows it can ask, and a path
-  holding a character that could disguise it is never put to the user.
+  nothing is looked up on disk until the server knows it can ask. The path
+  comes last in the question, after everything the user is told, so a folder
+  named to read like a sentence of its own cannot rewrite what is asked, and a
+  path holding a character that could hide or reorder text on the screen (a
+  control character, a line separator, a format character such as a
+  zero-width space, a bidirectional override or an invisible tag) is never
+  put to the user at all. Look-alike letters from another script are not
+  caught; the client shows the path as spelled.
 - **Network paths.** On Windows, the grant registry refuses a path that names
   a network share or a device before it resolves anything, whether a tool
   argument, a renderer command, or the settings seed handed it over, unless a
@@ -569,6 +575,10 @@ the way a renderer-supplied path is.
   output directory is published, so the CLI refuses an `--out` that contains,
   or is contained by, the folder being served. The site is derived output, not
   the workspace: serving grants no filesystem access back to the renderer.
+  What that renderer reports to the terminal (a build warning or failure)
+  is printed with control characters escaped: it shows the served workspace,
+  so a warning carries file names from it, and a terminal obeys an escape
+  sequence wherever it comes from.
 - **The web viewer shares an origin.** GitHub Pages serves every glyph-md
   repo under `glyph-md.github.io`, so the viewer's `'self'` covers the other
   sites there, and a script any of them publishes could run on the viewer's

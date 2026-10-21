@@ -43,10 +43,15 @@ jobs:
     name: Checks
     uses: ./.github/workflows/ci-checks.yml
 
+  # Each reusable workflow is handed the one secret it uses, by name. With
+  # `secrets: inherit` it would hold every repository secret, the release
+  # tokens included, and a pull request from a branch of this repo runs the
+  # workflow file it edits.
   tests:
     name: Tests
     uses: ./.github/workflows/ci-tests.yml
-    secrets: inherit
+    secrets:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   smoke:
     name: Smoke
@@ -76,4 +81,5 @@ jobs:
     # with the builds instead of in front of them.
     needs: checks
     uses: ./.github/workflows/ci-build.yml
-    secrets: inherit
+    secrets:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
