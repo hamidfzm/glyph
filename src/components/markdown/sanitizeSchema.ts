@@ -176,6 +176,7 @@ export const markdownSanitizeSchema = {
     ...defaultSchema.attributes,
     // `accesskey` would bind a document's link to a keyboard accelerator.
     "*": [
+      /* v8 ignore next -- the `?.`/`?? []` fallbacks only satisfy the optional types; rehype-sanitize's default schema always lists "*" */
       ...(defaultSchema.attributes?.["*"] ?? []).filter((attribute) => attribute !== "accessKey"),
       "align",
       "style",
