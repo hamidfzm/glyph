@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { isCanvasFile } from "@/lib/canvasExtensions";
 import { documentBody } from "@/lib/documentBody";
 import { errorMessage } from "@/lib/errorMessage";
 import type { ExportFormat } from "@/lib/export/writeExport";
@@ -50,7 +51,10 @@ export function useExport({
 
   const run = useCallback(
     async (format: ExportFormat) => {
-      const canvas = document.querySelector(".glyph-canvas") !== null;
+      // Judged from the file, not the DOM: a note's raw HTML can carry the
+      // board's class names and would otherwise route its export to the board
+      // builder, which then finds no board and writes nothing.
+      const canvas = filePath !== undefined && isCanvasFile(filePath);
       // Cheap guard so we don't pop a save dialog with nothing to export.
       if (!canvas && !documentBody()) return;
 

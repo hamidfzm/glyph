@@ -216,6 +216,21 @@ describe("useExport", () => {
     spy.mockRestore();
   });
 
+  // Raw HTML in a note can carry the board's class names; the file decides.
+  it("exports a note as a document even when its DOM carries the board's class", async () => {
+    setBody();
+    setCanvas();
+    vi.mocked(pickSave).mockResolvedValue("/out.html");
+    const { result } = renderExport();
+    await act(async () => {
+      await result.current.exportHtml();
+    });
+
+    expect(buildBoardMock).not.toHaveBeenCalled();
+    const call = vi.mocked(invoke).mock.calls.find((c) => c[0] === "write_file");
+    expect(call).toBeTruthy();
+  });
+
   it("exports a canvas tab as a spatial vector HTML page", async () => {
     setCanvas();
     vi.mocked(pickSave).mockResolvedValue("/out.html");
@@ -319,7 +334,7 @@ describe("useExport", () => {
     vi.mocked(pickSave).mockResolvedValue("/out.html");
     buildBoardMock.mockRejectedValue(new Error("render failed"));
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
-    const { result } = renderExport();
+    const { result } = renderExport({ filePath: "/docs/board.canvas" });
     await act(async () => {
       await result.current.exportHtml();
     });
@@ -336,7 +351,7 @@ describe("useExport", () => {
     const write = deferred();
     vi.mocked(invoke).mockReturnValue(write.promise);
 
-    const { result } = renderExport();
+    const { result } = renderExport({ filePath: "/docs/board.canvas" });
     expect(result.current.exporting).toBeNull();
 
     let pending!: Promise<void>;

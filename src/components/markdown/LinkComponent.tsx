@@ -1,9 +1,6 @@
-import { ask } from "@tauri-apps/plugin-dialog";
-import { openUrl } from "@tauri-apps/plugin-opener";
-import { type ComponentPropsWithoutRef, useCallback, useContext } from "react";
-import { useTranslation } from "react-i18next";
+import { type ComponentPropsWithoutRef, useCallback } from "react";
 import { ExternalLinkIcon } from "@/components/icons/ExternalLinkIcon";
-import { SettingsContext } from "@/contexts/SettingsContext";
+import { useOpenExternalLink } from "@/hooks/useOpenExternalLink";
 import { isOpenableRelativeHref } from "@/lib/relativePath";
 import { scrollToHeading } from "@/lib/scrollToHeading";
 import { WikilinkAnchor } from "./WikilinkAnchor";
@@ -31,8 +28,7 @@ export function LinkComponent(props: LinkComponentProps) {
   } = props as LinkComponentProps & {
     node?: unknown;
   };
-  const { settings } = useContext(SettingsContext);
-  const { t } = useTranslation("common");
+  const openExternal = useOpenExternalLink();
 
   // Wikilink: identified by remarkWikilink-emitted data attributes. We never
   // route these through openUrl — they're either a workspace file (resolved)
@@ -71,28 +67,11 @@ export function LinkComponent(props: LinkComponentProps) {
       }
 
       e.preventDefault();
-
-      if (settings.behavior.confirmExternalLinks) {
-        const confirmed = await ask(t("link.confirmMessage", { url: href }), {
-          title: t("link.openExternalTitle"),
-          kind: "info",
-          okLabel: t("link.open"),
-          cancelLabel: t("link.cancel"),
-        });
-        if (!confirmed) return;
-      }
-
-      // The opener plugin rejects targets its scope refuses, which a relative
-      // link to something that is not an openable document (a bare folder, an
-      // extensionless file) hits. There is nothing to recover, and React drops
-      // this handler's promise, so the rejection would surface as a crash.
-      try {
-        await openUrl(href);
-      } catch {
-        // Nothing opened; the click is a no-op.
-      }
+      // A relative link to something that is not an openable document (a bare
+      // folder, an extensionless file) lands here too; the opener refuses it.
+      await openExternal(href);
     },
-    [href, onOpenRelativeFile, settings.behavior.confirmExternalLinks, t],
+    [href, onOpenRelativeFile, openExternal],
   );
 
   if (typeof wikilinkTarget === "string") {

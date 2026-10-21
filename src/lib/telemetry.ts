@@ -94,11 +94,22 @@ export function scrubBreadcrumb(crumb: Breadcrumb): Breadcrumb | null {
   if (crumb.category && URL_BEARING_CATEGORIES.has(crumb.category)) {
     return null;
   }
+  // A DOM breadcrumb names the clicked element by its id, title and alt, which
+  // in a rendered document are the document's own words (a heading's slug, an
+  // image's alt text).
+  if (crumb.category?.startsWith("ui.")) {
+    return null;
+  }
   if (crumb.message) {
     crumb.message = redactPaths(crumb.message);
   }
   if (crumb.data && typeof crumb.data.url === "string") {
     crumb.data.url = "[redacted-url]";
+  }
+  // A console breadcrumb keeps the raw call arguments beside the message, and
+  // the app logs paths as arguments.
+  if (crumb.data && "arguments" in crumb.data) {
+    delete crumb.data.arguments;
   }
   return crumb;
 }

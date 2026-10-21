@@ -165,7 +165,9 @@ feature:
 
 - `connect-src https: http:` stays broad only because the Ollama server URL
   is user-configurable to arbitrary LAN hosts (plus update checks and the
-  plugin marketplace over HTTPS).
+  plugin marketplace over HTTPS). A streamed reply is read no further than
+  16 MiB, a line no further than 1 MiB, and an error body no further than
+  64 KiB, so a host the user named cannot grow the renderer without end.
 - `script-src data: blob: 'wasm-unsafe-eval'` is required by the Mermaid and
   D2 WASM renderers.
 - `script-src 'unsafe-eval'` is required by D2 alone: its blob-URL worker
@@ -193,6 +195,17 @@ feature:
   before it is put in the document, as the page renders already did.
 - `object-src 'none'`, `frame-src 'none'`, `base-uri 'self'`, and
   `form-action 'none'` close the remaining injection sinks.
+- A link a document wrote opens in the system handler only behind the
+  external-link prompt (when the setting asks for one), through one path for
+  a markdown link and a canvas link card alike. A canvas card whose URL is
+  not one of the opener's schemes (`http`, `https`, `mailto`, `tel`) renders
+  as text and carries no link into an export. A wikilink opens only a file
+  the workspace listing holds, since its target rides on a data attribute
+  raw HTML can forge, the way embeds and previews are already gated. The
+  sanitizer drops `accesskey`, which would bind a document's link to a
+  keyboard accelerator. Sentry breadcrumbs (opt-in telemetry) drop DOM
+  breadcrumbs, which name the clicked element by the document's own words,
+  and the raw arguments of console breadcrumbs, which carry paths.
 
 The dev CSP is identical plus the Vite dev server and HMR websocket on
 `localhost:1420`.
