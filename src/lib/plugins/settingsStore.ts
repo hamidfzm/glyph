@@ -6,8 +6,9 @@ import { readPluginsKey, writePluginsKey } from "./pluginsFile";
 // fire-and-forget.
 const KEY = "settings";
 
-// Saves rewrite the whole key, so a window queues them; a failed one still runs the next.
-let saveChain: Promise<void> = Promise.resolve();
+// Each save rewrites the whole key, so saves run one at a time in call order:
+// a save reads the key only after the previous save has finished.
+let lastSave: Promise<void> = Promise.resolve();
 
 type AllSettings = Record<string, Record<string, unknown>>;
 
@@ -30,11 +31,18 @@ export function savePluginSettings(
   pluginId: string,
   settings: Record<string, unknown>,
 ): Promise<void> {
-  const save = async () => {
-    const all = await readAll();
-    await writePluginsKey(KEY, { ...all, [pluginId]: settings });
-  };
-  const next = saveChain.then(save, save);
-  saveChain = next;
-  return next;
+  const save = saveAfter(lastSave, pluginId, settings);
+  lastSave = save;
+  return save;
+}
+
+async function saveAfter(
+  previous: Promise<void>,
+  pluginId: string,
+  settings: Record<string, unknown>,
+): Promise<void> {
+  // A failed save rejects only its own caller; this save still runs.
+  await previous.catch(() => {});
+  const all = await readAll();
+  await writePluginsKey(KEY, { ...all, [pluginId]: settings });
 }
