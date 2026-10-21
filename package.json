@@ -120,13 +120,13 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@vitejs/plugin-react": "^5",
-    "@vitest/coverage-v8": "^4.1.11",
+    "@vitest/coverage-v8": "^4.1.12",
     "happy-dom": "^20.14.6",
     "husky": "^9.1.7",
     "lint-staged": "^17.6.0",
     "tailwindcss": "^4",
     "typescript": "^5.7",
     "vite": "^7",
-    "vitest": "^4.1.11"
+    "vitest": "^4.1.12"
   }
 }
