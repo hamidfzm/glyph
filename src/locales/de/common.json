@@ -91,6 +91,8 @@
     "failed": "Suche fehlgeschlagen.",
     "locateFailed": "Datei geöffnet, aber der Treffer konnte nicht angezeigt werden.",
     "truncated": "Es werden nur die ersten Treffer angezeigt. Grenze die Suche ein, um den Rest zu sehen.",
+    "oversized_one": "{{count}} Datei war zu groß für die Suche.",
+    "oversized_other": "{{count}} Dateien waren zu groß für die Suche.",
     "caseSensitive": "Groß-/Kleinschreibung beachten",
     "wholeWord": "Nur ganze Wörter",
     "regex": "Regulären Ausdruck verwenden"

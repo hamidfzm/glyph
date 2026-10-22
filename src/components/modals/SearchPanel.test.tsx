@@ -37,6 +37,7 @@ const hit = {
   ],
   total: 2,
   truncated: false,
+  oversized: 0,
 };
 
 function renderPanel(
@@ -180,6 +181,11 @@ describe("SearchPanel", () => {
   it("says when the results were capped", () => {
     renderPanel({ results: { ...hit, truncated: true } });
     expect(screen.getByText(/Narrow the search/)).toBeInTheDocument();
+  });
+
+  it("says how many files were too large to search", () => {
+    renderPanel({ results: { ...hit, oversized: 2 } });
+    expect(screen.getByText("2 files were too large to search.")).toBeInTheDocument();
   });
 
   it("asks for a folder when no workspace is open", () => {

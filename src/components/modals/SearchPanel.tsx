@@ -210,6 +210,11 @@ export function SearchPanel({
         {results.truncated && (
           <div className="workspace-search-truncated">{t("workspaceSearch.truncated")}</div>
         )}
+        {results.oversized > 0 && (
+          <div className="workspace-search-truncated">
+            {t("workspaceSearch.oversized", { count: results.oversized })}
+          </div>
+        )}
       </div>
     </div>
   );

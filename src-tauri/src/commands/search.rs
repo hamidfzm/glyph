@@ -4,7 +4,7 @@ use std::fs;
 use std::path::Path;
 use tauri::State;
 
-use super::walk::{workspace_walker, WALK_MAX_DEPTH, WALK_MAX_FILES};
+use super::walk::{workspace_walker, SCAN_MAX_FILE_BYTES, WALK_MAX_DEPTH, WALK_MAX_FILES};
 use crate::grants::GrantRegistry;
 
 /// Stop once this many matches are collected: a one-character query would
@@ -13,6 +13,9 @@ const MAX_MATCHES: usize = 500;
 /// Characters of context kept on either side of a match. A minified or
 /// single-line document would otherwise send megabytes per row.
 const CONTEXT_CHARS: usize = 120;
+/// Bytes that are sure to hold `CONTEXT_CHARS` characters: four per character,
+/// plus the three a window edge may move to land on a character boundary.
+const CONTEXT_BYTES: usize = CONTEXT_CHARS * 4 + 3;
 
 #[derive(Debug, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -51,6 +54,8 @@ pub struct SearchResults {
     pub total: usize,
     /// True when a cap cut the scan short, so the UI can say "refine this".
     pub truncated: bool,
+    /// Files left unread because they are over the size cap.
+    pub oversized: usize,
 }
 
 /// Literal, whole-word, and regex queries all compile to one `Regex`, so the
@@ -72,21 +77,46 @@ fn build_pattern(query: &str, options: &SearchOptions) -> Result<Regex, String> 
         .map_err(|e| format!("Invalid search pattern: {e}"))
 }
 
+/// The last `CONTEXT_CHARS` characters of `text`, marked when some were cut.
+/// Only a bounded tail of the bytes is read: counting the characters of a
+/// whole single-line document once per match made the search quadratic.
 fn clip_start(text: &str) -> String {
-    let count = text.chars().count();
-    if count <= CONTEXT_CHARS {
+    let from = text.len().saturating_sub(CONTEXT_BYTES);
+    let window = &text[char_boundary_at_or_after(text, from)..];
+    // Where the last CONTEXT_CHARS characters of the window begin.
+    let kept = window
+        .char_indices()
+        .rev()
+        .nth(CONTEXT_CHARS - 1)
+        .map_or(0, |(at, _)| at);
+    if kept == 0 && window.len() == text.len() {
         return text.to_string();
     }
-    let tail: String = text.chars().skip(count - CONTEXT_CHARS).collect();
-    format!("\u{2026}{tail}")
+    format!("\u{2026}{}", &window[kept..])
 }
 
+/// The first `CONTEXT_CHARS` characters of `text`, marked when some were cut.
 fn clip_end(text: &str) -> String {
-    if text.chars().count() <= CONTEXT_CHARS {
-        return text.to_string();
+    let window = &text[..char_boundary_at_or_before(text, CONTEXT_BYTES)];
+    // Where the character after the first CONTEXT_CHARS begins.
+    match window.char_indices().nth(CONTEXT_CHARS) {
+        Some((cut, _)) => format!("{}\u{2026}", &window[..cut]),
+        None if window.len() == text.len() => text.to_string(),
+        None => format!("{window}\u{2026}"),
     }
-    let head: String = text.chars().take(CONTEXT_CHARS).collect();
-    format!("{head}\u{2026}")
+}
+
+fn char_boundary_at_or_after(text: &str, at: usize) -> usize {
+    (at..=text.len())
+        .find(|&i| text.is_char_boundary(i))
+        .unwrap_or(text.len())
+}
+
+fn char_boundary_at_or_before(text: &str, at: usize) -> usize {
+    (0..=at.min(text.len()))
+        .rev()
+        .find(|&i| text.is_char_boundary(i))
+        .unwrap_or(0)
 }
 
 /// Collect at most `remaining` matches from `content`. The bool is true when
@@ -140,6 +170,7 @@ fn search_workspace_capped(
             files: Vec::new(),
             total: 0,
             truncated: false,
+            oversized: 0,
         });
     }
     let pattern = build_pattern(query, options)?;
@@ -148,6 +179,7 @@ fn search_workspace_capped(
     let mut total = 0;
     let mut scanned = 0;
     let mut truncated = false;
+    let mut oversized = 0;
     for entry in workspace_walker(root, WALK_MAX_DEPTH) {
         if !entry.file_type().is_file() {
             continue;
@@ -161,6 +193,15 @@ fn search_workspace_capped(
             break;
         }
         scanned += 1;
+        // The index leaves files over the cap out too; here one is counted
+        // rather than read, so the result says what was not searched.
+        if entry
+            .metadata()
+            .is_ok_and(|meta| meta.len() > SCAN_MAX_FILE_BYTES)
+        {
+            oversized += 1;
+            continue;
+        }
         // Non-UTF-8 content is skipped rather than failing the whole search.
         let Ok(content) = fs::read_to_string(file) else {
             continue;
@@ -183,6 +224,7 @@ fn search_workspace_capped(
         files,
         total,
         truncated,
+        oversized,
     })
 }
 
@@ -469,9 +511,63 @@ mod tests {
             }],
             total: 1,
             truncated: false,
+            oversized: 0,
         };
         let json = serde_json::to_string(&results).unwrap();
         assert!(json.contains("\"truncated\":false"));
+        assert!(json.contains("\"oversized\":0"));
         assert!(json.contains("\"line\":1"));
+    }
+
+    #[test]
+    fn clipping_keeps_whole_characters_at_both_edges() {
+        let short = "é".repeat(CONTEXT_CHARS);
+        assert_eq!(clip_start(&short), short);
+        assert_eq!(clip_end(&short), short);
+
+        let long = "é".repeat(CONTEXT_CHARS + 50);
+        let start = clip_start(&long);
+        assert!(start.starts_with('\u{2026}'));
+        assert_eq!(start.chars().count(), CONTEXT_CHARS + 1);
+        let end = clip_end(&long);
+        assert!(end.ends_with('\u{2026}'));
+        assert_eq!(end.chars().count(), CONTEXT_CHARS + 1);
+
+        // Four-byte characters fill the byte window exactly.
+        let wide = "\u{1F600}".repeat(CONTEXT_CHARS * 3);
+        assert_eq!(clip_start(&wide).chars().count(), CONTEXT_CHARS + 1);
+        assert_eq!(clip_end(&wide).chars().count(), CONTEXT_CHARS + 1);
+        assert_eq!(clip_end("abc"), "abc");
+        assert_eq!(clip_start(""), "");
+    }
+
+    #[test]
+    fn a_single_line_document_with_many_matches_clips_in_bounded_time() {
+        let dir = unique_tmp("long_line");
+        let line = "needle ".repeat(MAX_MATCHES) + &"x".repeat(4 * 1024 * 1024);
+        fs::write(dir.join("a.md"), format!("{line}needle\n")).unwrap();
+
+        let started = std::time::Instant::now();
+        let results = search(&dir, "needle", &literal());
+        assert_eq!(results.total, MAX_MATCHES);
+        assert!(results.truncated);
+        let took = started.elapsed();
+        assert!(took < std::time::Duration::from_secs(2), "took {took:?}");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn files_over_the_size_cap_are_counted_not_read() {
+        let dir = unique_tmp("oversized");
+        fs::write(dir.join("a.md"), "needle\n").unwrap();
+        // A sparse file: the size is what matters, not what it holds.
+        let huge = fs::File::create(dir.join("huge.md")).unwrap();
+        huge.set_len(SCAN_MAX_FILE_BYTES + 1).unwrap();
+
+        let results = search(&dir, "needle", &literal());
+        assert_eq!(results.total, 1);
+        assert_eq!(results.oversized, 1);
+        assert!(!results.truncated);
+        let _ = fs::remove_dir_all(&dir);
     }
 }

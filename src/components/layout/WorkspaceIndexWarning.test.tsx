@@ -40,4 +40,11 @@ describe("WorkspaceIndexWarning", () => {
     renderWith({ truncated: true, reason: "depthLimit", limit: 32 }, "vault");
     expect(screen.getByRole("status").getAttribute("title")).toContain("32 levels");
   });
+
+  it("names the link caps when a note or the broken-link list was cut", () => {
+    renderWith({ truncated: true, reason: "linkLimit", limit: 2000 }, "vault");
+    expect(screen.getByRole("status").getAttribute("title")).toContain("2000 links");
+    renderWith({ truncated: true, reason: "unresolvedLimit", limit: 10000 }, "vault");
+    expect(screen.getAllByRole("status")[1].getAttribute("title")).toContain("10000");
+  });
 });

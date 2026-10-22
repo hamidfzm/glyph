@@ -6,8 +6,8 @@ use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
 use super::canvas::{self, Canvas};
-use super::graph::{self, Graph};
-use super::note::{self, Note};
+use super::graph::{self, Graph, MAX_UNRESOLVED_LINKS};
+use super::note::{self, Note, MAX_LINKS_PER_NOTE};
 use super::resolve::{compare_paths, Resolver};
 use crate::commands::walk::{
     collect_files, ScanStatus, Stamp, SCAN_MAX_FILE_BYTES, WALK_MAX_DEPTH, WALK_MAX_FILES,
@@ -69,6 +69,8 @@ pub struct Vault {
     stamps: HashMap<String, Stamp>,
     /// Set when an update was turned away at the file cap.
     refused_at_cap: bool,
+    /// Set when a note holds more links than the index keeps.
+    links_capped: bool,
     max_files: usize,
     max_depth: usize,
 }
@@ -109,6 +111,7 @@ impl Vault {
             walk_status: status,
             stamps,
             refused_at_cap: false,
+            links_capped: false,
             max_files,
             max_depth,
         };
@@ -346,6 +349,7 @@ impl Vault {
         let aliases: Vec<Vec<String>> = self.notes.iter().map(|n| n.aliases.clone()).collect();
         self.resolver = Resolver::build(&paths, &aliases);
         self.graph = graph::build(&self.notes, &self.resolver);
+        self.links_capped = self.notes.iter().any(|note| note.links_truncated);
         self.field_names = self
             .notes
             .iter()
@@ -356,10 +360,20 @@ impl Vault {
     /// What the walk reported, unless a later file was turned away at the cap.
     /// That stays reported until the next walk, a rebuild or a sync, because
     /// the index cannot know whether a later deletion made room for the file
-    /// it refused.
+    /// it refused. A complete walk still reports an index cut short by the
+    /// link caps: the files are all there, but not every link in them.
     pub(crate) fn status(&self) -> ScanStatus {
         if self.refused_at_cap {
             return ScanStatus::file_limit(self.max_files);
+        }
+        if self.walk_status.truncated {
+            return self.walk_status.clone();
+        }
+        if self.links_capped {
+            return ScanStatus::link_limit(MAX_LINKS_PER_NOTE);
+        }
+        if self.graph.unresolved_truncated {
+            return ScanStatus::unresolved_limit(MAX_UNRESOLVED_LINKS);
         }
         self.walk_status.clone()
     }

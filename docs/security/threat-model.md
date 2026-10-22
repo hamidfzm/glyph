@@ -140,7 +140,7 @@ looked up (see "Network paths" below).
 
 | Command | Check |
 | ------- | ----- |
-| `read_file`, `check_path_exists`, `read_directory`, `list_markdown_files` | readable |
+| `read_file`, `check_path_exists`, `read_directory`, `list_markdown_files` | readable. `read_file` also refuses a document over 64 MiB, judged from its metadata before any of it is read: the whole document crosses IPC and sits in the renderer's editor, so this is the bound on what one file can make the app hold |
 | `allow_document_asset` | an existing image, audio, or video file, judged after symlinks resolve, inside the folder of an opened loose file; mirrored into the asset scope only |
 | `vault_snapshot`, `vault_refresh`, `vault_backlinks`, `vault_resolve`, `vault_query`, `vault_paths_with_tag` | granted workspace, not merely readable: the index is per workspace, and a readable check would also accept every directory inside one, letting a caller cache an index per subdirectory. The second path argument is answered from the index in memory, never read from disk, so an ungranted one returns nothing rather than content |
 | `vault_forget` | none, because nothing is looked up: the path is compared with the roots the store holds, as their indexes were built with them. It hands nothing back and only drops an index the process already built, so the worst a renderer can do with it is make the next snapshot rebuild from disk. A closing window releases its index the same way, from the paths it reported, and a workspace whose folder is gone is still forgotten |
@@ -149,7 +149,7 @@ looked up (see "Network paths" below).
 | `prune_export_dir` | the output directory must be writable, and each entry read back from its manifest must be plain path segments whose parent still canonicalizes inside that directory (so a hand-edited manifest cannot delete outside the export). The manifest is neither read nor replaced when it, or the `.glyph` folder holding it, is a link: the output directory is checked, but a link below it leads anywhere. A manifest that cannot be read or parsed is left as it is and nothing is pruned. A new one is written to a staging file of its own beside it, opened only if nothing holds that name, and moved over the old one in one step. The list of files the export failed to replace, like the list of files it wrote, can only spare a manifest entry, never name something else to remove. An entry that differs from a listed name only in case, Unicode normalization form or separators is opened beside that name to see whether the two are one file (the volume decides, not the fold); both paths are confined as above, and nothing but that yes or no comes of it. The reason handed back names the first entry that could not be removed, quoted and escaped, because that name comes from the manifest and ends up in the app's notice and on stderr |
 | `pick_export_dir` | `root` must be a granted workspace, checked before the dialog opens. It only decides whether the folder the user then picks is refused for resolving inside that workspace; the grant is for the picked folder alone, so naming another root gains a renderer nothing it could not already write |
 | `pick_save`, `pick_move_dir` | `default_dir`, the folder the dialog opens in, must be a granted workspace when one is given, checked before the dialog opens. A native dialog resolves that folder as it opens, before the user chooses anything, and on Windows resolving a network path connects to the host it names. A folder that passes is handed on as the renderer spelled it rather than canonicalized, since the dialog cannot open a `\\?\UNC\` path. The grant `pick_save` mints is for the file the user picks, and `pick_move_dir` mints none |
-| `watch_file`, `watch_directory` | readable (unwatch stays open; it only drops a watcher) |
+| `watch_file`, `watch_directory` | readable (unwatch stays open; it only drops a watcher). A directory watch does not follow symbolic links, so a link to `/` or to the home folder inside a workspace puts no watch on the tree behind it; followed, it would take one watch per directory there and exhaust the user's quota. The `glyph serve` watch keeps the same rule |
 | `create_note`, `create_canvas`, `create_folder` | `root` must be a granted workspace and the target directory canonicalizes inside it; a network or device path is refused before that lookup. The entry takes the first default name nothing holds, and a link holds its name even when its target is missing, so creating never writes through one |
 | `rename_path`, `duplicate_path`, `move_path`, `delete_path` | `root` must be a granted workspace and the entry itself canonicalizes strictly inside it (a network or device path is refused before that lookup, for a move's destination too; a trailing `..`, the root itself, or a symlink resolving outside is refused; `duplicate_path` refuses a folder containing a symlink rather than copying its target). `rename_path` and `move_path` also rewrite links in the workspace's own indexed notes and canvases, each write passing `ensure_writable`; a link or canvas card target that resolves outside the workspace is never rewritten or probed on disk, a file changed since the plan read it is left as it is, and `dryRun` reads without writing. The name a copy, a rename, or a move lands on is picked the way a new entry's is, so it is never one a link holds. Neither the entry nor its destination may sit inside the workspace's `.git` directory |
 | `request_open` | folders only; the path must already be a granted workspace root |
@@ -457,7 +457,13 @@ the way a renderer-supplied path is.
   `ensure_readable` or `ensure_writable` before anything is read or written.
   A wikilink target resolves only to a note the index already holds, and the
   index keeps its walk rules: no symlink out of the vault, no hidden folder,
-  nothing over 5 MB.
+  nothing over 5 MB. What a note can put into the index is bounded too: the
+  first 2,000 wikilinks and 2,000 markdown destinations of a note are kept and
+  a note past that is reported as a partial index, a missing target is listed
+  once per note, and the list of links to missing notes stops at 10,000 with
+  the same report. The link scan itself is linear in a line, so a line as long
+  as the file cap allows is parsed in a bounded time. Workspace search leaves
+  files over 5 MiB unread and says how many.
 - **Effects.** `export` writes only inside the vault it reads, to a name
   carrying the format's extension, so it cannot replace a note; the name
   may not be a link either, since the write would follow it to whatever
@@ -560,6 +566,11 @@ the way a renderer-supplied path is.
 - **A replaced destination.** A rename or a move checks that nothing is at
   the destination and renames afterwards, as a rename made in the app does. A
   file created there in between is replaced.
+- **The caps bound the index; they do not make it small.** A workspace at
+  the file cap with every note at the link cap is still hundreds of megabytes
+  of index, and a search over it reads every file under 5 MiB. Each cap says
+  when it was hit, which is what keeps the index honest rather than what
+  keeps it cheap.
 - **The section check reads line by line.** `patch_note` judges whether a
   section's bounds match the rendered note without building CommonMark's
   block structure. What that cannot settle mostly errs toward refusing. Three

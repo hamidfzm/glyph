@@ -5,10 +5,15 @@ use std::ops::Range;
 
 use super::frontmatter::{parse_frontmatter, split_frontmatter};
 use super::headings::{js_lines, Fences};
-use super::md_links::{code_spans, in_spans, relative_destinations};
+use super::md_links::{code_spans, relative_destinations, SpanCursor};
 use super::tags::{add_tags, inline_tags};
 
 pub const MAX_SNIPPET_CHARS: usize = 200;
+/// Wikilinks, and separately markdown destinations, kept per note. Note content
+/// is untrusted, and every link costs the index and the graph memory for as
+/// long as the workspace is open; a note past the cap keeps its first links
+/// and is reported as partial through the snapshot status.
+pub const MAX_LINKS_PER_NOTE: usize = 2_000;
 
 #[derive(Debug, PartialEq)]
 pub(crate) struct Link {
@@ -37,6 +42,9 @@ pub(crate) struct Note {
     pub links: Vec<Link>,
     /// Relative markdown link and image destinations, as written.
     pub file_links: Vec<String>,
+    /// Set when the note holds more links than [`MAX_LINKS_PER_NOTE`], so
+    /// `links` or `file_links` is the first of them only.
+    pub links_truncated: bool,
 }
 
 /// Every link in a note with the byte range a rewrite replaces: a wikilink's
@@ -45,6 +53,8 @@ pub(crate) struct Note {
 pub(crate) struct Scan {
     pub links: Vec<(Link, Range<usize>)>,
     pub file_links: Vec<(String, Range<usize>)>,
+    /// Set when either list stopped at the limit the scan was given.
+    pub truncated: bool,
 }
 
 pub(crate) fn extract_note(path: &str, content: &str) -> Note {
@@ -82,7 +92,7 @@ pub(crate) fn extract_note(path: &str, content: &str) -> Note {
     }
     tags.sort();
 
-    let scan = scan(content, body_start);
+    let scan = scan(content, body_start, MAX_LINKS_PER_NOTE);
     Note {
         path: path.to_string(),
         title,
@@ -91,14 +101,15 @@ pub(crate) fn extract_note(path: &str, content: &str) -> Note {
         aliases,
         links: scan.links.into_iter().map(|(link, _)| link).collect(),
         file_links: scan.file_links.into_iter().map(|(dest, _)| dest).collect(),
+        links_truncated: scan.truncated,
     }
 }
 
 /// Every `[[target]]`, `![[embed]]` and relative markdown destination outside
-/// fenced and inline code, in source order. The frontmatter block is skipped
-/// the way the tag scan skips it: the renderer shows those lines as a table,
-/// never as links.
-pub(crate) fn scan(content: &str, body_start: usize) -> Scan {
+/// fenced and inline code, in source order, up to `max_links` of each. The
+/// frontmatter block is skipped the way the tag scan skips it: the renderer
+/// shows those lines as a table, never as links.
+pub(crate) fn scan(content: &str, body_start: usize, max_links: usize) -> Scan {
     let mut scan = Scan::default();
     let mut fences = Fences::new();
 
@@ -109,10 +120,19 @@ pub(crate) fn scan(content: &str, body_start: usize) -> Scan {
         // `js_lines` yields slices of `content`, so this is the line's offset.
         let offset = line.as_ptr() as usize - content.as_ptr() as usize;
         let code = code_spans(line);
-        push_line_links(line, (idx + 1) as u32, &code, offset, &mut scan.links);
-        for (dest, span) in relative_destinations(line, &code) {
+        // Each scan collects one past the cap, which is how it tells a note
+        // that is exactly at the cap from one that is over it.
+        let over = max_links.saturating_add(1);
+        push_line_links(line, (idx + 1) as u32, &code, offset, &mut scan.links, over);
+        for (dest, span) in relative_destinations(line, &code, over - scan.file_links.len()) {
             scan.file_links
                 .push((dest, span.start + offset..span.end + offset));
+        }
+        if scan.links.len() > max_links || scan.file_links.len() > max_links {
+            scan.truncated = true;
+            scan.links.truncate(max_links);
+            scan.file_links.truncate(max_links);
+            break;
         }
     }
 
@@ -125,11 +145,20 @@ fn push_line_links(
     code: &[Range<usize>],
     offset: usize,
     out: &mut Vec<(Link, Range<usize>)>,
+    limit: usize,
 ) {
     let bytes = line.as_bytes();
+    let mut code = SpanCursor::new(code);
+    // Every link on the line shares its snippet, so it is cut once rather
+    // than once per link.
+    let mut snippet: Option<String> = None;
     let mut i = 0;
-    while i + 1 < bytes.len() {
-        if bytes[i] != b'[' || bytes[i + 1] != b'[' || in_spans(code, i) {
+    while i + 1 < bytes.len() && out.len() < limit {
+        if let Some(span) = code.span_at(i) {
+            i = span.end;
+            continue;
+        }
+        if bytes[i] != b'[' || bytes[i + 1] != b'[' {
             i += 1;
             continue;
         }
@@ -140,7 +169,8 @@ fn push_line_links(
             break;
         };
         if close + 1 >= bytes.len() || bytes[close + 1] != b']' || close == start {
-            i += 1;
+            // Every `[[` before that `]` would stop at it the same way.
+            i = close + 1;
             continue;
         }
 
@@ -152,7 +182,7 @@ fn push_line_links(
                 alias,
                 embed: i > 0 && bytes[i - 1] == b'!',
                 line: line_number,
-                snippet: snippet_for(line),
+                snippet: snippet.get_or_insert_with(|| snippet_for(line)).clone(),
             };
             out.push((link, offset + start + span.start..offset + start + span.end));
         }
@@ -192,7 +222,7 @@ mod tests {
     use super::*;
 
     fn parse_links(content: &str, body_start: usize) -> Vec<Link> {
-        scan(content, body_start)
+        scan(content, body_start, usize::MAX)
             .links
             .into_iter()
             .map(|(link, _)| link)
@@ -205,7 +235,11 @@ mod tests {
             targets("`[[Code]]` and ``a [[Also]] b`` but [[Real]]\n"),
             ["Real"]
         );
-        let scan = scan("```\n[a](fenced.md)\n```\n`[b](code.md)` [c](real.md)\n", 0);
+        let scan = scan(
+            "```\n[a](fenced.md)\n```\n`[b](code.md)` [c](real.md)\n",
+            0,
+            usize::MAX,
+        );
         let dests: Vec<&str> = scan.file_links.iter().map(|(d, _)| d.as_str()).collect();
         assert_eq!(dests, ["real.md"]);
     }
@@ -216,7 +250,7 @@ mod tests {
         // offsets away from char offsets.
         let content = "---\nt: x\n---\ncafé ![[  Tar get #h|a ]] [n](../Note.md#s)\r\nnext [[B]]";
         let (_, body_start) = split_frontmatter(content);
-        let found = scan(content, body_start);
+        let found = scan(content, body_start, usize::MAX);
         let targets: Vec<&str> = found
             .links
             .iter()
@@ -376,5 +410,63 @@ mod tests {
         let note = extract_note("/w/a.md", &content);
         assert!(note.fields.is_empty());
         assert_eq!(note.tags, vec!["kept"]);
+    }
+
+    #[test]
+    fn a_note_over_the_link_cap_keeps_the_first_links_and_says_so() {
+        let content: String = (0..MAX_LINKS_PER_NOTE + 5)
+            .map(|i| format!("[[note{i}]]\n"))
+            .collect();
+        let note = extract_note("/w/a.md", &content);
+        assert_eq!(note.links.len(), MAX_LINKS_PER_NOTE);
+        assert_eq!(note.links[0].target, "note0");
+        assert!(note.links_truncated);
+
+        let exact: String = (0..MAX_LINKS_PER_NOTE)
+            .map(|i| format!("[[note{i}]]\n"))
+            .collect();
+        let note = extract_note("/w/b.md", &exact);
+        assert_eq!(note.links.len(), MAX_LINKS_PER_NOTE);
+        assert!(!note.links_truncated);
+    }
+
+    #[test]
+    fn markdown_destinations_are_capped_the_same_way() {
+        let content = "[a](a.md) ".repeat(MAX_LINKS_PER_NOTE + 1);
+        let note = extract_note("/w/a.md", &content);
+        assert_eq!(note.file_links.len(), MAX_LINKS_PER_NOTE);
+        assert!(note.links.is_empty());
+        assert!(note.links_truncated);
+    }
+
+    #[test]
+    fn a_rewrite_scan_is_not_capped() {
+        let content = "[[a]] ".repeat(MAX_LINKS_PER_NOTE + 1);
+        let found = scan(&content, 0, usize::MAX);
+        assert_eq!(found.links.len(), MAX_LINKS_PER_NOTE + 1);
+        assert!(!found.truncated);
+    }
+
+    /// The shapes that once made one long line quadratic in the note scan:
+    /// a wikilink every six bytes, each cutting its own snippet, and `[[` runs
+    /// that never close.
+    #[test]
+    fn a_megabyte_line_of_wikilinks_scans_in_bounded_time() {
+        let mib = 1024 * 1024;
+        let lines = [
+            ("[[a]] ".repeat(mib / 6), mib / 6),
+            (format!("{}]x", "[".repeat(mib)), 0),
+            ("`a` [[b]]".repeat(mib / 9), mib / 9),
+        ];
+        for (line, links) in &lines {
+            let started = std::time::Instant::now();
+            let found = scan(line, 0, usize::MAX);
+            let took = started.elapsed();
+            assert!(
+                took < std::time::Duration::from_secs(2),
+                "a hostile line took {took:?}"
+            );
+            assert_eq!(found.links.len(), *links);
+        }
     }
 }

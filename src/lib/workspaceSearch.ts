@@ -30,6 +30,8 @@ export interface SearchResults {
   total: number;
   /** True when a cap cut the scan short and the query needs narrowing. */
   truncated: boolean;
+  /** Files left unread because they are over the size cap. */
+  oversized: number;
 }
 
 export const DEFAULT_SEARCH_OPTIONS: SearchOptions = {
@@ -38,7 +40,12 @@ export const DEFAULT_SEARCH_OPTIONS: SearchOptions = {
   regex: false,
 };
 
-export const EMPTY_SEARCH_RESULTS: SearchResults = { files: [], total: 0, truncated: false };
+export const EMPTY_SEARCH_RESULTS: SearchResults = {
+  files: [],
+  total: 0,
+  truncated: false,
+  oversized: 0,
+};
 
 export function searchWorkspace(
   path: string,

@@ -91,6 +91,8 @@
     "failed": "La búsqueda falló.",
     "locateFailed": "Se abrió el archivo, pero no se pudo desplazar hasta esa coincidencia.",
     "truncated": "Solo se muestran las primeras coincidencias. Acota la búsqueda para ver el resto.",
+    "oversized_one": "{{count}} archivo era demasiado grande para buscar en él.",
+    "oversized_other": "{{count}} archivos eran demasiado grandes para buscar en ellos.",
     "caseSensitive": "Distinguir mayúsculas y minúsculas",
     "wholeWord": "Palabra completa",
     "regex": "Usar expresión regular"

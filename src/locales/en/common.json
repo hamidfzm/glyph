@@ -91,6 +91,8 @@
     "failed": "Search failed.",
     "locateFailed": "Opened the file, but couldn't scroll to that match.",
     "truncated": "Showing the first matches only. Narrow the search to see the rest.",
+    "oversized_one": "{{count}} file was too large to search.",
+    "oversized_other": "{{count}} files were too large to search.",
     "caseSensitive": "Match case",
     "wholeWord": "Match whole word",
     "regex": "Use regular expression"

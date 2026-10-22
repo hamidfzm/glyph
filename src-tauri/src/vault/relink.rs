@@ -270,6 +270,12 @@ impl<'a> Relinker<'a> {
     }
 
     fn affects(&self, note: &Note) -> bool {
+        // The index holds only the first links of a note past the cap, so the
+        // one that moved may be among those it dropped; the rewrite scan below
+        // reads the whole note and settles it.
+        if note.links_truncated {
+            return true;
+        }
         // A canvas card's `file` is relative to its board, as the renderer reads it.
         let links = note.links.iter().any(|link| {
             if self.is_canvas(&note.path) {
@@ -297,7 +303,7 @@ impl<'a> Relinker<'a> {
         }
 
         let (_, body_start) = split_frontmatter(content);
-        let found = scan(content, body_start);
+        let found = scan(content, body_start, usize::MAX);
         let mut edits: Vec<(Range<usize>, String)> = found
             .links
             .into_iter()
@@ -513,6 +519,26 @@ mod tests {
                 "Index.md",
                 "[[Trip]] [[Trip|shown]] [[Trip#Day 1]] ![[Trip]]\n[[ Trip ]] [[Trip.md]] [[Notes/Trip]] [[Nowhere]]\n"
             )
+        );
+    }
+
+    #[test]
+    fn a_link_past_the_index_cap_still_follows_the_move() {
+        // The index keeps only a note's first links, so the moved note may be
+        // linked only among those it dropped; the note is read whole anyway.
+        let filler: String = (0..crate::vault::note::MAX_LINKS_PER_NOTE)
+            .map(|i| format!("[[Other{i}]]\n"))
+            .collect();
+        let root = workspace(
+            "past_cap",
+            &[
+                ("Notes/Travel.md", "# Travel"),
+                ("Index.md", &format!("{filler}[[Travel]]\n")),
+            ],
+        );
+        assert_eq!(
+            planned(&root, "Notes/Travel.md", "Notes/Trip.md"),
+            one("Index.md", &format!("{filler}[[Trip]]\n"))
         );
     }
 

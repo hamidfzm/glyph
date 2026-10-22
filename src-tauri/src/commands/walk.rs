@@ -13,7 +13,8 @@ pub(crate) const SCAN_MAX_FILE_BYTES: u64 = 5 * 1024 * 1024;
 #[serde(rename_all = "camelCase")]
 pub struct ScanStatus {
     pub truncated: bool,
-    /// "fileLimit" or "depthLimit"; None when the scan is complete.
+    /// "fileLimit", "depthLimit", "linkLimit" or "unresolvedLimit"; None when
+    /// the scan is complete.
     pub reason: Option<&'static str>,
     /// The configured cap behind the reported reason.
     pub limit: Option<usize>,
@@ -40,6 +41,24 @@ impl ScanStatus {
         Self {
             truncated: true,
             reason: Some("depthLimit"),
+            limit: Some(limit),
+        }
+    }
+
+    /// A note held more links than the index keeps per note.
+    pub fn link_limit(limit: usize) -> Self {
+        Self {
+            truncated: true,
+            reason: Some("linkLimit"),
+            limit: Some(limit),
+        }
+    }
+
+    /// More links pointed at missing notes than the index lists.
+    pub fn unresolved_limit(limit: usize) -> Self {
+        Self {
+            truncated: true,
+            reason: Some("unresolvedLimit"),
             limit: Some(limit),
         }
     }
@@ -76,8 +95,13 @@ pub(crate) fn workspace_walker(root: &Path, max_depth: usize) -> impl Iterator<I
         .sort_by_file_name()
         .into_iter()
         .filter_entry(|e| {
+            // The root is the user's choice of folder, so its own name is
+            // never a reason to skip it.
+            if e.depth() == 0 {
+                return true;
+            }
             let name = e.file_name().to_string_lossy();
-            if name.starts_with('.') && e.depth() > 0 {
+            if name.starts_with('.') {
                 return false;
             }
             if e.file_type().is_dir() && WALK_SKIP_DIRS.contains(&name.as_ref()) {
@@ -168,6 +192,39 @@ mod tests {
         assert_eq!(status, ScanStatus::complete());
 
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_root_named_like_a_skipped_directory_is_still_walked() {
+        // The skip list is for folders inside a workspace; a workspace that is
+        // itself called `target` or `node_modules` must index its files.
+        let parent = std::env::temp_dir().join(format!(
+            "glyph_walk_root_name_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let root = parent.join("target");
+        std::fs::create_dir_all(root.join("node_modules")).unwrap();
+        std::fs::write(root.join("note.md"), "body").unwrap();
+        std::fs::write(root.join("node_modules").join("dep.md"), "body").unwrap();
+
+        let (files, _) = collect_files(
+            &root,
+            crate::is_markdown_file,
+            WALK_MAX_FILES,
+            WALK_MAX_DEPTH,
+        )
+        .unwrap();
+        let seen: Vec<String> = files
+            .iter()
+            .map(|(path, _)| path.file_name().unwrap().to_string_lossy().to_string())
+            .collect();
+        assert_eq!(seen, vec!["note.md"]);
+
+        let _ = std::fs::remove_dir_all(&parent);
     }
 
     #[test]
