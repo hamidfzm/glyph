@@ -244,6 +244,36 @@ feature:
 The dev CSP is identical plus the Vite dev server and HMR websocket on
 `localhost:1420`.
 
+## Navigation
+
+The CSP says what the page may load; it says nothing about where the webview
+may go. Every link in a document goes through the link component, which
+prompts before it hands the URL to the system browser, but markup reaches the
+page by other routes too: Mermaid keeps a `click A href "..."` under its
+strict level as an SVG anchor, an HTML label can hold one, and a D2 shape's
+`link` renders as one. None of those passed through the link component, and
+wry allows any top-level navigation by default, so a click replaced the app
+with the remote page, in a window with no address bar, where the init script
+that hands a spawned window its path (`window.__GLYPH_OPEN__`) is readable.
+Two layers close this:
+
+- **Diagram links are inert.** The Mermaid and D2 sanitizers forbid `<a>`
+  (`src/plugins/core/mermaid/mermaidRender.ts`,
+  `src/plugins/core/d2/d2Render.ts`), on screen and in the static renders
+  the exports, the OS previews and the web viewer use, so a diagram link
+  renders as its label with nothing to click. That is the intended
+  behaviour, not a gap: a diagram is drawn from document source, and a link
+  in it would open with no prompt.
+- **The host refuses the navigation.** `src-tauri/src/navigation_runtime.rs`
+  registers a plugin whose navigation handler runs for every webview, the
+  main window and the ones `windows_runtime.rs` spawns alike, and allows
+  only the app's own origin (`tauri://localhost`, or `http://tauri.localhost`
+  on Windows and Android) plus, in a dev build, the origin of the dev server
+  `tauri.conf.json` names (`tauri::is_dev()` decides, so a release build
+  allows no `localhost:1420`). Anything else that reaches the page
+  (`https:`, `file:`, `data:`, `javascript:`) is cancelled before it loads,
+  so a stray anchor does nothing.
+
 ## Windows Explorer preview handler
 
 The preview handler (`src-tauri/crates/preview-handler/`) renders markdown
@@ -319,10 +349,11 @@ control is the page's own:
   `no-referrer` keeps the page URL out of `Referer`, DNS prefetch is off, and
   nothing on the page reports telemetry, so the document never leaves the tab.
 - **No navigation.** One click handler covers every link in the document,
-  Mermaid's SVG links included: in-document anchors scroll without touching
-  the fragment that holds the document, web links open in a new tab with no
-  opener and no referrer, `mailto:` keeps its default, and everything else (a
-  relative `other.md`, a broken wikilink) is inert.
+  an SVG anchor included should one reach the page (the Mermaid render drops
+  its own): in-document anchors scroll without touching the fragment that
+  holds the document, web links open in a new tab with no opener and no
+  referrer, `mailto:` keeps its default, and everything else (a relative
+  `other.md`, a broken wikilink) is inert.
 - **A size cap.** Files over 2 MiB get a notice without being read. A link's
   prefix, alphabet and length are checked before decoding, and it is inflated
   in small chunks that stop once the document passes 2 MiB, so a short link
@@ -343,23 +374,43 @@ permission: the marketplace download runs in Rust
 registry index from its fixed URL and follows the entry to a package on the
 marketplace hosts alone, so the renderer never names a URL.
 
+- **Clipboard.** `clipboard-manager:allow-read-text` alone, for the editor's
+  context-menu Paste (`src/lib/editorContextMenu.ts`): `execCommand("paste")`
+  is blocked in the webview, and WebKit gates `navigator.clipboard.readText()`
+  behind a second native confirmation, so the item reads the native clipboard
+  through the plugin. Copying uses the browser clipboard API, which needs no
+  grant, so there is no `allow-write-text`. The command takes no argument and
+  no path, but nothing ties it to the menu item: a compromised renderer can
+  read whatever the user last copied, at any time, a password manager's
+  entry included. Accepted, since paste has to read the clipboard and this
+  is the only read that works without the extra prompt.
 - **Dialog.** Desktop holds `dialog:allow-message` alone (it backs `ask`).
   The plugin's `open` command adds whatever the user picks to the fs and asset
   scopes, so `dialog:allow-open` lives in `capabilities/mobile.json`
   (`platforms: [android, iOS]`), where the OS document picker replaces the
   Rust pickers. All desktop pickers run in Rust.
 - **Filesystem.** No `fs:` permission on desktop; file I/O goes through the
-  gated Rust commands. `fs:default` pulls in the `scope-app-recursive` scope
-  (`$APPCONFIG/**`, `$APPDATA/**`, and the other app-specific directories),
-  and the plugin unions the global and per-command scopes for every command
-  it exposes, so a scope granted for reads also authorizes `write_text_file`.
-  Plugins are installed under `app_config_dir()`, so that would let a
-  compromised renderer overwrite installed plugin code and have it loaded on
-  the next launch, bypassing the grant registry entirely. The plugin lives in
-  `capabilities/mobile.json`, gated to Android and iOS, where it reads the
-  sandboxed `content://` URIs the Rust commands cannot open. A unit test in
-  `lib.rs` fails if any `fs:` permission returns to the default capability
-  (#698).
+  gated Rust commands. The plugin lives in `capabilities/mobile.json`, gated
+  to Android and iOS, where it reads the sandboxed `content://` URIs the Rust
+  commands cannot open (`src/lib/documentContent.ts`), as `fs:default` plus
+  `fs:allow-read-text-file`. In tauri-plugin-fs 2.6.0 the `default` set is
+  `create-app-specific-dirs` (`mkdir`, scoped to the app-specific directories
+  themselves), `read-app-specific-dirs-recursive` (`read_dir`, `read_file`,
+  `read_text_file`, `read_text_file_lines` and `exists` under the
+  `scope-app-recursive` scope: `$APPCONFIG/**`, `$APPDATA/**` and the other
+  app-specific directories) and `deny-default` (the webview's own cookie,
+  cache and storage paths under `$APPLOCALDATA` are denied on Windows and
+  Linux). It carries no write command, so a renderer holding it can read
+  everything under the app directories, installed plugin code and
+  `settings.json` included, and create those directories, but cannot change
+  a file there. The plugin unions the global and per-command scopes for every
+  command it exposes, so any `fs:allow-write-*` added beside `fs:default`
+  would be scoped to those same directories, and plugins are installed under
+  `app_config_dir()`: a compromised renderer could then overwrite installed
+  plugin code and have it loaded on the next launch, bypassing the grant
+  registry entirely. That is why desktop carries no `fs:` permission at all.
+  A unit test in `lib.rs` fails if any `fs:` permission returns to the
+  default capability (#698).
 - **Opener.** `opener:allow-open-url` with the `allow-default-urls` scope
   (`mailto:`, `tel:`, `http://`, `https://`), which links and the update
   notices use. Not `opener:default`: that set also carries

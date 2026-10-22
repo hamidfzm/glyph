@@ -1,9 +1,8 @@
 import { visit } from "unist-util-visit";
 import { isMarkdownFile } from "@/lib/markdownExtensions";
 import { basename } from "@/lib/paths";
-import { isRelativeLocalHref, normalizeRelativePath } from "@/lib/relativePath";
+import { decodeHref, isRelativeLocalHref, normalizeRelativePath } from "@/lib/relativePath";
 import {
-  decodeHref,
   encodeHref,
   headingSlug,
   isPublishableAsset,

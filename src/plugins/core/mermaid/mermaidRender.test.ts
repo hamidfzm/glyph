@@ -188,6 +188,18 @@ describe("renderMermaid sanitizing", () => {
     expect(initialize).toHaveBeenCalledWith(expect.objectContaining({ securityLevel: "strict" }));
   });
 
+  // Mermaid keeps `click A href "..."` under its strict level as an SVG anchor,
+  // and an HTML label may hold one too. Neither goes through the link
+  // component, so a click would navigate the webview itself: the sanitizer
+  // forbids the anchor (DOMPurify keeps its content, so the label survives).
+  it("forbids the anchors a click link or an HTML label puts in the diagram", async () => {
+    renderSvg.mockResolvedValue({
+      svg: '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"><a xlink:href="https://attacker.example"><text>A</text></a><foreignObject><a href="https://attacker.example">Open</a></foreignObject></svg>',
+    });
+    await renderMermaid('graph TD; A-->B; click A href "https://attacker.example"', false);
+    expect(sanitizeMock.mock.calls[0][1]).toMatchObject({ FORBID_TAGS: ["a"] });
+  });
+
   // Mermaid's default on a parse error is to draw its own error diagram into a
   // node it leaves in document.body, outside whatever document asked.
   it("asks Mermaid not to draw its own error diagram", async () => {
@@ -239,10 +251,10 @@ describe("renderMermaidStatic", () => {
     });
   });
 
-  it("sanitizes the rendered markup before any consumer sees it", async () => {
+  it("sanitizes the rendered markup, anchors included, before any consumer sees it", async () => {
     renderSvg.mockResolvedValue({ svg: '<svg xmlns="http://www.w3.org/2000/svg"/>' });
-    await renderMermaidStatic("graph TD; A-->B");
-    expect(sanitizeMock.mock.calls[0][1]).toMatchObject({ FORBID_TAGS: ["foreignObject"] });
+    await renderMermaidStatic('graph TD; A-->B; click A href "https://attacker.example"');
+    expect(sanitizeMock.mock.calls[0][1]).toMatchObject({ FORBID_TAGS: ["foreignObject", "a"] });
   });
 
   it("clears the filled backdrop Mermaid puts behind edge and cluster labels", async () => {
@@ -287,7 +299,7 @@ describe("renderMermaidPreview", () => {
     expect(initialize).toHaveBeenCalledWith(
       expect.objectContaining({ theme: "dark", htmlLabels: false }),
     );
-    expect(sanitizeMock.mock.calls[0][1]).toMatchObject({ FORBID_TAGS: ["foreignObject"] });
+    expect(sanitizeMock.mock.calls[0][1]).toMatchObject({ FORBID_TAGS: ["foreignObject", "a"] });
   });
 
   it("keeps the label backgrounds, which only paper drops", async () => {

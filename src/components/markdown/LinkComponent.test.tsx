@@ -66,6 +66,22 @@ describe("LinkComponent hash links", () => {
     const anchor = container.querySelector("a") as HTMLAnchorElement;
     expect(() => fireEvent.click(anchor)).not.toThrow();
   });
+
+  // `[x](#%E0)` is not valid percent-encoding: decoding it throws, and the
+  // click handler's promise had no catcher, so that was a reported crash.
+  it("looks a malformed percent-encoded fragment up verbatim instead of throwing", () => {
+    const target = document.createElement("h2");
+    target.id = "%E0";
+    const scroll = vi.fn();
+    target.scrollIntoView = scroll;
+    document.body.appendChild(target);
+
+    const { container } = renderLink({ href: "#%E0" });
+    fireEvent.click(container.querySelector("a") as HTMLAnchorElement);
+
+    expect(scroll).toHaveBeenCalled();
+    target.remove();
+  });
 });
 
 describe("LinkComponent wikilinks", () => {

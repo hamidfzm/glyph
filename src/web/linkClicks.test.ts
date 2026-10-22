@@ -101,7 +101,7 @@ describe("handleDocumentClick", () => {
     );
   });
 
-  it("opens a link inside a Mermaid diagram's SVG", () => {
+  it("opens a link inside an SVG", () => {
     mount('<svg><a xlink:href="https://example.com/node"><text>Node</text></a></svg>');
     expect(click(root.querySelector("text")!).defaultPrevented).toBe(true);
     expect(open).toHaveBeenCalledWith("https://example.com/node", "_blank", "noopener,noreferrer");

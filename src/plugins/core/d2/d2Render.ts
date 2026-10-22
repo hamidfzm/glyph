@@ -47,12 +47,14 @@ const cache = new RenderCache<Promise<string>>();
 // href references while keeping SVG elements; we additionally forbid
 // <foreignObject>, the SVG-embedded-HTML XSS vector. Note: this also strips D2's
 // foreignObject-based markdown/code blocks, an accepted trade-off: the XSS
-// guard outweighs those rare embeds.
+// guard outweighs those rare embeds. A shape's `link` becomes an anchor that
+// bypasses the link component's prompt and would navigate the webview itself,
+// so anchors go too; the shape and its label stay.
 // DOMPurify is imported on demand so it stays out of the startup bundle; a D2
 // render already awaits the multi-MB compiler, so the extra import is noise.
 async function sanitizeSvg(svg: string): Promise<string> {
   const { default: DOMPurify } = await import("dompurify");
-  return DOMPurify.sanitize(svg, { FORBID_TAGS: ["foreignObject"] });
+  return DOMPurify.sanitize(svg, { FORBID_TAGS: ["foreignObject", "a"] });
 }
 
 /** Compile and render a D2 source to sanitized SVG, served from cache when the

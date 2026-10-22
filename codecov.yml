@@ -67,6 +67,11 @@ ignore:
   # live window manager and can't be reached from MockRuntime. The routing
   # decision (route_open) and the registry live in windows.rs with direct tests.
   - "src-tauri/src/windows_runtime.rs"
+  # navigation_runtime.rs registers the navigation guard plugin; its
+  # on_navigation closure runs only inside a real webview, which MockRuntime
+  # never navigates. The decision (is_app_url) lives in navigation.rs with
+  # direct tests.
+  - "src-tauri/src/navigation_runtime.rs"
   # Native pick dialogs (commands/pick.rs): every command drives a live OS
   # file dialog via tauri-plugin-dialog's blocking API, which cannot be
   # exercised from MockRuntime past a check that runs before it. The grant

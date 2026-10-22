@@ -1,7 +1,7 @@
 import { type ComponentPropsWithoutRef, useCallback } from "react";
 import { ExternalLinkIcon } from "@/components/icons/ExternalLinkIcon";
 import { useOpenExternalLink } from "@/hooks/useOpenExternalLink";
-import { isOpenableRelativeHref } from "@/lib/relativePath";
+import { decodeHref, isOpenableRelativeHref } from "@/lib/relativePath";
 import { scrollToHeading } from "@/lib/scrollToHeading";
 import { WikilinkAnchor } from "./WikilinkAnchor";
 
@@ -53,7 +53,7 @@ export function LinkComponent(props: LinkComponentProps) {
 
       if (href.startsWith("#")) {
         e.preventDefault();
-        const id = decodeURIComponent(href.slice(1));
+        const id = decodeHref(href.slice(1));
         if (id) scrollToHeading(id);
         return;
       }

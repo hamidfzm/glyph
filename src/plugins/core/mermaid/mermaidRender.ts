@@ -55,6 +55,11 @@ function renderWith(config: MermaidConfig, source: string): Promise<string> {
   return pending;
 }
 
+// A diagram's links (`click A href "..."`, an anchor in an HTML label) are not
+// routed through the link component, so a click would navigate the webview
+// itself to the target, with no prompt; the anchor goes and its label stays.
+const INERT_LINKS = ["a"];
+
 // The on-screen render lands in the document through `innerHTML`, so it gets
 // the same pass the page renders get (see `renderTextLabels`), keeping the
 // HTML labels the screen uses: DOMPurify sanitizes inside a `<foreignObject>`
@@ -63,6 +68,7 @@ async function sanitizeLive(svg: string): Promise<string> {
   const DOMPurify = await loadPurify();
   const fragment = DOMPurify.sanitize(svg, {
     USE_PROFILES: { html: true, svg: true, svgFilters: true },
+    FORBID_TAGS: INERT_LINKS,
     RETURN_DOM_FRAGMENT: true,
   });
   return svgMarkup(fragment);
@@ -136,7 +142,10 @@ async function renderTextLabels(source: string, dark: boolean): Promise<Document
     source,
   );
   const DOMPurify = await loadPurify();
-  return DOMPurify.sanitize(svg, { FORBID_TAGS: ["foreignObject"], RETURN_DOM_FRAGMENT: true });
+  return DOMPurify.sanitize(svg, {
+    FORBID_TAGS: ["foreignObject", ...INERT_LINKS],
+    RETURN_DOM_FRAGMENT: true,
+  });
 }
 
 function svgMarkup(fragment: DocumentFragment): string {
