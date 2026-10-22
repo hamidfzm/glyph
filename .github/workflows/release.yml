@@ -380,26 +380,53 @@ jobs:
               --field content="$(base64 -w0 /tmp/glyph.json)"
           fi
 
-  # The web viewer is built from this tag by glyph-md/view's own workflow,
-  # which deploys it to GitHub Pages; this job only starts that run. Only the
-  # highest release deploys, so a hotfix cut from an older line cannot roll the
-  # public viewer back, and it skips cleanly until the satellite exists.
-  publish-web-viewer:
+  # Satellites that follow each release run their own workflow for its tag;
+  # this job only starts those runs. Only the highest release dispatches, so a
+  # hotfix cut from an older line cannot roll a satellite back, and each one
+  # skips cleanly until its satellite has the workflow.
+  dispatch-satellites:
     needs: update-release-notes
     if: needs.update-release-notes.outputs.latest == 'true'
     runs-on: ubuntu-24.04
     permissions: {}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Builds the web viewer from this tag and deploys it to GitHub Pages.
+          - repo: glyph-md/view
+            workflow: deploy.yml
+            input: ref
+          # Smoke-tests the export action against this tag, pins it as the
+          # action's default and publishes the matching action release, which
+          # the Marketplace lists.
+          - repo: glyph-md/export-website-action
+            workflow: release.yml
+            input: version
     steps:
-      - name: Deploy the web viewer from this tag
+      - name: Start ${{ matrix.workflow }} in ${{ matrix.repo }}
         env:
           GH_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
           TAG: ${{ github.ref_name }}
+          REPO: ${{ matrix.repo }}
+          WORKFLOW: ${{ matrix.workflow }}
+          INPUT: ${{ matrix.input }}
         run: |
-          if [ -z "$GH_TOKEN" ] || ! gh api repos/glyph-md/view/actions/workflows/deploy.yml >/dev/null 2>&1; then
-            echo "glyph-md/view has no deploy workflow yet; skipping the web viewer deploy."
+          if [ -z "$GH_TOKEN" ]; then
+            echo "TAP_GITHUB_TOKEN is not set; skipping $REPO."
             exit 0
           fi
-          gh workflow run deploy.yml --repo glyph-md/view --ref main -f ref="$TAG"
+          # Only a missing workflow skips. Any other API failure fails the job,
+          # so a hiccup cannot quietly drop this release from a satellite.
+          if ! ERR="$(gh api "repos/$REPO/actions/workflows/$WORKFLOW" 2>&1 >/dev/null)"; then
+            if [[ "$ERR" == *"HTTP 404"* ]]; then
+              echo "$REPO has no $WORKFLOW yet; skipping."
+              exit 0
+            fi
+            echo "$ERR"
+            exit 1
+          fi
+          gh workflow run "$WORKFLOW" --repo "$REPO" --ref main -f "$INPUT=$TAG"
 
   publish-winget:
     needs: build

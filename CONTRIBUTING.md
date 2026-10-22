@@ -201,9 +201,9 @@ While it is registered, the test install previews every markdown file you press 
 comes from a picked or dropped file, or from the URL fragment (`#v1.` and the
 document, deflate-compressed and base64url-encoded). `pnpm build:web` builds it
 into `dist-web/`. The [glyph-md/view](https://github.com/glyph-md/view) repo
-deploys it to GitHub Pages: each release's `publish-web-viewer` job starts
-that repo's workflow, which builds this repo at the release tag. The page's
-meta CSP is its only network control, so `src/test/e2e/webViewer.spec.ts`
+deploys it to GitHub Pages: the highest release's `dispatch-satellites` job
+starts that repo's workflow, which builds this repo at the release tag. The
+page's meta CSP is its only network control, so `src/test/e2e/webViewer.spec.ts`
 opens hostile documents in the built page under WebKit (build it first).
 
 To try it, build and serve `dist-web/`:
@@ -381,6 +381,10 @@ Do **not** create releases manually with `gh release create` or push tags by han
 **A release with a Breaking Changes section needs an upgrade note written by hand.** The generated bullet is only the PR title, which tells nobody what to change. Prepend a short before/after block to the published notes with `gh release edit vX.Y.Z --notes-file <file>`; [v0.23.0](https://github.com/hamidfzm/glyph/releases/tag/v0.23.0) is the worked example.
 
 **Wait for CI to pass on `main` before triggering Create Release.** The release workflow assumes the latest commit is green; running it on a red `main` produces broken artifacts that get published to every package manager simultaneously. Check the CI badge or `gh run list --branch main --limit 1` first.
+
+### Satellite releases
+
+For the highest release, the `dispatch-satellites` job starts a workflow in each satellite that follows releases: [glyph-md/view](https://github.com/glyph-md/view) deploys the web viewer, and [glyph-md/export-website-action](https://github.com/glyph-md/export-website-action) smoke-tests the action against the release, pins it as the action's default `version`, and publishes an action release of the same name, which the GitHub Marketplace lists. That release is created with `RELEASE_TOKEN` from the satellite's `release` environment, a token of the account that published the action to the Marketplace: GitHub has no API for the Marketplace checkbox, and does not list a release made with `GITHUB_TOKEN`. When the action's smoke test fails, it stays on the previous release; fix it and run its Release workflow by hand with the tag.
 
 ### Post-release smoke test
 
