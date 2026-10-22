@@ -19,33 +19,16 @@ runs:
         PATTERNS: ${{ inputs.patterns }}
       run: |
         set -euo pipefail
-        args=(--pattern SHA256SUMS)
+        patterns=()
         while IFS= read -r pattern; do
-          [ -n "$pattern" ] && args+=(--pattern "$pattern")
+          [ -n "$pattern" ] && patterns+=("$pattern")
         done <<< "$PATTERNS"
+        args=(--pattern SHA256SUMS)
+        for pattern in "${patterns[@]}"; do
+          args+=(--pattern "$pattern")
+        done
         gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --clobber "${args[@]}"
 
         # Every file a pattern names must be listed, and must match the list.
-        wanted=$(mktemp)
-        while IFS= read -r pattern; do
-          [ -n "$pattern" ] || continue
-          found=0
-          for file in $pattern; do
-            [ -e "$file" ] || continue
-            found=1
-            line=$(awk -v f="$file" '$2 == f' SHA256SUMS)
-            if [ -z "$line" ]; then
-              echo "::error::$file is not listed in SHA256SUMS"
-              exit 1
-            fi
-            printf '%s\n' "$line" >> "$wanted"
-          done
-          if [ "$found" = 0 ]; then
-            echo "::error::no release asset matches $pattern"
-            exit 1
-          fi
-        done <<< "$PATTERNS"
-        if [ -s "$wanted" ]; then
-          sha256sum --check --strict "$wanted"
-        fi
-        rm -f "$wanted"
+        # The checkout this action follows puts the script here.
+        bash scripts/release-assets.sh verify "${patterns[@]}"
