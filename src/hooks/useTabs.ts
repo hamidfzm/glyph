@@ -234,9 +234,13 @@ export function useTabs(options: UseTabsOptions) {
       const save = async (tab: FileTab) => {
         saved.set(tab.id, await saveDocument(tab.id));
       };
-      const withPath = Promise.all(dirty.filter((tab) => !tab.file.virtual).map(save));
-      for (const tab of dirty.filter((tab) => tab.file.virtual)) await save(tab);
-      await withPath;
+      const saveUntitledInTurn = async () => {
+        for (const tab of dirty.filter((tab) => tab.file.virtual)) await save(tab);
+      };
+      await Promise.all([
+        ...dirty.filter((tab) => !tab.file.virtual).map(save),
+        saveUntitledInTurn(),
+      ]);
       const unsaved = dirty.filter((tab) => !saved.get(tab.id));
       if (unsaved.length === 0) return true;
 

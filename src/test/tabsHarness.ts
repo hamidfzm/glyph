@@ -82,6 +82,13 @@ export function makeInvoker(overrides: Partial<Record<string, Invoker>> = {}): I
   };
 }
 
+/** Route `write_file` to `writeFile`, every other command to the defaults. */
+export function mockWriteFile(writeFile: ReturnType<typeof vi.fn>): void {
+  vi.mocked(invoke).mockImplementation(
+    makeInvoker({ write_file: writeFile as unknown as Invoker }) as typeof invoke,
+  );
+}
+
 export function defaultOptions(over: Partial<Parameters<typeof useTabs>[0]> = {}) {
   return {
     reopenLastFile: false,

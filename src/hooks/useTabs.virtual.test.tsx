@@ -12,6 +12,7 @@ import {
   fileOf,
   type Invoker,
   makeInvoker,
+  mockWriteFile,
   resetTabsMocks,
   type TabsHook,
 } from "@/test/tabsHarness";
@@ -84,9 +85,7 @@ describe("useTabs in-memory documents", () => {
 
   it("saveDocument on a virtual tab writes via Save As and adopts the path", async () => {
     const writeFile = vi.fn().mockResolvedValue(undefined);
-    vi.mocked(invoke).mockImplementation(
-      makeInvoker({ write_file: writeFile as unknown as Invoker }) as typeof invoke,
-    );
+    mockWriteFile(writeFile);
     vi.mocked(pickSave).mockResolvedValue("/p/saved.md");
     const onSettingsChange = vi.fn();
     const { result } = renderHook(() => useTabs(defaultOptions({ onSettingsChange })));
@@ -111,9 +110,7 @@ describe("useTabs in-memory documents", () => {
 
   it("saveDocument keeps the buffer virtual when Save As is cancelled", async () => {
     const writeFile = vi.fn().mockResolvedValue(undefined);
-    vi.mocked(invoke).mockImplementation(
-      makeInvoker({ write_file: writeFile as unknown as Invoker }) as typeof invoke,
-    );
+    mockWriteFile(writeFile);
     vi.mocked(pickSave).mockResolvedValue(null);
     const { result } = renderHook(() => useTabs(defaultOptions()));
     const tabId = await newDraft(result, "X");
@@ -226,9 +223,7 @@ describe("useTabs in-memory documents", () => {
 
   it("Save As writes the text as it is when the dialog is confirmed", async () => {
     const writeFile = vi.fn().mockResolvedValue(undefined);
-    vi.mocked(invoke).mockImplementation(
-      makeInvoker({ write_file: writeFile as unknown as Invoker }) as typeof invoke,
-    );
+    mockWriteFile(writeFile);
     const dialog = deferred<string | null>();
     vi.mocked(pickSave).mockReturnValue(dialog.promise);
     const { result } = renderHook(() => useTabs(defaultOptions()));
@@ -264,9 +259,7 @@ describe("useTabs in-memory documents", () => {
       writeStarted.resolve();
       await writeGate.promise;
     });
-    vi.mocked(invoke).mockImplementation(
-      makeInvoker({ write_file: writeFile as unknown as Invoker }) as typeof invoke,
-    );
+    mockWriteFile(writeFile);
     vi.mocked(pickSave).mockResolvedValue("/p/saved.md");
     const { result } = renderHook(() => useTabs(defaultOptions()));
     const tabId = await newDraft(result, "first");
@@ -305,9 +298,7 @@ describe("useTabs in-memory documents", () => {
 
   it("closing an untitled tab saves what was typed while its Save As dialog was open", async () => {
     const writeFile = vi.fn().mockResolvedValue(undefined);
-    vi.mocked(invoke).mockImplementation(
-      makeInvoker({ write_file: writeFile as unknown as Invoker }) as typeof invoke,
-    );
+    mockWriteFile(writeFile);
     const dialog = deferred<string | null>();
     vi.mocked(pickSave).mockReturnValue(dialog.promise);
     const { result } = renderHook(() => useTabs(defaultOptions()));
@@ -341,9 +332,7 @@ describe("useTabs in-memory documents", () => {
     ["cancelled", null],
   ])("a Save As dialog %s after its tab was closed has nothing to save", async (_how, picked) => {
     const writeFile = vi.fn().mockResolvedValue(undefined);
-    vi.mocked(invoke).mockImplementation(
-      makeInvoker({ write_file: writeFile as unknown as Invoker }) as typeof invoke,
-    );
+    mockWriteFile(writeFile);
     const dialog = deferred<string | null>();
     vi.mocked(pickSave).mockReturnValue(dialog.promise);
     const { result } = renderHook(() =>
@@ -372,9 +361,7 @@ describe("useTabs in-memory documents", () => {
 
   it("an older Save As dialog confirmed last still saves the newest text", async () => {
     const writeFile = vi.fn().mockResolvedValue(undefined);
-    vi.mocked(invoke).mockImplementation(
-      makeInvoker({ write_file: writeFile as unknown as Invoker }) as typeof invoke,
-    );
+    mockWriteFile(writeFile);
     const older = deferred<string | null>();
     const newer = deferred<string | null>();
     vi.mocked(pickSave).mockReturnValueOnce(older.promise).mockReturnValueOnce(newer.promise);
@@ -492,9 +479,7 @@ describe("useTabs in-memory documents", () => {
 
   it("saveDocument asks again with no starting folder when the workspace root is refused", async () => {
     const writeFile = vi.fn().mockResolvedValue(undefined);
-    vi.mocked(invoke).mockImplementation(
-      makeInvoker({ write_file: writeFile as unknown as Invoker }) as typeof invoke,
-    );
+    mockWriteFile(writeFile);
     // The root's folder was renamed under the app, so the backend no longer
     // resolves it and refuses it as the folder to open the dialog in.
     expectConsole(/asking again with no starting folder/);
@@ -519,9 +504,7 @@ describe("useTabs in-memory documents", () => {
 
   it("saveDocument keeps the buffer virtual when the second Save As is cancelled", async () => {
     const writeFile = vi.fn().mockResolvedValue(undefined);
-    vi.mocked(invoke).mockImplementation(
-      makeInvoker({ write_file: writeFile as unknown as Invoker }) as typeof invoke,
-    );
+    mockWriteFile(writeFile);
     expectConsole(/asking again with no starting folder/);
     vi.mocked(pickSave)
       .mockRejectedValueOnce("path is outside the allowed workspaces and files: /p/ws")
@@ -650,12 +633,6 @@ describe("useTabs in-memory documents", () => {
 });
 
 describe("closing untitled documents", () => {
-  function mockWrites(writeFile: ReturnType<typeof vi.fn>) {
-    vi.mocked(invoke).mockImplementation(
-      makeInvoker({ write_file: writeFile as unknown as Invoker }) as typeof invoke,
-    );
-  }
-
   it.each([
     ["the window", (result: TabsHook) => result.current.flushForClose()],
     ["both tabs", (result: TabsHook, ids: string[]) => result.current.closeTabs(ids)],
@@ -663,7 +640,7 @@ describe("closing untitled documents", () => {
     "closing %s asks for one Save As at a time, and still asks after a cancel",
     async (_what, close) => {
       const writeFile = vi.fn().mockResolvedValue(undefined);
-      mockWrites(writeFile);
+      mockWriteFile(writeFile);
       const first = deferred<string | null>();
       const second = deferred<string | null>();
       vi.mocked(pickSave).mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
@@ -705,7 +682,7 @@ describe("closing untitled documents", () => {
 
   it("writes a tab with a path while an untitled tab's Save As is still open", async () => {
     const writeFile = vi.fn().mockResolvedValue(undefined);
-    mockWrites(writeFile);
+    mockWriteFile(writeFile);
     const dialog = deferred<string | null>();
     vi.mocked(pickSave).mockReturnValue(dialog.promise);
     const { result } = renderHook(() => useTabs(defaultOptions()));
@@ -760,5 +737,40 @@ describe("closing untitled documents", () => {
     expect(pickSave).not.toHaveBeenCalled();
     expect(closed).toBe(false);
     expect(fileOf(result).dirty).toBe(true);
+  });
+
+  it("after Save at the Auto Save off prompt, still asks for one Save As at a time", async () => {
+    const writeFile = vi.fn().mockResolvedValue(undefined);
+    mockWriteFile(writeFile);
+    const first = deferred<string | null>();
+    const second = deferred<string | null>();
+    vi.mocked(pickSave).mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+    const confirmUnsaved = vi.fn(async () => "save" as const);
+    const { result } = renderHook(() =>
+      useTabs(defaultOptions({ autoSave: false, confirmUnsaved })),
+    );
+    await newDraft(result, "one");
+    await newDraft(result, "two");
+
+    let closing: Promise<boolean> | undefined;
+    act(() => {
+      closing = result.current.flushForClose();
+    });
+    await deliver(() => {});
+    expect(pickSave).toHaveBeenCalledTimes(1);
+
+    await deliver(() => first.resolve("/p/one.md"));
+    expect(pickSave).toHaveBeenCalledTimes(2);
+
+    let proceed: boolean | undefined;
+    await act(async () => {
+      second.resolve("/p/two.md");
+      proceed = await closing;
+    });
+    expect(proceed).toBe(true);
+    expect(writeFile.mock.calls.map((call) => call[1])).toEqual([
+      { path: "/p/one.md", content: "one" },
+      { path: "/p/two.md", content: "two" },
+    ]);
   });
 });

@@ -1,4 +1,3 @@
-import { invoke } from "@tauri-apps/api/core";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useAutoSave } from "@/hooks/useAutoSave";
@@ -8,8 +7,7 @@ import { deferred } from "@/test/deferred";
 import {
   defaultOptions,
   fileOf,
-  type Invoker,
-  makeInvoker,
+  mockWriteFile,
   openEditable,
   resetTabsMocks,
   type TabsHook,
@@ -37,12 +35,6 @@ function useTabsWithAutoSave() {
   const tabs = useTabs(defaultOptions());
   useAutoSave({ documents: autoSaveDocuments(tabs.tabs), save: tabs.saveDocument });
   return tabs;
-}
-
-function mockWrites(writeFile: ReturnType<typeof vi.fn>) {
-  vi.mocked(invoke).mockImplementation(
-    makeInvoker({ write_file: writeFile as unknown as Invoker }) as typeof invoke,
-  );
 }
 
 async function wait(ms: number) {
@@ -116,7 +108,7 @@ describe("Auto Save and untitled documents", () => {
         await writeGate.promise;
       })
       .mockResolvedValue(undefined);
-    mockWrites(writeFile);
+    mockWriteFile(writeFile);
     vi.mocked(pickSave).mockResolvedValue("/p/saved.md");
     const { result } = renderHook(useTabsWithAutoSave);
     const tabId = await typeIntoNewDocument(result, "first");
@@ -156,7 +148,7 @@ describe("Auto Save and untitled documents", () => {
 
   it("still saves a document with a path once per pause in typing", async () => {
     const writeFile = vi.fn().mockResolvedValue(undefined);
-    mockWrites(writeFile);
+    mockWriteFile(writeFile);
     const { result } = renderHook(useTabsWithAutoSave);
     const tabId = await openEditable(result);
     vi.useFakeTimers();

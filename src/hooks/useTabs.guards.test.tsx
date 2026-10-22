@@ -2,7 +2,13 @@ import { invoke } from "@tauri-apps/api/core";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { pickFiles } from "@/lib/pickers";
-import { defaultOptions, type Invoker, makeInvoker, resetTabsMocks } from "@/test/tabsHarness";
+import {
+  defaultOptions,
+  type Invoker,
+  makeInvoker,
+  mockWriteFile,
+  resetTabsMocks,
+} from "@/test/tabsHarness";
 import { useTabs } from "./useTabs";
 
 vi.mock("@/lib/pickers", () => ({
@@ -202,9 +208,7 @@ describe("useTabs guards and no-ops", () => {
 
   it("toggleTask is a no-op for a tab that carries no text", async () => {
     const writeFile = vi.fn(async () => undefined);
-    vi.mocked(invoke).mockImplementation(
-      makeInvoker({ write_file: writeFile as unknown as Invoker }) as typeof invoke,
-    );
+    mockWriteFile(writeFile);
     const { result } = renderHook(() => useTabs(defaultOptions()));
     await waitFor(() => expect(result.current.initializing).toBe(false));
     // An image tab is never read as text, so its content stays null.
