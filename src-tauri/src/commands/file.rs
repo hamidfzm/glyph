@@ -120,9 +120,20 @@ fn says_absent(e: &io::Error) -> bool {
     )
 }
 
+/// Whether a site-relative path, in either separator, names `.git` or anything
+/// below it. Nothing below `.git` is ever written (`ensure_writable`), so
+/// nothing there is the export's to claim or remove, and the output folder is
+/// often a checkout of the site's own repository.
+fn names_git_dir_in_site(rel: &str) -> bool {
+    grants::names_git_dir(&rel.split(['/', '\\']).collect::<PathBuf>())
+}
+
 /// The folder and the file name `rel` points at under `out_dir`, when every
-/// segment of it is a plain name.
+/// segment of it is a plain name and none is `.git`.
 fn entry_parts(out_dir: &Path, rel: &str) -> Option<(PathBuf, OsString)> {
+    if names_git_dir_in_site(rel) {
+        return None;
+    }
     let mut path = out_dir.to_path_buf();
     for segment in rel.split(['/', '\\']) {
         let mut components = Path::new(segment).components();
@@ -395,6 +406,14 @@ pub fn prune_export_dir(
     grants: State<'_, GrantRegistry>,
 ) -> Result<PruneReport, String> {
     let out_dir = grants.ensure_writable(&out_dir)?;
+    // A claim to have written below `.git` is not the export's, since no write
+    // lands there: refused before anything is removed or recorded, so the
+    // manifest never carries it.
+    if let Some(rel) = written.iter().find(|rel| names_git_dir_in_site(rel)) {
+        return Err(format!(
+            "Refusing to record {rel:?}: nothing below .git is ever written"
+        ));
+    }
     let manifest = out_dir.join(SITE_MANIFEST_REL);
     // `out_dir` is checked and holds no link, but one below it leads anywhere,
     // and the manifest is read and replaced where it leads.
@@ -1361,6 +1380,51 @@ mod tests {
         assert!(victim.exists());
 
         let _ = fs::remove_dir_all(&outer);
+    }
+
+    #[test]
+    fn prune_export_dir_removes_nothing_below_git() {
+        // The output folder is a checkout of the site's repository, and a
+        // manifest written by hand or by a compromised renderer claims its
+        // repository files, in either case and either separator.
+        let dir = out_dir_with_manifest(
+            "prune_git",
+            &[".git/config", ".GIT/HEAD", ".git\\hooks\\pre-commit"],
+        );
+        fs::create_dir_all(dir.join(".git/hooks")).unwrap();
+        fs::create_dir_all(dir.join(".GIT")).unwrap();
+        fs::write(dir.join(".git/config"), "[remote \"origin\"]").unwrap();
+        fs::write(dir.join(".GIT/HEAD"), "ref: refs/heads/main").unwrap();
+        fs::write(dir.join(".git/hooks/pre-commit"), "#!/bin/sh").unwrap();
+
+        assert_eq!(prune(&dir, &[]).unwrap(), clean(0));
+
+        assert!(dir.join(".git/config").is_file());
+        assert!(dir.join(".GIT/HEAD").is_file());
+        assert!(dir.join(".git/hooks/pre-commit").is_file());
+        // Dropped rather than carried: nothing of Glyph's is at those paths.
+        assert_eq!(manifest_text(&dir), "[]");
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn prune_export_dir_records_no_claim_below_git() {
+        let dir = out_dir_with_manifest("prune_git_claim", &["index.html", "stale.html"]);
+        fs::write(dir.join("index.html"), "home").unwrap();
+        fs::write(dir.join("stale.html"), "stale").unwrap();
+        let before = manifest_text(&dir);
+
+        for claim in [".git/HEAD", ".GIT/config", "site\\.git\\hooks\\pre-commit"] {
+            let err = prune(&dir, &["index.html", claim]).unwrap_err();
+            assert!(err.contains(".git"), "{err}");
+        }
+
+        // Refused before anything was removed or the manifest replaced.
+        assert!(dir.join("stale.html").is_file());
+        assert_eq!(manifest_text(&dir), before);
+
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[cfg(windows)]

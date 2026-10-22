@@ -17,7 +17,7 @@ use super::note::{scan, Note};
 use super::resolve::{compare_paths, stem_of, Resolver};
 use super::store::{apply_changes, with_synced_vault, VaultStore};
 use super::Vault;
-use crate::grants::GrantRegistry;
+use crate::grants::{names_git_dir, GrantRegistry};
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -130,9 +130,17 @@ pub(crate) fn respelled(from: &Path, to: &Path) -> bool {
 }
 
 fn plan(vault: &Vault, from: &Path, to: &Path) -> Result<Vec<Rewrite>, String> {
-    let (Some((from, _)), Some((to, _))) = (vault.inside_root(from), vault.inside_root(to)) else {
+    let (Some((from, from_rel)), Some((to, to_rel))) =
+        (vault.inside_root(from), vault.inside_root(to))
+    else {
         return Err("Refusing to move outside the workspace".to_string());
     };
+    // The commands refuse both ends before planning; held here as well so no
+    // caller of `relocate` lands an entry in `.git`, which the lexical check
+    // above would let through.
+    if names_git_dir(&from_rel) || names_git_dir(&to_rel) {
+        return Err("Refusing to move into or out of the workspace's .git directory".to_string());
+    }
     let relinker = Relinker::new(vault, Move { from, to });
     let mut rewrites = Vec::new();
     for note in &vault.notes {
@@ -939,5 +947,18 @@ mod tests {
         assert!(plan(&vault, &root.join("Travel.md"), &outside.join("Travel.md")).is_err());
         fs::remove_dir_all(&root).unwrap();
         fs::remove_dir_all(&outside).unwrap();
+    }
+
+    #[test]
+    fn a_move_that_names_git_at_either_end_is_refused() {
+        let root = workspace("git_dir", &[("Travel.md", ""), ("hooks/pre-commit", "")]);
+        let vault = Vault::build(&root).unwrap();
+        // The folder is inside the workspace, so the lexical check alone
+        // would plan the move that makes its hook git's.
+        assert!(plan(&vault, &root.join("hooks"), &root.join(".git")).is_err());
+        assert!(plan(&vault, &root.join("hooks"), &root.join("sub/.GIT")).is_err());
+        assert!(plan(&vault, &root.join(".git/config"), &root.join("config")).is_err());
+        assert!(plan(&vault, &root.join("hooks"), &root.join("scripts")).is_ok());
+        fs::remove_dir_all(&root).unwrap();
     }
 }

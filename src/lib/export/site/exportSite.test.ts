@@ -180,6 +180,22 @@ describe("exportSite", () => {
     expect(fs.copies).toEqual([{ src: "/ws/img/shot.png", dest: "/out/img/shot.png" }]);
   });
 
+  it("copies nothing hidden or above the workspace, however a page refers to it", async () => {
+    const fs = mockFs({
+      "/ws/notes.md":
+        "![e](.env) [c](.git/config) ![d](../private/diagram.png) ![ok](images/x.png)",
+      "/ws/.env": "SECRET=1",
+      "/ws/.git/config": "[remote]",
+      "/private/diagram.png": "<binary>",
+      "/ws/images/x.png": "<binary>",
+    });
+    const result = await exportSite({ root: "/ws", outDir: "/out" });
+    expect(result.assets).toBe(1);
+    expect(fs.copies).toEqual([{ src: "/ws/images/x.png", dest: "/out/images/x.png" }]);
+    expect(fs.pruned[0]).not.toContain(".env");
+    expect(fs.pruned[0]).not.toContain(".git/config");
+  });
+
   it("copies a linked file into the output tree so the link resolves", async () => {
     const fs = mockFs({ "/ws/notes.md": "[the report](./docs/report.pdf)" });
     const result = await exportSite({ root: "/ws", outDir: "/out" });

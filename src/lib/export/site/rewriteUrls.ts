@@ -1,8 +1,15 @@
 import { visit } from "unist-util-visit";
 import { isMarkdownFile } from "@/lib/markdownExtensions";
-import { basename, isPathInside } from "@/lib/paths";
+import { basename } from "@/lib/paths";
 import { isRelativeLocalHref, normalizeRelativePath } from "@/lib/relativePath";
-import { decodeHref, encodeHref, headingSlug, relativeHref, relFromRoot } from "./sitePaths";
+import {
+  decodeHref,
+  encodeHref,
+  headingSlug,
+  isPublishableAsset,
+  relativeHref,
+  relFromRoot,
+} from "./sitePaths";
 
 // Rehype plugin that makes one rendered page navigable inside the exported
 // site: wikilink anchors point at the target's generated .html, relative
@@ -66,19 +73,19 @@ function isGeneratedPath(ctx: SiteUrlContext, dest: string): boolean {
 }
 
 /**
- * Reserve a site-relative destination for `abs`. Assets inside the workspace
- * keep their relative location; anything outside, or anything that would land
- * on a file the exporter generates, goes to assets/ with a numeric suffix on
- * basename collisions.
+ * Reserve a site-relative destination for `abs`, a publishable workspace file
+ * (callers check `isPublishableAsset` first). It keeps its relative location
+ * unless that would land on a file the exporter generates; then it goes to
+ * assets/ with a numeric suffix on basename collisions.
  */
 function assetDestination(ctx: SiteUrlContext, abs: string): string {
   const existing = ctx.assets.get(abs);
   if (existing) return existing;
-  const mirrored = isPathInside(abs, ctx.root) ? relFromRoot(ctx.root, abs) : null;
+  const mirrored = relFromRoot(ctx.root, abs);
   // Assets are copied after the pages are written, so mirroring a workspace
   // file onto a path the exporter generates (a stray index.html, a workspace
   // style.css) would silently overwrite it. Those go to assets/ instead.
-  if (mirrored !== null && !isGeneratedPath(ctx, mirrored)) {
+  if (!isGeneratedPath(ctx, mirrored)) {
     ctx.assets.set(abs, mirrored);
     return mirrored;
   }
@@ -117,9 +124,9 @@ function rewriteAnchor(ctx: SiteUrlContext, props: Record<string, unknown>): voi
   // micromark percent-encodes destinations; decode to get the on-disk path.
   const abs = normalizeRelativePath(ctx.filePath, decodeHref(target));
   if (!isMarkdownFile(target)) {
-    // Anything above the root keeps its original href: a link is easier to
-    // write carelessly than an embed, so it does not publish what it names.
-    if (!isPathInside(abs, ctx.root)) return;
+    // A file the site may not publish keeps its original href, and nothing
+    // is copied for it.
+    if (!isPublishableAsset(ctx.root, abs)) return;
     props.href = encodeHref(relativeHref(ctx.pageRel, assetDestination(ctx, abs))) + suffix;
     return;
   }
@@ -154,6 +161,9 @@ function rewriteAssetRef(
   const value = props[key];
   if (typeof value !== "string" || !isRelativeLocalHref(value)) return;
   const abs = normalizeRelativePath(ctx.filePath, decodeHref(value));
+  // Left as written, like a link: the site serves nothing there, so the
+  // reference is broken in the export rather than a file published by it.
+  if (!isPublishableAsset(ctx.root, abs)) return;
   const dest = assetDestination(ctx, abs);
   props[key] = encodeHref(relativeHref(ctx.pageRel, dest));
 }

@@ -3,9 +3,8 @@
 // file is not required; a present-but-invalid file fails the export loudly,
 // because silently publishing wrong metadata is worse than no export.
 
-import { isPathInside } from "@/lib/paths";
 import { normalizeRelativePath } from "@/lib/relativePath";
-import { relFromRoot } from "./sitePaths";
+import { isPublishableAsset, relFromRoot } from "./sitePaths";
 import { DEFAULT_SITE_THEME_ID } from "./themes";
 
 // Lives in the .glyph/ workspace-configuration folder (the walker skips
@@ -106,9 +105,10 @@ export function parseSiteConfig(raw: string | null, workspaceName: string): Site
 /**
  * Resolve a config-supplied workspace-relative asset path (favicon,
  * socialImage) to its absolute source and site-relative destination,
- * rejecting anything that escapes the workspace. The config may come
- * from an untrusted workspace (a cloned repo), so "../secrets" must not
- * become a read outside the root or a write outside the output directory.
+ * rejecting anything the site may not publish. The config may come from an
+ * untrusted workspace (a cloned repo), so "../secrets" must not become a read
+ * outside the root or a write outside the output directory, and ".env" must
+ * not publish a file the page walk keeps out of the site.
  */
 export function resolveConfigAsset(
   root: string,
@@ -117,11 +117,13 @@ export function resolveConfigAsset(
 ): { abs: string; siteRel: string } {
   // Asset paths are workspace-root-relative. normalizeRelativePath resolves
   // against the directory of its first argument, so anchor it at a synthetic
-  // file directly inside the root; it collapses
-  // "." and ".." segments, which is what makes the isPathInside clamp sound.
+  // file directly inside the root; it collapses "." and ".." segments, which
+  // is what makes the containment check sound.
   const abs = normalizeRelativePath(`${root}/_anchor_`, rel);
-  if (abs === root || !isPathInside(abs, root)) {
-    throw new Error(`${SITE_CONFIG_PATH}: "${key}" must stay inside the workspace: ${rel}`);
+  if (!isPublishableAsset(root, abs)) {
+    throw new Error(
+      `${SITE_CONFIG_PATH}: "${key}" must stay inside the workspace and under no hidden name: ${rel}`,
+    );
   }
   return { abs, siteRel: relFromRoot(root, abs) };
 }
