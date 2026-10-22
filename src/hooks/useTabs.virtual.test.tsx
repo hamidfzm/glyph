@@ -8,9 +8,11 @@ import { expectConsole } from "@/test/consoleGuard";
 import { deferred } from "@/test/deferred";
 import {
   defaultOptions,
+  deliver,
   fileOf,
   type Invoker,
   makeInvoker,
+  mockWriteFile,
   resetTabsMocks,
   type TabsHook,
 } from "@/test/tabsHarness";
@@ -35,7 +37,8 @@ async function newDraft(result: TabsHook, text: string) {
   act(() => {
     result.current.newDocument();
   });
-  const tabId = result.current.tabs[0].id;
+  const tabId = result.current.activeTabId;
+  if (!tabId) throw new Error("expected the new document to be active");
   act(() => {
     result.current.updateEditContent(tabId, text);
   });
@@ -82,9 +85,7 @@ describe("useTabs in-memory documents", () => {
 
   it("saveDocument on a virtual tab writes via Save As and adopts the path", async () => {
     const writeFile = vi.fn().mockResolvedValue(undefined);
-    vi.mocked(invoke).mockImplementation(
-      makeInvoker({ write_file: writeFile as unknown as Invoker }) as typeof invoke,
-    );
+    mockWriteFile(writeFile);
     vi.mocked(pickSave).mockResolvedValue("/p/saved.md");
     const onSettingsChange = vi.fn();
     const { result } = renderHook(() => useTabs(defaultOptions({ onSettingsChange })));
@@ -109,9 +110,7 @@ describe("useTabs in-memory documents", () => {
 
   it("saveDocument keeps the buffer virtual when Save As is cancelled", async () => {
     const writeFile = vi.fn().mockResolvedValue(undefined);
-    vi.mocked(invoke).mockImplementation(
-      makeInvoker({ write_file: writeFile as unknown as Invoker }) as typeof invoke,
-    );
+    mockWriteFile(writeFile);
     vi.mocked(pickSave).mockResolvedValue(null);
     const { result } = renderHook(() => useTabs(defaultOptions()));
     const tabId = await newDraft(result, "X");
@@ -224,9 +223,7 @@ describe("useTabs in-memory documents", () => {
 
   it("Save As writes the text as it is when the dialog is confirmed", async () => {
     const writeFile = vi.fn().mockResolvedValue(undefined);
-    vi.mocked(invoke).mockImplementation(
-      makeInvoker({ write_file: writeFile as unknown as Invoker }) as typeof invoke,
-    );
+    mockWriteFile(writeFile);
     const dialog = deferred<string | null>();
     vi.mocked(pickSave).mockReturnValue(dialog.promise);
     const { result } = renderHook(() => useTabs(defaultOptions()));
@@ -262,9 +259,7 @@ describe("useTabs in-memory documents", () => {
       writeStarted.resolve();
       await writeGate.promise;
     });
-    vi.mocked(invoke).mockImplementation(
-      makeInvoker({ write_file: writeFile as unknown as Invoker }) as typeof invoke,
-    );
+    mockWriteFile(writeFile);
     vi.mocked(pickSave).mockResolvedValue("/p/saved.md");
     const { result } = renderHook(() => useTabs(defaultOptions()));
     const tabId = await newDraft(result, "first");
@@ -303,9 +298,7 @@ describe("useTabs in-memory documents", () => {
 
   it("closing an untitled tab saves what was typed while its Save As dialog was open", async () => {
     const writeFile = vi.fn().mockResolvedValue(undefined);
-    vi.mocked(invoke).mockImplementation(
-      makeInvoker({ write_file: writeFile as unknown as Invoker }) as typeof invoke,
-    );
+    mockWriteFile(writeFile);
     const dialog = deferred<string | null>();
     vi.mocked(pickSave).mockReturnValue(dialog.promise);
     const { result } = renderHook(() => useTabs(defaultOptions()));
@@ -339,9 +332,7 @@ describe("useTabs in-memory documents", () => {
     ["cancelled", null],
   ])("a Save As dialog %s after its tab was closed has nothing to save", async (_how, picked) => {
     const writeFile = vi.fn().mockResolvedValue(undefined);
-    vi.mocked(invoke).mockImplementation(
-      makeInvoker({ write_file: writeFile as unknown as Invoker }) as typeof invoke,
-    );
+    mockWriteFile(writeFile);
     const dialog = deferred<string | null>();
     vi.mocked(pickSave).mockReturnValue(dialog.promise);
     const { result } = renderHook(() =>
@@ -370,9 +361,7 @@ describe("useTabs in-memory documents", () => {
 
   it("an older Save As dialog confirmed last still saves the newest text", async () => {
     const writeFile = vi.fn().mockResolvedValue(undefined);
-    vi.mocked(invoke).mockImplementation(
-      makeInvoker({ write_file: writeFile as unknown as Invoker }) as typeof invoke,
-    );
+    mockWriteFile(writeFile);
     const older = deferred<string | null>();
     const newer = deferred<string | null>();
     vi.mocked(pickSave).mockReturnValueOnce(older.promise).mockReturnValueOnce(newer.promise);
@@ -490,9 +479,7 @@ describe("useTabs in-memory documents", () => {
 
   it("saveDocument asks again with no starting folder when the workspace root is refused", async () => {
     const writeFile = vi.fn().mockResolvedValue(undefined);
-    vi.mocked(invoke).mockImplementation(
-      makeInvoker({ write_file: writeFile as unknown as Invoker }) as typeof invoke,
-    );
+    mockWriteFile(writeFile);
     // The root's folder was renamed under the app, so the backend no longer
     // resolves it and refuses it as the folder to open the dialog in.
     expectConsole(/asking again with no starting folder/);
@@ -517,9 +504,7 @@ describe("useTabs in-memory documents", () => {
 
   it("saveDocument keeps the buffer virtual when the second Save As is cancelled", async () => {
     const writeFile = vi.fn().mockResolvedValue(undefined);
-    vi.mocked(invoke).mockImplementation(
-      makeInvoker({ write_file: writeFile as unknown as Invoker }) as typeof invoke,
-    );
+    mockWriteFile(writeFile);
     expectConsole(/asking again with no starting folder/);
     vi.mocked(pickSave)
       .mockRejectedValueOnce("path is outside the allowed workspaces and files: /p/ws")
@@ -644,5 +629,148 @@ describe("useTabs in-memory documents", () => {
     expect(ok).toBe(true);
     expect(onWorkspaceNotice).not.toHaveBeenCalled();
     expect(result.current.tabs).toHaveLength(0);
+  });
+});
+
+describe("closing untitled documents", () => {
+  it.each([
+    ["the window", (result: TabsHook) => result.current.flushForClose()],
+    ["both tabs", (result: TabsHook, ids: string[]) => result.current.closeTabs(ids)],
+  ])(
+    "closing %s asks for one Save As at a time, and still asks after a cancel",
+    async (_what, close) => {
+      const writeFile = vi.fn().mockResolvedValue(undefined);
+      mockWriteFile(writeFile);
+      const first = deferred<string | null>();
+      const second = deferred<string | null>();
+      vi.mocked(pickSave).mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+      vi.mocked(ask).mockResolvedValueOnce(false);
+      const { result } = renderHook(() => useTabs(defaultOptions()));
+      const ids = [await newDraft(result, "one"), await newDraft(result, "two")];
+      const titles = [fileOf(result, 0).path, fileOf(result, 1).path];
+
+      let closing: Promise<boolean> | undefined;
+      act(() => {
+        closing = close(result, ids);
+      });
+      expect(pickSave).toHaveBeenCalledTimes(1);
+
+      await deliver(() => first.resolve(null));
+      expect(vi.mocked(pickSave).mock.calls.map((call) => call[0])).toEqual(
+        titles.map((title) => `${title}.md`),
+      );
+
+      let proceed: boolean | undefined;
+      await act(async () => {
+        second.resolve("/p/two.md");
+        proceed = await closing;
+      });
+
+      expect(writeFile).toHaveBeenCalledExactlyOnceWith("write_file", {
+        path: "/p/two.md",
+        content: "two",
+      });
+      // The discard prompt lists the cancelled document only.
+      const message = vi.mocked(ask).mock.lastCall?.[0];
+      expect(message).toContain(titles[0]);
+      expect(message).not.toContain(titles[1]);
+      expect(proceed).toBe(false);
+      expect(result.current.tabs.map((tab) => tab.id)).toEqual(ids);
+      expect(fileOf(result, 0).virtual).toBe(true);
+    },
+  );
+
+  it("writes a tab with a path while an untitled tab's Save As is still open", async () => {
+    const writeFile = vi.fn().mockResolvedValue(undefined);
+    mockWriteFile(writeFile);
+    const dialog = deferred<string | null>();
+    vi.mocked(pickSave).mockReturnValue(dialog.promise);
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await newDraft(result, "draft");
+    await act(async () => {
+      await result.current.openFile("/p/a.md");
+    });
+    const fileId = result.current.activeTabId;
+    if (!fileId) throw new Error("expected /p/a.md to be active");
+    act(() => {
+      result.current.setTabMode(fileId, "edit");
+    });
+    act(() => {
+      result.current.updateEditContent(fileId, "EDITED");
+    });
+
+    let closing: Promise<boolean> | undefined;
+    act(() => {
+      closing = result.current.flushForClose();
+    });
+    await deliver(() => {});
+    expect(writeFile).toHaveBeenCalledExactlyOnceWith("write_file", {
+      path: "/p/a.md",
+      content: "EDITED",
+    });
+
+    let proceed: boolean | undefined;
+    await act(async () => {
+      dialog.resolve("/p/draft.md");
+      proceed = await closing;
+    });
+    expect(proceed).toBe(true);
+    expect(writeFile).toHaveBeenLastCalledWith("write_file", {
+      path: "/p/draft.md",
+      content: "draft",
+    });
+  });
+
+  it("asks Save / Don't Save / Cancel before any Save As when Auto Save is off", async () => {
+    const confirmUnsaved = vi.fn(async () => "cancel" as const);
+    const { result } = renderHook(() =>
+      useTabs(defaultOptions({ autoSave: false, confirmUnsaved })),
+    );
+    const tabId = await newDraft(result, "draft");
+
+    let closed: boolean | undefined;
+    await act(async () => {
+      closed = await result.current.closeTab(tabId);
+    });
+
+    expect(confirmUnsaved).toHaveBeenCalledExactlyOnceWith([fileOf(result).path]);
+    expect(pickSave).not.toHaveBeenCalled();
+    expect(closed).toBe(false);
+    expect(fileOf(result).dirty).toBe(true);
+  });
+
+  it("after Save at the Auto Save off prompt, still asks for one Save As at a time", async () => {
+    const writeFile = vi.fn().mockResolvedValue(undefined);
+    mockWriteFile(writeFile);
+    const first = deferred<string | null>();
+    const second = deferred<string | null>();
+    vi.mocked(pickSave).mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+    const confirmUnsaved = vi.fn(async () => "save" as const);
+    const { result } = renderHook(() =>
+      useTabs(defaultOptions({ autoSave: false, confirmUnsaved })),
+    );
+    await newDraft(result, "one");
+    await newDraft(result, "two");
+
+    let closing: Promise<boolean> | undefined;
+    act(() => {
+      closing = result.current.flushForClose();
+    });
+    await deliver(() => {});
+    expect(pickSave).toHaveBeenCalledTimes(1);
+
+    await deliver(() => first.resolve("/p/one.md"));
+    expect(pickSave).toHaveBeenCalledTimes(2);
+
+    let proceed: boolean | undefined;
+    await act(async () => {
+      second.resolve("/p/two.md");
+      proceed = await closing;
+    });
+    expect(proceed).toBe(true);
+    expect(writeFile.mock.calls.map((call) => call[1])).toEqual([
+      { path: "/p/one.md", content: "one" },
+      { path: "/p/two.md", content: "two" },
+    ]);
   });
 });

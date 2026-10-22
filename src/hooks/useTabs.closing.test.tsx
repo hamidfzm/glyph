@@ -1,10 +1,9 @@
-import { invoke } from "@tauri-apps/api/core";
 import { ask } from "@tauri-apps/plugin-dialog";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { expectConsole } from "@/test/consoleGuard";
 import { deferred } from "@/test/deferred";
-import { defaultOptions, type Invoker, makeInvoker, resetTabsMocks } from "@/test/tabsHarness";
+import { defaultOptions, mockWriteFile, resetTabsMocks } from "@/test/tabsHarness";
 import { useTabs } from "./useTabs";
 
 vi.mock("@/lib/pickers", () => ({
@@ -52,14 +51,10 @@ describe("useTabs close coordinator", () => {
     return tab?.kind === "file" && tab.file.dirty;
   }
 
-  function writeInvoker(writeFile: ReturnType<typeof vi.fn>) {
-    return makeInvoker({ write_file: writeFile as unknown as Invoker }) as typeof invoke;
-  }
-
   // Closing a tab by mouse click or Cmd/Ctrl+W both route through closeTab.
   it("closeTab flushes a dirty tab, then removes it", async () => {
     const writeFile = vi.fn().mockResolvedValue(undefined);
-    vi.mocked(invoke).mockImplementation(writeInvoker(writeFile));
+    mockWriteFile(writeFile);
     const { result } = renderHook(() => useTabs(defaultOptions()));
     await ready(result);
     const id = await openDirty(result, "/p/a.md", "BODY");
@@ -75,9 +70,7 @@ describe("useTabs close coordinator", () => {
   it("closeTab keeps the tab open when a failed save's discard is cancelled", async () => {
     const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     vi.mocked(ask).mockResolvedValue(false);
-    vi.mocked(invoke).mockImplementation(
-      writeInvoker(vi.fn().mockRejectedValue(new Error("disk full"))),
-    );
+    mockWriteFile(vi.fn().mockRejectedValue(new Error("disk full")));
     const { result } = renderHook(() => useTabs(defaultOptions()));
     await ready(result);
     const id = await openDirty(result, "/p/a.md");
@@ -95,9 +88,7 @@ describe("useTabs close coordinator", () => {
   it("closeTab discards and closes after the user confirms a failed save", async () => {
     const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     vi.mocked(ask).mockResolvedValue(true);
-    vi.mocked(invoke).mockImplementation(
-      writeInvoker(vi.fn().mockRejectedValue(new Error("disk full"))),
-    );
+    mockWriteFile(vi.fn().mockRejectedValue(new Error("disk full")));
     const { result } = renderHook(() => useTabs(defaultOptions()));
     await ready(result);
     const id = await openDirty(result, "/p/a.md");
@@ -112,7 +103,7 @@ describe("useTabs close coordinator", () => {
 
   it("closeWorkspace flushes every dirty tab in the workspace", async () => {
     const writeFile = vi.fn().mockResolvedValue(undefined);
-    vi.mocked(invoke).mockImplementation(writeInvoker(writeFile));
+    mockWriteFile(writeFile);
     const { result } = renderHook(() => useTabs(defaultOptions()));
     await ready(result);
     await act(async () => {
@@ -132,9 +123,7 @@ describe("useTabs close coordinator", () => {
   it("cancelling the discard keeps the workspace open", async () => {
     const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     vi.mocked(ask).mockResolvedValue(false);
-    vi.mocked(invoke).mockImplementation(
-      writeInvoker(vi.fn().mockRejectedValue(new Error("disk full"))),
-    );
+    mockWriteFile(vi.fn().mockRejectedValue(new Error("disk full")));
     const { result } = renderHook(() => useTabs(defaultOptions()));
     await ready(result);
     await act(async () => {
@@ -154,7 +143,7 @@ describe("useTabs close coordinator", () => {
 
   it("replacing the workspace flushes the outgoing workspace's dirty tabs", async () => {
     const writeFile = vi.fn().mockResolvedValue(undefined);
-    vi.mocked(invoke).mockImplementation(writeInvoker(writeFile));
+    mockWriteFile(writeFile);
     const { result } = renderHook(() => useTabs(defaultOptions()));
     await ready(result);
     await act(async () => {
@@ -173,9 +162,7 @@ describe("useTabs close coordinator", () => {
   it("cancelling the discard aborts a workspace replacement", async () => {
     const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     vi.mocked(ask).mockResolvedValue(false);
-    vi.mocked(invoke).mockImplementation(
-      writeInvoker(vi.fn().mockRejectedValue(new Error("disk full"))),
-    );
+    mockWriteFile(vi.fn().mockRejectedValue(new Error("disk full")));
     const { result } = renderHook(() => useTabs(defaultOptions()));
     await ready(result);
     await act(async () => {
@@ -194,7 +181,7 @@ describe("useTabs close coordinator", () => {
 
   it("flushForClose saves every dirty tab (multi-tab shutdown) and reports success", async () => {
     const writeFile = vi.fn().mockResolvedValue(undefined);
-    vi.mocked(invoke).mockImplementation(writeInvoker(writeFile));
+    mockWriteFile(writeFile);
     const { result } = renderHook(() => useTabs(defaultOptions()));
     await ready(result);
     const a = await openDirty(result, "/p/a.md", "A");
@@ -215,9 +202,7 @@ describe("useTabs close coordinator", () => {
   it("flushForClose returns false when the user cancels after a failed save", async () => {
     const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     vi.mocked(ask).mockResolvedValue(false);
-    vi.mocked(invoke).mockImplementation(
-      writeInvoker(vi.fn().mockRejectedValue(new Error("disk full"))),
-    );
+    mockWriteFile(vi.fn().mockRejectedValue(new Error("disk full")));
     const { result } = renderHook(() => useTabs(defaultOptions()));
     await ready(result);
     await openDirty(result, "/p/a.md");
@@ -236,9 +221,7 @@ describe("useTabs close coordinator", () => {
     // The shared ask mock accumulates calls across this file; count only ours.
     vi.mocked(ask).mockClear();
     vi.mocked(ask).mockResolvedValue(true);
-    vi.mocked(invoke).mockImplementation(
-      writeInvoker(vi.fn().mockRejectedValue(new Error("disk full"))),
-    );
+    mockWriteFile(vi.fn().mockRejectedValue(new Error("disk full")));
     const { result } = renderHook(() => useTabs(defaultOptions()));
     await ready(result);
     await openDirty(result, "/p/a.md");
@@ -259,9 +242,7 @@ describe("useTabs close coordinator", () => {
   it("closeTabs keeps every tab of the batch open when the discard is cancelled", async () => {
     const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     vi.mocked(ask).mockResolvedValue(false);
-    vi.mocked(invoke).mockImplementation(
-      writeInvoker(vi.fn().mockRejectedValue(new Error("disk full"))),
-    );
+    mockWriteFile(vi.fn().mockRejectedValue(new Error("disk full")));
     const { result } = renderHook(() => useTabs(defaultOptions()));
     await ready(result);
     const dirtyId = await openDirty(result, "/p/a.md");
@@ -281,7 +262,7 @@ describe("useTabs close coordinator", () => {
 
   it("does not prompt with autosave on: the close flush stays silent", async () => {
     const writeFile = vi.fn().mockResolvedValue(undefined);
-    vi.mocked(invoke).mockImplementation(writeInvoker(writeFile));
+    mockWriteFile(writeFile);
     const confirmUnsaved = vi.fn(async () => "cancel" as const);
     const { result } = renderHook(() => useTabs(defaultOptions({ confirmUnsaved })));
     await ready(result);
@@ -298,7 +279,7 @@ describe("useTabs close coordinator", () => {
   });
 
   it("prompts with every dirty document when autosave is off", async () => {
-    vi.mocked(invoke).mockImplementation(writeInvoker(vi.fn().mockResolvedValue(undefined)));
+    mockWriteFile(vi.fn().mockResolvedValue(undefined));
     const confirmUnsaved = vi.fn(async () => "save" as const);
     const { result } = renderHook(() =>
       useTabs(defaultOptions({ autoSave: false, confirmUnsaved })),
@@ -316,7 +297,7 @@ describe("useTabs close coordinator", () => {
 
   it("saves and proceeds when the user picks Save", async () => {
     const writeFile = vi.fn().mockResolvedValue(undefined);
-    vi.mocked(invoke).mockImplementation(writeInvoker(writeFile));
+    mockWriteFile(writeFile);
     const { result } = renderHook(() =>
       useTabs(defaultOptions({ autoSave: false, confirmUnsaved: async () => "save" as const })),
     );
@@ -335,7 +316,7 @@ describe("useTabs close coordinator", () => {
 
   it("proceeds without writing when the user picks Don't Save", async () => {
     const writeFile = vi.fn().mockResolvedValue(undefined);
-    vi.mocked(invoke).mockImplementation(writeInvoker(writeFile));
+    mockWriteFile(writeFile);
     const { result } = renderHook(() =>
       useTabs(defaultOptions({ autoSave: false, confirmUnsaved: async () => "discard" as const })),
     );
@@ -353,7 +334,7 @@ describe("useTabs close coordinator", () => {
 
   it("aborts the close and keeps the tab dirty when the user cancels", async () => {
     const writeFile = vi.fn().mockResolvedValue(undefined);
-    vi.mocked(invoke).mockImplementation(writeInvoker(writeFile));
+    mockWriteFile(writeFile);
     const { result } = renderHook(() =>
       useTabs(defaultOptions({ autoSave: false, confirmUnsaved: async () => "cancel" as const })),
     );
@@ -374,7 +355,7 @@ describe("useTabs close coordinator", () => {
   // all-or-nothing: cancelling keeps the clean tabs of the batch open too.
   it("closeTabs prompts for the dirty members and keeps the batch open on cancel", async () => {
     const writeFile = vi.fn().mockResolvedValue(undefined);
-    vi.mocked(invoke).mockImplementation(writeInvoker(writeFile));
+    mockWriteFile(writeFile);
     const confirmUnsaved = vi.fn(async () => "cancel" as const);
     const { result } = renderHook(() =>
       useTabs(defaultOptions({ autoSave: false, confirmUnsaved })),
@@ -435,7 +416,7 @@ describe("useTabs close coordinator", () => {
 
   it("closeTabs discards the whole batch when the user picks Don't Save", async () => {
     const writeFile = vi.fn().mockResolvedValue(undefined);
-    vi.mocked(invoke).mockImplementation(writeInvoker(writeFile));
+    mockWriteFile(writeFile);
     const { result } = renderHook(() =>
       useTabs(defaultOptions({ autoSave: false, confirmUnsaved: async () => "discard" as const })),
     );
@@ -457,7 +438,7 @@ describe("useTabs close coordinator", () => {
 
   it("flushes edits made while the prompt was open, not just the snapshot", async () => {
     const writeFile = vi.fn().mockResolvedValue(undefined);
-    vi.mocked(invoke).mockImplementation(writeInvoker(writeFile));
+    mockWriteFile(writeFile);
     // The prompt is open for user time, during which the menu, plugins, or an
     // external reload can dirty another document. The gate holds it open.
     const answer = deferred<"save">();
@@ -513,9 +494,7 @@ describe("useTabs close coordinator", () => {
     expectConsole(/Auto-save failed/);
     vi.mocked(ask).mockClear();
     vi.mocked(ask).mockResolvedValue(false);
-    vi.mocked(invoke).mockImplementation(
-      writeInvoker(vi.fn().mockRejectedValue(new Error("disk full"))),
-    );
+    mockWriteFile(vi.fn().mockRejectedValue(new Error("disk full")));
     const { result } = renderHook(() =>
       useTabs(defaultOptions({ autoSave: false, confirmUnsaved: async () => "save" as const })),
     );

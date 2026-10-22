@@ -7,6 +7,7 @@ import {
   defaultOptions,
   type Invoker,
   makeInvoker,
+  mockWriteFile,
   resetTabsMocks,
 } from "@/test/tabsHarness";
 import { useTabs } from "./useTabs";
@@ -214,9 +215,7 @@ describe("useTabs programmatic edits", () => {
     // Graph tabs have no document, so the activeFileOf read inside commitEdit
     // comes back null and nothing is written.
     const writeFile = vi.fn().mockResolvedValue(undefined);
-    vi.mocked(invoke).mockImplementation(
-      makeInvoker({ write_file: writeFile as unknown as Invoker }) as typeof invoke,
-    );
+    mockWriteFile(writeFile);
     const { result } = renderHook(() => useTabs(defaultOptions()));
     await waitFor(() => expect(result.current.initializing).toBe(false));
 

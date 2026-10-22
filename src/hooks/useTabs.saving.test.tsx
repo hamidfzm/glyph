@@ -1,4 +1,3 @@
-import { invoke } from "@tauri-apps/api/core";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { expectConsole } from "@/test/consoleGuard";
@@ -6,8 +5,7 @@ import { type Deferred, deferred } from "@/test/deferred";
 import {
   defaultOptions,
   fileOf,
-  type Invoker,
-  makeInvoker,
+  mockWriteFile,
   openEditable,
   resetTabsMocks,
 } from "@/test/tabsHarness";
@@ -29,9 +27,7 @@ afterEach(() => {
 describe("useTabs saving", () => {
   it("updateEditContent marks the file dirty and saveDocument writes and clears it", async () => {
     const writeFile = vi.fn().mockResolvedValue(undefined);
-    vi.mocked(invoke).mockImplementation(
-      makeInvoker({ write_file: writeFile as unknown as Invoker }) as typeof invoke,
-    );
+    mockWriteFile(writeFile);
     const { result } = renderHook(() => useTabs(defaultOptions()));
     const tabId = await openEditable(result);
 
@@ -52,9 +48,7 @@ describe("useTabs saving", () => {
 
   it("saveDocument is a no-op for a clean tab", async () => {
     const writeFile = vi.fn().mockResolvedValue(undefined);
-    vi.mocked(invoke).mockImplementation(
-      makeInvoker({ write_file: writeFile as unknown as Invoker }) as typeof invoke,
-    );
+    mockWriteFile(writeFile);
     const { result } = renderHook(() => useTabs(defaultOptions()));
     // openEditable enters edit mode but makes no edit, so the tab stays clean.
     const tabId = await openEditable(result);
@@ -71,9 +65,7 @@ describe("useTabs saving", () => {
 
   it("saveDocument is a no-op for an unknown or non-file tab id", async () => {
     const writeFile = vi.fn().mockResolvedValue(undefined);
-    vi.mocked(invoke).mockImplementation(
-      makeInvoker({ write_file: writeFile as unknown as Invoker }) as typeof invoke,
-    );
+    mockWriteFile(writeFile);
     const { result } = renderHook(() => useTabs(defaultOptions()));
     await waitFor(() => expect(result.current.initializing).toBe(false));
 
@@ -93,9 +85,7 @@ describe("useTabs saving", () => {
       writeStarted.resolve();
       await writeGate.promise;
     });
-    vi.mocked(invoke).mockImplementation(
-      makeInvoker({ write_file: writeFile as unknown as Invoker }) as typeof invoke,
-    );
+    mockWriteFile(writeFile);
     const { result } = renderHook(() => useTabs(defaultOptions()));
     const tabId = await openEditable(result);
 
@@ -136,9 +126,7 @@ describe("useTabs saving", () => {
       await gate.promise;
       order.push(`end:${content}`);
     });
-    vi.mocked(invoke).mockImplementation(
-      makeInvoker({ write_file: writeFile as unknown as Invoker }) as typeof invoke,
-    );
+    mockWriteFile(writeFile);
     const { result } = renderHook(() => useTabs(defaultOptions()));
     const tabId = await openEditable(result);
 
@@ -187,9 +175,7 @@ describe("useTabs saving", () => {
       gates.set(path, gate);
       await gate.promise;
     });
-    vi.mocked(invoke).mockImplementation(
-      makeInvoker({ write_file: writeFile as unknown as Invoker }) as typeof invoke,
-    );
+    mockWriteFile(writeFile);
     const { result } = renderHook(() => useTabs(defaultOptions()));
     await waitFor(() => expect(result.current.initializing).toBe(false));
 
@@ -228,9 +214,7 @@ describe("useTabs saving", () => {
 
   it("saves a fully-deleted document: empty string is valid content (#432)", async () => {
     const writeFile = vi.fn().mockResolvedValue(undefined);
-    vi.mocked(invoke).mockImplementation(
-      makeInvoker({ write_file: writeFile as unknown as Invoker }) as typeof invoke,
-    );
+    mockWriteFile(writeFile);
     const { result } = renderHook(() => useTabs(defaultOptions()));
     const tabId = await openEditable(result);
 
@@ -254,9 +238,7 @@ describe("useTabs saving", () => {
       .fn()
       .mockRejectedValueOnce(new Error("disk full"))
       .mockResolvedValue(undefined);
-    vi.mocked(invoke).mockImplementation(
-      makeInvoker({ write_file: writeFile as unknown as Invoker }) as typeof invoke,
-    );
+    mockWriteFile(writeFile);
     const { result } = renderHook(() => useTabs(defaultOptions()));
     const tabId = await openEditable(result);
 
@@ -286,9 +268,7 @@ describe("useTabs saving", () => {
     const onWorkspaceNotice = vi.fn();
     const writeFile = vi.fn().mockRejectedValue(new Error("disk full"));
     const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    vi.mocked(invoke).mockImplementation(
-      makeInvoker({ write_file: writeFile as unknown as Invoker }) as typeof invoke,
-    );
+    mockWriteFile(writeFile);
     const { result } = renderHook(() => useTabs(defaultOptions({ onWorkspaceNotice })));
     const tabId = await openEditable(result);
 
