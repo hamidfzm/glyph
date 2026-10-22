@@ -26,6 +26,7 @@ import { useTabReorderShortcuts } from "@/hooks/useTabReorderShortcuts";
 import { useWindowClose } from "@/hooks/useWindowClose";
 import { useWindowReveal } from "@/hooks/useWindowReveal";
 import { useWorkspaceSearch } from "@/hooks/useWorkspaceSearch";
+import { autoSaveDocuments } from "@/lib/autoSaveDocuments";
 import { isImageFile } from "@/lib/imageExtensions";
 import { AIChatPanel } from "./ai/lazyAIChatPanel";
 import { AppBanners } from "./layout/AppBanners";
@@ -103,18 +104,11 @@ export function AppShell() {
   const workspaceSearch = useWorkspaceSearch();
   const modals = useAppModals();
 
-  // Autosave every dirty editable tab, not just the active one, so switching
-  // tabs never cancels another document's pending save. Each carries its
-  // revision so the scheduler can debounce per document. With autosave off the
-  // list is empty, so nothing is scheduled (Save and close-flush still work).
+  // With autosave off the list is empty, so nothing is scheduled (Save and
+  // close-flush still work).
   const autoSave = settings.behavior.autoSave;
   const dirtyDocuments = useMemo(
-    () =>
-      autoSave
-        ? openTabs
-            .filter((t) => t.kind === "file" && t.file.dirty)
-            .map((t) => ({ id: t.id, revision: t.file?.revision ?? 0 }))
-        : [],
+    () => (autoSave ? autoSaveDocuments(openTabs) : []),
     [openTabs, autoSave],
   );
   useAutoSave({ documents: dirtyDocuments, save: saveDocument });

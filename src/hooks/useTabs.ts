@@ -228,9 +228,16 @@ export function useTabs(options: UseTabsOptions) {
 
       // Flush every dirty document and wait for the writes to settle. Each save
       // reports its own success, so a failed write can't be missed by a
-      // dirty-flag read that hasn't re-rendered yet.
-      const saved = await Promise.all(dirty.map((tab) => saveDocument(tab.id)));
-      const unsaved = dirty.filter((_, i) => !saved[i]);
+      // dirty-flag read that hasn't re-rendered yet. Untitled documents open
+      // their Save As one after another, so the user can tell them apart.
+      const saved = new Map<string, boolean>();
+      const save = async (tab: FileTab) => {
+        saved.set(tab.id, await saveDocument(tab.id));
+      };
+      const withPath = Promise.all(dirty.filter((tab) => !tab.file.virtual).map(save));
+      for (const tab of dirty.filter((tab) => tab.file.virtual)) await save(tab);
+      await withPath;
+      const unsaved = dirty.filter((tab) => !saved.get(tab.id));
       if (unsaved.length === 0) return true;
 
       // Some documents couldn't be saved; closing now would drop those edits,

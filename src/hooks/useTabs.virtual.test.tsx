@@ -8,6 +8,7 @@ import { expectConsole } from "@/test/consoleGuard";
 import { deferred } from "@/test/deferred";
 import {
   defaultOptions,
+  deliver,
   fileOf,
   type Invoker,
   makeInvoker,
@@ -35,7 +36,8 @@ async function newDraft(result: TabsHook, text: string) {
   act(() => {
     result.current.newDocument();
   });
-  const tabId = result.current.tabs[0].id;
+  const tabId = result.current.activeTabId;
+  if (!tabId) throw new Error("expected the new document to be active");
   act(() => {
     result.current.updateEditContent(tabId, text);
   });
@@ -644,5 +646,119 @@ describe("useTabs in-memory documents", () => {
     expect(ok).toBe(true);
     expect(onWorkspaceNotice).not.toHaveBeenCalled();
     expect(result.current.tabs).toHaveLength(0);
+  });
+});
+
+describe("closing untitled documents", () => {
+  function mockWrites(writeFile: ReturnType<typeof vi.fn>) {
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({ write_file: writeFile as unknown as Invoker }) as typeof invoke,
+    );
+  }
+
+  it.each([
+    ["the window", (result: TabsHook) => result.current.flushForClose()],
+    ["both tabs", (result: TabsHook, ids: string[]) => result.current.closeTabs(ids)],
+  ])(
+    "closing %s asks for one Save As at a time, and still asks after a cancel",
+    async (_what, close) => {
+      const writeFile = vi.fn().mockResolvedValue(undefined);
+      mockWrites(writeFile);
+      const first = deferred<string | null>();
+      const second = deferred<string | null>();
+      vi.mocked(pickSave).mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+      vi.mocked(ask).mockResolvedValueOnce(false);
+      const { result } = renderHook(() => useTabs(defaultOptions()));
+      const ids = [await newDraft(result, "one"), await newDraft(result, "two")];
+      const titles = [fileOf(result, 0).path, fileOf(result, 1).path];
+
+      let closing: Promise<boolean> | undefined;
+      act(() => {
+        closing = close(result, ids);
+      });
+      expect(pickSave).toHaveBeenCalledTimes(1);
+
+      await deliver(() => first.resolve(null));
+      expect(vi.mocked(pickSave).mock.calls.map((call) => call[0])).toEqual(
+        titles.map((title) => `${title}.md`),
+      );
+
+      let proceed: boolean | undefined;
+      await act(async () => {
+        second.resolve("/p/two.md");
+        proceed = await closing;
+      });
+
+      expect(writeFile).toHaveBeenCalledExactlyOnceWith("write_file", {
+        path: "/p/two.md",
+        content: "two",
+      });
+      // The discard prompt lists the cancelled document only.
+      const message = vi.mocked(ask).mock.lastCall?.[0];
+      expect(message).toContain(titles[0]);
+      expect(message).not.toContain(titles[1]);
+      expect(proceed).toBe(false);
+      expect(result.current.tabs.map((tab) => tab.id)).toEqual(ids);
+      expect(fileOf(result, 0).virtual).toBe(true);
+    },
+  );
+
+  it("writes a tab with a path while an untitled tab's Save As is still open", async () => {
+    const writeFile = vi.fn().mockResolvedValue(undefined);
+    mockWrites(writeFile);
+    const dialog = deferred<string | null>();
+    vi.mocked(pickSave).mockReturnValue(dialog.promise);
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await newDraft(result, "draft");
+    await act(async () => {
+      await result.current.openFile("/p/a.md");
+    });
+    const fileId = result.current.activeTabId;
+    if (!fileId) throw new Error("expected /p/a.md to be active");
+    act(() => {
+      result.current.setTabMode(fileId, "edit");
+    });
+    act(() => {
+      result.current.updateEditContent(fileId, "EDITED");
+    });
+
+    let closing: Promise<boolean> | undefined;
+    act(() => {
+      closing = result.current.flushForClose();
+    });
+    await deliver(() => {});
+    expect(writeFile).toHaveBeenCalledExactlyOnceWith("write_file", {
+      path: "/p/a.md",
+      content: "EDITED",
+    });
+
+    let proceed: boolean | undefined;
+    await act(async () => {
+      dialog.resolve("/p/draft.md");
+      proceed = await closing;
+    });
+    expect(proceed).toBe(true);
+    expect(writeFile).toHaveBeenLastCalledWith("write_file", {
+      path: "/p/draft.md",
+      content: "draft",
+    });
+  });
+
+  it("asks Save / Don't Save / Cancel before any Save As when Auto Save is off", async () => {
+    const confirmUnsaved = vi.fn(async () => "cancel" as const);
+    const { result } = renderHook(() =>
+      useTabs(defaultOptions({ autoSave: false, confirmUnsaved })),
+    );
+    const tabId = await newDraft(result, "draft");
+
+    let closed: boolean | undefined;
+    await act(async () => {
+      closed = await result.current.closeTab(tabId);
+    });
+
+    expect(confirmUnsaved).toHaveBeenCalledExactlyOnceWith([fileOf(result).path]);
+    expect(pickSave).not.toHaveBeenCalled();
+    expect(closed).toBe(false);
+    expect(fileOf(result).dirty).toBe(true);
   });
 });

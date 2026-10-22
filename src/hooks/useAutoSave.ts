@@ -2,8 +2,8 @@ import { useEffect, useRef } from "react";
 
 const AUTO_SAVE_DELAY = 2000;
 
-/** A dirty editable tab awaiting an autosave, identified so each document keeps
- *  its own debounce timer independent of which tab is active. */
+/** A dirty tab awaiting an autosave, identified so each document keeps its own
+ *  debounce timer independent of which tab is active. */
 export interface SavableDocument {
   id: string;
   /** Monotonic edit counter; a fresh value means new edits to (re)schedule. */
@@ -11,14 +11,14 @@ export interface SavableDocument {
 }
 
 interface UseAutoSaveOptions {
-  /** Every currently-dirty editable tab, not just the active one. */
+  /** The dirty tabs to save, from `autoSaveDocuments`. */
   documents: SavableDocument[];
   /** Persist one document by id (revision-guarded and serialized upstream). */
   save: (id: string) => void;
 }
 
 /**
- * Per-document debounced autosave. Each dirty tab owns its own timer, so
+ * Per-document debounced autosave. Each listed tab owns its own timer, so
  * switching tabs never cancels another document's pending save. A save fires
  * once per revision: a new edit bumps the revision and reschedules; a completed
  * or failed save leaves the revision recorded, so it won't re-fire until the

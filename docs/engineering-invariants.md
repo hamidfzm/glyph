@@ -8,8 +8,8 @@ Non-negotiable guarantees for Glyph. Every stateful or security-sensitive change
 
 A user edit is never discarded without a completed durable write or an explicit, informed discard by the user.
 
-- Owners: `src/hooks/useDocumentSave.ts` (save path), `src/hooks/useTabStrip.ts` (dirty tracking), `src/hooks/useDiskReload.ts` (a dirty tab is never reloaded from disk, in any editor mode), `src/hooks/useDocumentEdits.ts` (a checkbox toggle, canvas commit, undo, or redo joins a dirty tab's buffer and never replaces text typed since), `src/hooks/useAutoSave.ts`, `src/hooks/useWindowClose.ts`, `src-tauri/src/mcp/edits.rs` (an agent's write is refused for a note the app reports unsaved edits in, and for one that changed since the edit was worked out)
-- Evidence: `src/hooks/useAutoSave.test.ts`, `src/hooks/useTabs.*.test.tsx`, `src/hooks/useDiskReload.test.ts`, the tests in `src-tauri/src/mcp/edits.rs`
+- Owners: `src/hooks/useDocumentSave.ts` (save path), `src/hooks/useTabStrip.ts` (dirty tracking), `src/hooks/useDiskReload.ts` (a dirty tab is never reloaded from disk, in any editor mode), `src/hooks/useDocumentEdits.ts` (a checkbox toggle, canvas commit, undo, or redo joins a dirty tab's buffer and never replaces text typed since), `src/hooks/useAutoSave.ts` with `src/lib/autoSaveDocuments.ts` (an untitled document stays dirty in memory until Save or close, since Auto Save never opens its Save As), `src/hooks/useWindowClose.ts`, `src-tauri/src/mcp/edits.rs` (an agent's write is refused for a note the app reports unsaved edits in, and for one that changed since the edit was worked out)
+- Evidence: `src/hooks/useAutoSave.test.ts`, `src/lib/autoSaveDocuments.test.ts`, `src/hooks/useTabs.*.test.tsx`, `src/hooks/useDiskReload.test.ts`, the tests in `src-tauri/src/mcp/edits.rs`
 
 ### INV-2: Empty is not absent
 
