@@ -170,7 +170,7 @@ export function useTabs(options: UseTabsOptions) {
   // the same file can never overlap.
   const enqueueWrite = useWriteQueue();
 
-  const { saveDocument } = useDocumentSave({
+  const { saveDocument, saveUntilClean } = useDocumentSave({
     stateRef,
     setState,
     updateActiveFile,
@@ -193,7 +193,7 @@ export function useTabs(options: UseTabsOptions) {
   const { renamePath, movePath } = useRelocation({
     stateRef,
     workspaceRef,
-    saveDocument,
+    saveUntilClean,
     markSelfSave,
     reloadFromDisk,
     refreshIndexes,
@@ -213,7 +213,7 @@ export function useTabs(options: UseTabsOptions) {
           (tab): tab is FileTab =>
             tab.kind === "file" && tab.file.dirty && (!scope || scope.has(tab.id)),
         );
-      let dirty = dirtyTabs();
+      const dirty = dirtyTabs();
       if (dirty.length === 0) return true;
 
       // With autosave off the user decides when a file hits disk (#563).
@@ -221,27 +221,12 @@ export function useTabs(options: UseTabsOptions) {
         const choice = await optionsRef.current.confirmUnsaved(dirty.map((tab) => tab.file.path));
         if (choice === "cancel") return false;
         if (choice === "discard") return true;
-        // The prompt is open for an unbounded time, so flush what is dirty now
-        // rather than the snapshot it listed; edits made meanwhile still land.
-        dirty = dirtyTabs();
       }
 
-      // Flush every dirty document and wait for the writes to settle. Each save
-      // reports its own success, so a failed write can't be missed by a
-      // dirty-flag read that hasn't re-rendered yet. Untitled documents open
-      // their Save As one after another, so the user can tell them apart.
-      const saved = new Map<string, boolean>();
-      const save = async (tab: FileTab) => {
-        saved.set(tab.id, await saveDocument(tab.id));
-      };
-      const saveUntitledInTurn = async () => {
-        for (const tab of dirty.filter((tab) => tab.file.virtual)) await save(tab);
-      };
-      await Promise.all([
-        ...dirty.filter((tab) => !tab.file.virtual).map(save),
-        saveUntitledInTurn(),
-      ]);
-      const unsaved = dirty.filter((tab) => !saved.get(tab.id));
+      // The prompt is open for an unbounded time and a write can be slow, so
+      // this saves what is dirty now and again after each round, until the
+      // text on disk is every tab's latest.
+      const unsaved = await saveUntilClean(dirtyTabs);
       if (unsaved.length === 0) return true;
 
       // Some documents couldn't be saved; closing now would drop those edits,
@@ -254,7 +239,7 @@ export function useTabs(options: UseTabsOptions) {
         cancelLabel: t("unsavedChanges.cancel"),
       });
     },
-    [saveDocument, stateRef, t],
+    [saveUntilClean, stateRef, t],
   );
 
   // Filled after `useWorkspaceSession` below; the lifecycle needs the capture/

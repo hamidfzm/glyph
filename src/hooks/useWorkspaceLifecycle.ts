@@ -1,7 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
-import { type Dispatch, type RefObject, type SetStateAction, useCallback, useRef } from "react";
+import { type RefObject, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import type { OpenFileOptions } from "@/hooks/useOpenDocument";
+import type { SetTabsState } from "@/hooks/useTabStrip";
 import type { WorkspaceNotice } from "@/hooks/useWorkspaceNotice";
 import type { WorkspaceSessionApi } from "@/hooks/useWorkspaceSession";
 import { isCliExportProcess } from "@/lib/cliExport";
@@ -23,7 +24,7 @@ export interface OpenFolderOptions {
 
 interface UseWorkspaceLifecycleOptions {
   stateRef: RefObject<TabsState>;
-  setState: Dispatch<SetStateAction<TabsState>>;
+  setState: SetTabsState;
   workspaceRef: RefObject<Workspace | null>;
   openTree: (root: string, expanded?: string[]) => Promise<void>;
   clearTree: () => void;
@@ -263,10 +264,7 @@ export function useWorkspaceLifecycle({
           await sessionRef.current?.restoreSession(root, session);
           // Re-capture so entries that failed to reopen (a file deleted since
           // last session) drop out of the stored snapshot instead of being
-          // retried on every open. stateRef may still miss the last commit
-          // here; the reactive persist and the close flush both re-capture
-          // from settled state, so at worst a crash within the debounce
-          // window keeps one extra stale entry.
+          // retried on every open.
           if (workspaceRef.current?.root === root) sessionRef.current?.captureSession();
         } else if (files.length > 0) {
           // First open on this machine: auto-open the workspace's remembered
