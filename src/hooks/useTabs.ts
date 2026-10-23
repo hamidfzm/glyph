@@ -24,7 +24,7 @@ import { isCliExportProcess } from "@/lib/cliExport";
 import { pruneGraphViews } from "@/lib/graphViewStore";
 import { basename, isPathInside, movedPath } from "@/lib/paths";
 import { EDITOR_MODE, type EditorMode } from "@/lib/settings";
-import { type FileTab, type PersistedTab, removeTabs } from "@/lib/tabs";
+import { type FileTab, fileTabs, type PersistedTab, removeTabs } from "@/lib/tabs";
 import type { RelinkRequest } from "@/lib/vault";
 
 const MAX_RECENT_FILES = 10;
@@ -204,15 +204,13 @@ export function useTabs(options: UseTabsOptions) {
   });
 
   // The single close coordinator: every destructive lifecycle path (tab close,
-  // workspace close/replace, window close) flushes through it.
+  // workspace close/replace, window close) flushes through it. `inScope` is
+  // asked again each round, so a tab that joins the closing set meanwhile (one
+  // opened inside a workspace being closed) is saved too.
   const flushForClose = useCallback(
-    async (ids?: Iterable<string>): Promise<boolean> => {
-      const scope = ids ? new Set(ids) : null;
+    async (inScope?: (tab: FileTab) => boolean): Promise<boolean> => {
       const dirtyTabs = () =>
-        stateRef.current.tabs.filter(
-          (tab): tab is FileTab =>
-            tab.kind === "file" && tab.file.dirty && (!scope || scope.has(tab.id)),
-        );
+        fileTabs(stateRef.current).filter((tab) => tab.file.dirty && (!inScope || inScope(tab)));
       const dirty = dirtyTabs();
       if (dirty.length === 0) return true;
 
@@ -247,7 +245,6 @@ export function useTabs(options: UseTabsOptions) {
   const sessionRef = useRef<WorkspaceSessionApi | null>(null);
 
   const { openFolder, createWorkspace, closeWorkspace } = useWorkspaceLifecycle({
-    stateRef,
     setState,
     workspaceRef,
     openTree,
@@ -326,7 +323,8 @@ export function useTabs(options: UseTabsOptions) {
   const closeTabs = useCallback(
     async (ids: string[]): Promise<boolean> => {
       if (ids.length === 0) return true;
-      if (!(await flushForClose(ids))) return false;
+      const closing = new Set(ids);
+      if (!(await flushForClose((tab) => closing.has(tab.id)))) return false;
       setState((prev) => {
         const removedIds = new Set<string>();
         for (const id of ids) {

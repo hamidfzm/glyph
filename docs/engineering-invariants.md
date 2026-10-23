@@ -29,8 +29,8 @@ Older asynchronous work cannot overwrite newer state or mark it complete. Writes
 
 Closing or replacing an owner (tab, workspace, window) flushes or transfers every pending operation it owns. Nothing pending is dropped on unmount, tab close, workspace switch, or app exit. The single exception is an explicit user discard: with Auto Save off, the close prompt's **Don't Save** drops the pending edits, which is the informed discard INV-1 allows.
 
-- Owners: `src/hooks/useTabs.ts` close-flush coordination, `src/hooks/useDocumentSave.ts` (`saveUntilClean` repeats the save until no tab in the close holds unwritten text, or its write fails), `src/hooks/useWindowClose.ts`
-- Evidence: lifecycle transition tests (edit -> switch -> close, shutdown flush), `src/hooks/useTabs.*.test.tsx` close-prompt cases, and the late-edit cases in `src/hooks/useTabs.closing.test.tsx` and `src/hooks/useTabs.virtual.test.tsx` (an edit during a close's write, or in the same tick as the close)
+- Owners: `src/hooks/useTabs.ts` close-flush coordination (which tabs a close covers is asked again each round, so a tab opened inside a workspace being closed is covered too), `src/hooks/useDocumentSave.ts` (`saveUntilClean` repeats the save until no tab in the close holds unwritten text, or its write fails), `src/hooks/useWindowClose.ts`
+- Evidence: lifecycle transition tests (edit -> switch -> close, shutdown flush), `src/hooks/useTabs.*.test.tsx` close-prompt cases, and the late-edit cases in `src/hooks/useTabs.closing.test.tsx` and `src/hooks/useTabs.virtual.test.tsx` (an edit during a close's write, in the same tick as the close, or in a workspace tab opened while the workspace's close is saving)
 
 ### INV-5: All external input is untrusted
 

@@ -161,10 +161,11 @@ export function useDocumentSave({
       if (file.virtual) return saveVirtualAs(id, file.path);
       if (!file.dirty) return Promise.resolve(true);
       // editContent is the edit buffer, always set once a tab is dirty; the null
-      // check only narrows the type for the write below ("" stays valid, since a
-      // fully-deleted document must still save, see #432).
+      // check narrows the type for the write below ("" stays valid, since a
+      // fully-deleted document must still save, see #432). It reports a failure
+      // so `saveUntilClean` can never go round forever on a tab that stays dirty.
       /* v8 ignore start -- unreachable: a dirty tab always has an edit buffer */
-      if (file.editContent == null) return Promise.resolve(true);
+      if (file.editContent == null) return Promise.resolve(false);
       /* v8 ignore stop */
       const { path, editContent: content, revision } = file;
 
@@ -176,7 +177,7 @@ export function useDocumentSave({
             ...f,
             content,
             // Stay dirty when a newer edit landed while this write was in
-            // flight, so the newer revision is saved on its own timer.
+            // flight, so the newer revision is saved too.
             dirty: f.revision !== revision,
           }));
           return true;

@@ -20,7 +20,8 @@ export type SetTabsState = (update: (prev: TabsState) => TabsState) => void;
 export function useTabStrip() {
   const [state, setRenderedState] = useState<TabsState>({ tabs: [], activeTabId: null });
   // Moved by each change as it is made, not by the render that follows, so a
-  // close flush sees an edit or a save completion from the same tick.
+  // close flush sees an edit or a save completion from the same tick. An
+  // updater must not call setState itself: its result would drop that change.
   const stateRef = useRef(state);
   const setState = useCallback<SetTabsState>((update) => {
     stateRef.current = update(stateRef.current);
