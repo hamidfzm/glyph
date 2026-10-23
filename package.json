@@ -100,6 +100,8 @@
     ],
     "overrides": {
       "@codecov/bundler-plugin-core>zod": "^4.6.6",
+      "undici@6": "^6.29.1",
+      "jsdom>undici": "^7.30.1",
       "katex": "$katex"
     }
   },
@@ -122,7 +124,7 @@
     "@types/react-dom": "^19",
     "@vitejs/plugin-react": "^5",
     "@vitest/coverage-v8": "^4.1.12",
-    "happy-dom": "^20.14.6",
+    "happy-dom": "^21.0.4",
     "husky": "^9.1.7",
     "lint-staged": "^17.6.0",
     "tailwindcss": "^4",
