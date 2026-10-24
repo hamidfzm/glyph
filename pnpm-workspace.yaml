@@ -1,1 +1,5 @@
 minimumReleaseAge: 10080
+# Advisory releases taken inside the cooldown. Without an entry, every later
+# lockfile resolve (Dependabot, pnpm add) fails until the release matures.
+minimumReleaseAgeExclude:
+  - happy-dom@21.0.4
