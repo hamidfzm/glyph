@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
-import { type Dispatch, type RefObject, type SetStateAction, useCallback } from "react";
+import { type RefObject, useCallback } from "react";
 import { useTranslation } from "react-i18next";
+import type { SetTabsState } from "@/hooks/useTabStrip";
 import { isCanvasFile } from "@/lib/canvasExtensions";
 import { isCliExportProcess } from "@/lib/cliExport";
 import { D2_EXTENSIONS } from "@/lib/d2Extensions";
@@ -52,7 +53,7 @@ export interface OpenFileOptions {
 
 interface UseOpenDocumentOptions {
   stateRef: RefObject<TabsState>;
-  setState: Dispatch<SetStateAction<TabsState>>;
+  setState: SetTabsState;
   workspaceRef: RefObject<Workspace | null>;
   /** `prev` with `id` active, the outgoing tab's scroll snapshotted. */
   withActiveTab: (prev: TabsState, id: string) => TabsState;

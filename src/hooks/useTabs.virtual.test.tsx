@@ -10,11 +10,13 @@ import {
   defaultOptions,
   deliver,
   fileOf,
+  holdWrites,
   type Invoker,
   makeInvoker,
   mockWriteFile,
   resetTabsMocks,
   type TabsHook,
+  writesOf,
 } from "@/test/tabsHarness";
 import { useTabs } from "./useTabs";
 
@@ -323,6 +325,35 @@ describe("useTabs in-memory documents", () => {
       path: "/p/saved.md",
       content: "first second",
     });
+    expect(result.current.tabs).toHaveLength(0);
+  });
+
+  it("closing an untitled tab writes what was typed during its Save As write", async () => {
+    const { writeFile, started, release } = holdWrites(1);
+    vi.mocked(pickSave).mockResolvedValue("/p/saved.md");
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    const tabId = await newDraft(result, "first");
+
+    let closing: Promise<boolean> | undefined;
+    await act(async () => {
+      closing = result.current.closeTab(tabId);
+      await started[0].promise;
+    });
+    act(() => {
+      result.current.updateEditContent(tabId, "first second");
+    });
+    let closed: boolean | undefined;
+    await act(async () => {
+      release[0].resolve();
+      closed = await closing;
+    });
+
+    expect(closed).toBe(true);
+    expect(pickSave).toHaveBeenCalledTimes(1);
+    expect(writesOf(writeFile)).toEqual([
+      { path: "/p/saved.md", content: "first" },
+      { path: "/p/saved.md", content: "first second" },
+    ]);
     expect(result.current.tabs).toHaveLength(0);
   });
 

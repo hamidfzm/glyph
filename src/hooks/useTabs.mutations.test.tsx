@@ -594,6 +594,45 @@ describe("useTabs link rewriting on rename and move", () => {
     expect(fileOf(result).dirty).toBe(false);
   });
 
+  it("saves an edit made during the save before the rewrite, then rewrites", async () => {
+    const steps: string[] = [];
+    const started = deferred();
+    const release = deferred();
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        write_file: async (_cmd, args) => {
+          steps.push(`save ${args?.content}`);
+          if (steps.length > 2) return;
+          started.resolve();
+          await release.promise;
+        },
+        rename_path: async (_cmd, args) => {
+          steps.push(args?.dryRun ? "preview" : "apply");
+          return relinked("/p/ws/trip.md", { files: index });
+        },
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await openWorkspace(result);
+    await openDirty(result, "/p/ws/index.md", "typed");
+    const tabId = result.current.tabs[0].id;
+
+    let renaming: Promise<string | null> | undefined;
+    await act(async () => {
+      renaming = result.current.renamePath("/p/ws/travel.md", "trip");
+      await started.promise;
+    });
+    act(() => {
+      result.current.updateEditContent(tabId, "typed more");
+    });
+    await act(async () => {
+      release.resolve();
+      await renaming;
+    });
+
+    expect(steps).toEqual(["preview", "save typed", "save typed more", "apply"]);
+  });
+
   it("does not rename when an affected tab cannot be saved", async () => {
     expectConsole(/Auto-save failed/);
     vi.mocked(invoke).mockImplementation(

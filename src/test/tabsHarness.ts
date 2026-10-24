@@ -7,6 +7,7 @@ import { pickFiles, pickFolder, pickNewWorkspace, pickSave } from "@/lib/pickers
 import { EMPTY_SNAPSHOT, type VaultSnapshot } from "@/lib/vault";
 import { COMPLETE_SCAN } from "@/lib/workspaceScan";
 import { resetWorkspaceSessions } from "@/lib/workspaceSession";
+import { deferred } from "@/test/deferred";
 
 // Shared harness for the useTabs suites (useTabs.*.test.tsx). Each of those
 // files mocks "@/lib/pickers" itself — vi.mock is per-module and hoisted — and
@@ -87,6 +88,26 @@ export function mockWriteFile(writeFile: ReturnType<typeof vi.fn>): void {
   vi.mocked(invoke).mockImplementation(
     makeInvoker({ write_file: writeFile as unknown as Invoker }) as typeof invoke,
   );
+}
+
+/** Hold each of the first `count` writes open until released; later writes land at once. */
+export function holdWrites(count: number) {
+  const started = Array.from({ length: count }, () => deferred());
+  const release = Array.from({ length: count }, () => deferred());
+  let writes = 0;
+  const writeFile = vi.fn(async () => {
+    const n = writes++;
+    if (n >= count) return;
+    started[n].resolve();
+    await release[n].promise;
+  });
+  mockWriteFile(writeFile);
+  return { writeFile, started, release };
+}
+
+/** What each `write_file` call carried, in order. */
+export function writesOf(writeFile: ReturnType<typeof vi.fn>) {
+  return writeFile.mock.calls.map((call) => call[1]);
 }
 
 export function defaultOptions(over: Partial<Parameters<typeof useTabs>[0]> = {}) {

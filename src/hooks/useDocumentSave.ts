@@ -1,17 +1,18 @@
 import { invoke } from "@tauri-apps/api/core";
-import { type Dispatch, type RefObject, type SetStateAction, useCallback, useRef } from "react";
+import { type RefObject, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
+import type { SetTabsState } from "@/hooks/useTabStrip";
 import type { WorkspaceNotice } from "@/hooks/useWorkspaceNotice";
 import type { EnqueueWrite } from "@/hooks/useWriteQueue";
 import { MARKDOWN_EXTENSIONS } from "@/lib/markdownExtensions";
 import { basename, isPathInside } from "@/lib/paths";
 import { pickSave } from "@/lib/pickers";
-import type { FileState, TabsState } from "@/lib/tabs";
+import type { FileState, FileTab, TabsState } from "@/lib/tabs";
 import { setWorkspaceLastFile } from "@/lib/workspace";
 
 interface UseDocumentSaveOptions {
   stateRef: RefObject<TabsState>;
-  setState: Dispatch<SetStateAction<TabsState>>;
+  setState: SetTabsState;
   updateActiveFile: (id: string, mutator: (f: FileState) => FileState) => void;
   addToRecent: (path: string) => void;
   getWorkspaceRoot: () => string | null;
@@ -149,9 +150,8 @@ export function useDocumentSave({
   // clean, and still-loading tabs. The write is queued per path, and the
   // dirty flag is cleared only when the written revision is still current, so a
   // slow write completing after a newer edit never strands that edit. Resolves
-  // true when the document is safely on disk (or there was nothing to save),
-  // false when the write or Save As failed. The close coordinator reads this directly
-  // rather than re-checking dirty state, which may not have re-rendered yet.
+  // false when the write or Save As failed, true otherwise, including when an
+  // edit made during the write leaves the tab dirty: `saveUntilClean` checks that.
   const saveDocument = useCallback(
     (id: string): Promise<boolean> => {
       const tab = stateRef.current.tabs.find((candidate) => candidate.id === id);
@@ -161,10 +161,11 @@ export function useDocumentSave({
       if (file.virtual) return saveVirtualAs(id, file.path);
       if (!file.dirty) return Promise.resolve(true);
       // editContent is the edit buffer, always set once a tab is dirty; the null
-      // check only narrows the type for the write below ("" stays valid, since a
-      // fully-deleted document must still save, see #432).
+      // check narrows the type for the write below ("" stays valid, since a
+      // fully-deleted document must still save, see #432). It reports a failure
+      // so `saveUntilClean` can never go round forever on a tab that stays dirty.
       /* v8 ignore start -- unreachable: a dirty tab always has an edit buffer */
-      if (file.editContent == null) return Promise.resolve(true);
+      if (file.editContent == null) return Promise.resolve(false);
       /* v8 ignore stop */
       const { path, editContent: content, revision } = file;
 
@@ -176,7 +177,7 @@ export function useDocumentSave({
             ...f,
             content,
             // Stay dirty when a newer edit landed while this write was in
-            // flight, so the newer revision is saved on its own timer.
+            // flight, so the newer revision is saved too.
             dirty: f.revision !== revision,
           }));
           return true;
@@ -195,5 +196,34 @@ export function useDocumentSave({
     [enqueueWrite, markSelfSave, saveVirtualAs, stateRef, updateActiveFile],
   );
 
-  return { saveDocument };
+  // Save until none of `dirtyTabs()` is left dirty: an edit made while a write
+  // was in flight keeps its tab dirty, and the next round writes it. A tab whose
+  // write or Save As fails leaves the rounds, and the failed tabs are returned.
+  const saveUntilClean = useCallback(
+    async (dirtyTabs: () => FileTab[]): Promise<FileTab[]> => {
+      const failed = new Map<string, FileTab>();
+      const save = async (tab: FileTab) => {
+        if (!(await saveDocument(tab.id))) failed.set(tab.id, tab);
+      };
+      // Untitled documents open their Save As one after another, so the user can tell them apart.
+      const saveRound = async (tabs: FileTab[]) => {
+        const saveUntitledInTurn = async () => {
+          for (const tab of tabs.filter((tab) => tab.file.virtual)) await save(tab);
+        };
+        await Promise.all([
+          ...tabs.filter((tab) => !tab.file.virtual).map(save),
+          saveUntitledInTurn(),
+        ]);
+      };
+      let dirty = dirtyTabs();
+      while (dirty.length > 0) {
+        await saveRound(dirty);
+        dirty = dirtyTabs().filter((tab) => !failed.has(tab.id));
+      }
+      return [...failed.values()];
+    },
+    [saveDocument],
+  );
+
+  return { saveDocument, saveUntilClean };
 }

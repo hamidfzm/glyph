@@ -1,14 +1,14 @@
 import { invoke } from "@tauri-apps/api/core";
 import { type RefObject, useCallback } from "react";
 import type { WorkspaceNotice } from "@/hooks/useWorkspaceNotice";
-import { basename, movedPath } from "@/lib/paths";
-import { fileTabs, type TabsState, type Workspace } from "@/lib/tabs";
+import { basename } from "@/lib/paths";
+import { type FileTab, fileTabs, type TabsState, type Workspace } from "@/lib/tabs";
 import type { Relink, RelinkRequest } from "@/lib/vault";
 
 interface UseRelocationOptions {
   stateRef: RefObject<TabsState>;
   workspaceRef: RefObject<Workspace | null>;
-  saveDocument: (id: string) => Promise<boolean>;
+  saveUntilClean: (dirtyTabs: () => FileTab[]) => Promise<FileTab[]>;
   markSelfSave: (path: string) => void;
   reloadFromDisk: (tabId: string, path: string, revision?: number) => Promise<void>;
   refreshIndexes: (root: string, isCurrent: () => boolean) => Promise<void>;
@@ -27,7 +27,7 @@ interface UseRelocationOptions {
 export function useRelocation({
   stateRef,
   workspaceRef,
-  saveDocument,
+  saveUntilClean,
   markSelfSave,
   reloadFromDisk,
   refreshIndexes,
@@ -45,10 +45,10 @@ export function useRelocation({
       const unsaved = dirtyTabs().map((tab) => tab.file.path);
       if (!(await confirmRelink({ root, files: preview.files, unsaved }))) return false;
       // The prompt is open for an unbounded time, so save what is dirty now.
-      const saved = await Promise.all(dirtyTabs().map((tab) => saveDocument(tab.id)));
-      return saved.every(Boolean);
+      const failed = await saveUntilClean(dirtyTabs);
+      return failed.length === 0;
     },
-    [confirmRelink, saveDocument, stateRef],
+    [confirmRelink, saveUntilClean, stateRef],
   );
 
   // Null when the user backs out at the prompt, or the workspace changed while
@@ -68,7 +68,7 @@ export function useRelocation({
   );
 
   const settle = useCallback(
-    async (done: Relink, from: string, root: string, revisions: Map<string, number>) => {
+    async (done: Relink, root: string, revisions: Map<string, number>) => {
       // Marked before the reloads below start, or each would read twice, overtaken by its own mark.
       for (const file of done.files) markSelfSave(file.path);
       if (done.failed) {
@@ -79,12 +79,10 @@ export function useRelocation({
         );
       }
       const rewritten = new Set(done.files.map((file) => file.path));
-      // The tabs may not have re-rendered onto their new paths yet, and a tab
-      // edited while the move ran keeps what was typed.
+      // A tab edited while the move ran keeps what was typed.
       const reloads = fileTabs(stateRef.current)
-        .map((tab) => ({ id: tab.id, path: movedPath(tab.file.path, from, done.newPath) }))
-        .filter((tab) => rewritten.has(tab.path))
-        .map((tab) => reloadFromDisk(tab.id, tab.path, revisions.get(tab.id)));
+        .filter((tab) => rewritten.has(tab.file.path))
+        .map((tab) => reloadFromDisk(tab.id, tab.file.path, revisions.get(tab.id)));
       const isCurrent = () => workspaceRef.current?.root === root;
       await Promise.all([...reloads, refreshIndexes(root, isCurrent)]);
     },
@@ -100,7 +98,7 @@ export function useRelocation({
         if (!relocated) return null;
         const { done, revisions } = relocated;
         await refreshAfterRename(path, done.newPath, root);
-        await settle(done, path, root, revisions);
+        await settle(done, root, revisions);
         return done.newPath;
       } catch (err) {
         console.error("Failed to rename:", err);
@@ -120,7 +118,7 @@ export function useRelocation({
         const { done, revisions } = relocated;
         if (done.newPath === from) return from;
         await refreshAfterMove(from, toDir, done.newPath, root);
-        await settle(done, from, root, revisions);
+        await settle(done, root, revisions);
         return done.newPath;
       } catch (err) {
         console.error("Failed to move:", err);

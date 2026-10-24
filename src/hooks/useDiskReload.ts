@@ -1,9 +1,10 @@
-import { type Dispatch, type SetStateAction, useCallback, useRef } from "react";
+import { useCallback, useRef } from "react";
+import type { SetTabsState } from "@/hooks/useTabStrip";
 import { loadFileContent } from "@/lib/documentContent";
-import { type TabsState, updateFiles } from "@/lib/tabs";
+import { updateFiles } from "@/lib/tabs";
 
 interface UseDiskReloadOptions {
-  setState: Dispatch<SetStateAction<TabsState>>;
+  setState: SetTabsState;
   forgetHistory: (id: string) => void;
   selfSaveCount: (path: string) => number;
 }

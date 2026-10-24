@@ -1,14 +1,15 @@
 import { invoke } from "@tauri-apps/api/core";
-import { type Dispatch, type RefObject, type SetStateAction, useCallback, useRef } from "react";
+import { type RefObject, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import type { OpenFileOptions } from "@/hooks/useOpenDocument";
+import type { SetTabsState } from "@/hooks/useTabStrip";
 import type { WorkspaceNotice } from "@/hooks/useWorkspaceNotice";
 import type { WorkspaceSessionApi } from "@/hooks/useWorkspaceSession";
 import { isCliExportProcess } from "@/lib/cliExport";
 import { isMarkdownFile } from "@/lib/markdownExtensions";
 import { isPathInside } from "@/lib/paths";
 import { pickFolder, pickNewWorkspace } from "@/lib/pickers";
-import { removeTabs, type TabsState, type Workspace } from "@/lib/tabs";
+import { type FileTab, removeTabs, type Workspace } from "@/lib/tabs";
 import { getWorkspaceLastFile, resolveWorkspace, type WorkspaceResolution } from "@/lib/workspace";
 import {
   beginSessionRestore,
@@ -22,15 +23,14 @@ export interface OpenFolderOptions {
 }
 
 interface UseWorkspaceLifecycleOptions {
-  stateRef: RefObject<TabsState>;
-  setState: Dispatch<SetStateAction<TabsState>>;
+  setState: SetTabsState;
   workspaceRef: RefObject<Workspace | null>;
   openTree: (root: string, expanded?: string[]) => Promise<void>;
   clearTree: () => void;
   scanWorkspace: (root: string, isCurrent: () => boolean) => Promise<string[]>;
   clearIndexes: (root?: string | null) => void;
   resetStatus: () => void;
-  flushForClose: (ids?: Iterable<string>) => Promise<boolean>;
+  flushForClose: (inScope?: (tab: FileTab) => boolean) => Promise<boolean>;
   openFile: (path: string, options?: OpenFileOptions) => Promise<unknown>;
   forgetScroll: (id: string) => void;
   forgetHistory: (id: string) => void;
@@ -46,7 +46,6 @@ interface UseWorkspaceLifecycleOptions {
  * one down: its dirty documents are flushed, its tabs closed, its indexes dropped.
  */
 export function useWorkspaceLifecycle({
-  stateRef,
   setState,
   workspaceRef,
   openTree,
@@ -92,22 +91,13 @@ export function useWorkspaceLifecycle({
     [forgetHistory, forgetScroll, setState],
   );
 
-  /** Ids of the open file tabs that live inside `root`. */
-  const tabIdsInside = useCallback(
-    (root: string) =>
-      stateRef.current.tabs
-        .filter((tab) => tab.kind === "file" && isPathInside(tab.file.path, root))
-        .map((tab) => tab.id),
-    [stateRef],
-  );
-
   // Close the window's workspace: stop watching it, close its tabs, drop the
   // tree + indexes. Loose file tabs stay open.
   const closeWorkspace = useCallback(async () => {
     const ws = workspaceRef.current;
     if (!ws) return;
     // Protect every dirty document in the workspace before tearing it down.
-    if (!(await flushForClose(tabIdsInside(ws.root)))) return;
+    if (!(await flushForClose((tab) => isPathInside(tab.file.path, ws.root)))) return;
     // Snapshot before teardown (INV-4), unless this close interrupts an
     // in-flight restore whose stored snapshot is the good copy (INV-3). Then
     // suppress the reactive persist while the strip churns so the emptied
@@ -122,15 +112,7 @@ export function useWorkspaceLifecycle({
     } finally {
       endSessionRestore();
     }
-  }, [
-    clearIndexes,
-    clearTree,
-    closeWorkspaceTabs,
-    flushForClose,
-    sessionRef,
-    tabIdsInside,
-    workspaceRef,
-  ]);
+  }, [clearIndexes, clearTree, closeWorkspaceTabs, flushForClose, sessionRef, workspaceRef]);
 
   // Create an empty folder and adopt it as a workspace, routing through the
   // same window manager as Open Folder.
@@ -220,7 +202,7 @@ export function useWorkspaceLifecycle({
         // switch and keeps the current workspace open.
         const previous = workspaceRef.current;
         if (previous) {
-          if (!(await flushForClose(tabIdsInside(previous.root)))) return;
+          if (!(await flushForClose((tab) => isPathInside(tab.file.path, previous.root)))) return;
           // Snapshot the outgoing workspace before its tabs close (INV-4),
           // unless it is itself a half-restored strip from an open this call
           // interrupted; its stored snapshot is the good copy (INV-3). Read
@@ -263,10 +245,7 @@ export function useWorkspaceLifecycle({
           await sessionRef.current?.restoreSession(root, session);
           // Re-capture so entries that failed to reopen (a file deleted since
           // last session) drop out of the stored snapshot instead of being
-          // retried on every open. stateRef may still miss the last commit
-          // here; the reactive persist and the close flush both re-capture
-          // from settled state, so at worst a crash within the debounce
-          // window keeps one extra stale entry.
+          // retried on every open.
           if (workspaceRef.current?.root === root) sessionRef.current?.captureSession();
         } else if (files.length > 0) {
           // First open on this machine: auto-open the workspace's remembered
@@ -292,7 +271,6 @@ export function useWorkspaceLifecycle({
       resetStatus,
       scanWorkspace,
       sessionRef,
-      tabIdsInside,
       workspaceRef,
     ],
   );

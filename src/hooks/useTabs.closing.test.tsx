@@ -3,7 +3,13 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { expectConsole } from "@/test/consoleGuard";
 import { deferred } from "@/test/deferred";
-import { defaultOptions, mockWriteFile, resetTabsMocks } from "@/test/tabsHarness";
+import {
+  defaultOptions,
+  holdWrites,
+  mockWriteFile,
+  resetTabsMocks,
+  writesOf,
+} from "@/test/tabsHarness";
 import { useTabs } from "./useTabs";
 
 vi.mock("@/lib/pickers", () => ({
@@ -63,7 +69,7 @@ describe("useTabs close coordinator", () => {
       await result.current.closeTab(id);
     });
 
-    expect(writeFile).toHaveBeenCalledWith("write_file", { path: "/p/a.md", content: "BODY" });
+    expect(writesOf(writeFile)).toEqual([{ path: "/p/a.md", content: "BODY" }]);
     expect(hasTab(result, id)).toBe(false);
   });
 
@@ -193,6 +199,7 @@ describe("useTabs close coordinator", () => {
     });
 
     expect(ok).toBe(true);
+    expect(writeFile).toHaveBeenCalledTimes(2);
     expect(writeFile).toHaveBeenCalledWith("write_file", { path: "/p/a.md", content: "A" });
     expect(writeFile).toHaveBeenCalledWith("write_file", { path: "/p/b.md", content: "B" });
     expect(isDirty(result, a)).toBe(false);
@@ -510,5 +517,284 @@ describe("useTabs close coordinator", () => {
     // rather than dropping the edits silently.
     expect(ask).toHaveBeenCalledTimes(1);
     expect(ok).toBe(false);
+  });
+
+  type Close = (r: Hook, id: string) => Promise<unknown>;
+  // Whether the close went through, given what it resolved with.
+  type Closed = (r: Hook, id: string, resolved: unknown) => boolean;
+
+  // The tab stays on screen while its write is in flight, so typing still reaches it.
+  it.each<[string, Partial<Parameters<typeof useTabs>[0]>, Close, Closed]>([
+    ["a tab close", {}, (r, id) => r.current.closeTab(id), (r, id) => !hasTab(r, id)],
+    [
+      "a workspace close",
+      {},
+      (r) => r.current.closeWorkspace(),
+      (r) => r.current.workspace === null,
+    ],
+    [
+      "a workspace switch",
+      {},
+      (r) => r.current.openFolder("/ws2"),
+      (r) => r.current.workspace?.root === "/ws2",
+    ],
+    [
+      "a window close",
+      {},
+      (r) => r.current.flushForClose(),
+      (_r, _id, resolved) => resolved === true,
+    ],
+    [
+      "a window close after Save at the prompt",
+      { autoSave: false, confirmUnsaved: async () => "save" as const },
+      (r) => r.current.flushForClose(),
+      (_r, _id, resolved) => resolved === true,
+    ],
+  ])(
+    "%s writes an edit made while its save was in flight",
+    async (_how, options, close, closed) => {
+      const { writeFile, started, release } = holdWrites(1);
+      const { result } = renderHook(() => useTabs(defaultOptions(options)));
+      await ready(result);
+      await act(async () => {
+        await result.current.openFolder("/ws");
+      });
+      const id = await openDirty(result, "/ws/a.md", "one");
+
+      let closing: Promise<unknown> | undefined;
+      await act(async () => {
+        closing = close(result, id);
+        await started[0].promise;
+      });
+      act(() => {
+        result.current.updateEditContent(id, "one two");
+      });
+      let resolved: unknown;
+      await act(async () => {
+        release[0].resolve();
+        resolved = await closing;
+      });
+
+      expect(writesOf(writeFile)).toEqual([
+        { path: "/ws/a.md", content: "one" },
+        { path: "/ws/a.md", content: "one two" },
+      ]);
+      expect(isDirty(result, id)).toBe(false);
+      expect(closed(result, id, resolved)).toBe(true);
+    },
+  );
+
+  it.each<[string, Close]>([
+    ["a workspace close", (r) => r.current.closeWorkspace()],
+    ["a workspace switch", (r) => r.current.openFolder("/ws2")],
+  ])("%s saves a workspace tab opened and edited during its flush", async (_how, close) => {
+    const { writeFile, started, release } = holdWrites(1);
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await ready(result);
+    await act(async () => {
+      await result.current.openFolder("/ws");
+    });
+    const a = await openDirty(result, "/ws/a.md", "A");
+
+    let closing: Promise<unknown> | undefined;
+    await act(async () => {
+      closing = close(result, a);
+      await started[0].promise;
+    });
+    const c = await openDirty(result, "/ws/c.md", "C");
+    await act(async () => {
+      release[0].resolve();
+      await closing;
+    });
+
+    expect(writesOf(writeFile)).toEqual([
+      { path: "/ws/a.md", content: "A" },
+      { path: "/ws/c.md", content: "C" },
+    ]);
+    expect(hasTab(result, c)).toBe(false);
+  });
+
+  it("closeTab removes the tab only once its late edit is on disk", async () => {
+    const { writeFile, started, release } = holdWrites(1);
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await ready(result);
+    const other = await openDirty(result, "/p/b.md", "B");
+    const id = await openDirty(result, "/p/a.md", "one");
+
+    let closing: Promise<boolean> | undefined;
+    await act(async () => {
+      closing = result.current.closeTab(id);
+      await started[0].promise;
+    });
+    act(() => {
+      result.current.updateEditContent(id, "one two");
+      result.current.updateEditContent(other, "B more");
+    });
+    let closed: boolean | undefined;
+    await act(async () => {
+      release[0].resolve();
+      closed = await closing;
+    });
+
+    expect(closed).toBe(true);
+    // A tab outside the close is neither written nor waited on.
+    expect(writesOf(writeFile)).toEqual([
+      { path: "/p/a.md", content: "one" },
+      { path: "/p/a.md", content: "one two" },
+    ]);
+    expect(hasTab(result, id)).toBe(false);
+    expect(isDirty(result, other)).toBe(true);
+  });
+
+  it("flushForClose keeps saving while edits keep arriving during slow writes", async () => {
+    const { writeFile, started, release } = holdWrites(2);
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await ready(result);
+    const id = await openDirty(result, "/p/a.md", "one");
+
+    let flush: Promise<boolean> | undefined;
+    await act(async () => {
+      flush = result.current.flushForClose();
+      await started[0].promise;
+    });
+    act(() => {
+      result.current.updateEditContent(id, "one two");
+    });
+    act(() => {
+      result.current.updateEditContent(id, "one two three");
+    });
+    await act(async () => {
+      release[0].resolve();
+      await started[1].promise;
+    });
+    act(() => {
+      result.current.updateEditContent(id, "one two three four");
+    });
+    let ok: boolean | undefined;
+    await act(async () => {
+      release[1].resolve();
+      ok = await flush;
+    });
+
+    expect(ok).toBe(true);
+    expect(writesOf(writeFile).map((write) => write.content)).toEqual([
+      "one",
+      "one two three",
+      "one two three four",
+    ]);
+    expect(isDirty(result, id)).toBe(false);
+  });
+
+  it.each<[string, Close]>([
+    ["a tab close", (r, id) => r.current.closeTab(id)],
+    ["a workspace close", (r) => r.current.closeWorkspace()],
+    ["a window close", (r) => r.current.flushForClose()],
+  ])("%s writes an edit made in the same tick as the close", async (_how, close) => {
+    const writeFile = vi.fn().mockResolvedValue(undefined);
+    mockWriteFile(writeFile);
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await ready(result);
+    await act(async () => {
+      await result.current.openFolder("/ws");
+    });
+    await act(async () => {
+      await result.current.openFile("/ws/a.md");
+    });
+    const id = result.current.tabs[0].id;
+    act(() => {
+      result.current.setTabMode(id, "edit");
+    });
+
+    let closing: Promise<unknown> | undefined;
+    act(() => {
+      result.current.updateEditContent(id, "typed");
+      closing = close(result, id);
+    });
+    await act(async () => {
+      await closing;
+    });
+
+    expect(writesOf(writeFile)).toEqual([{ path: "/ws/a.md", content: "typed" }]);
+    expect(isDirty(result, id)).toBe(false);
+  });
+
+  it("lists a tab whose catch-up write fails in the discard prompt", async () => {
+    expectConsole(/Auto-save failed/);
+    vi.mocked(ask).mockClear();
+    vi.mocked(ask).mockResolvedValue(false);
+    const started = deferred();
+    const release = deferred();
+    const writeFile = vi
+      .fn()
+      .mockImplementationOnce(async () => {
+        started.resolve();
+        await release.promise;
+      })
+      .mockRejectedValueOnce(new Error("disk full"));
+    mockWriteFile(writeFile);
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await ready(result);
+    const id = await openDirty(result, "/p/a.md", "one");
+
+    let closing: Promise<boolean> | undefined;
+    await act(async () => {
+      closing = result.current.closeTab(id);
+      await started.promise;
+    });
+    act(() => {
+      result.current.updateEditContent(id, "one two");
+    });
+    let closed: boolean | undefined;
+    await act(async () => {
+      release.resolve();
+      closed = await closing;
+    });
+
+    expect(writeFile).toHaveBeenCalledTimes(2);
+    expect(ask).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(ask).mock.calls[0][0]).toContain("a.md");
+    expect(closed).toBe(false);
+    expect(hasTab(result, id)).toBe(true);
+    expect(isDirty(result, id)).toBe(true);
+  });
+
+  it("catches up the other tabs before prompting for one whose write failed", async () => {
+    expectConsole(/Auto-save failed/);
+    vi.mocked(ask).mockClear();
+    vi.mocked(ask).mockResolvedValue(false);
+    const started = deferred();
+    const release = deferred();
+    let writesOfB = 0;
+    const writeFile = vi.fn(async (_cmd: string, args: { path: string }) => {
+      if (args.path === "/p/a.md") throw new Error("disk full");
+      if (writesOfB++ > 0) return;
+      started.resolve();
+      await release.promise;
+    });
+    mockWriteFile(writeFile);
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await ready(result);
+    await openDirty(result, "/p/a.md", "A");
+    const b = await openDirty(result, "/p/b.md", "B");
+
+    let flush: Promise<boolean> | undefined;
+    await act(async () => {
+      flush = result.current.flushForClose();
+      await started.promise;
+    });
+    act(() => {
+      result.current.updateEditContent(b, "B late");
+    });
+    await act(async () => {
+      release.resolve();
+      await flush;
+    });
+
+    const writesToB = writesOf(writeFile).filter((write) => write.path === "/p/b.md");
+    expect(writesToB.map((write) => write.content)).toEqual(["B", "B late"]);
+    expect(isDirty(result, b)).toBe(false);
+    const message = vi.mocked(ask).mock.calls[0][0];
+    expect(message).toContain("a.md");
+    expect(message).not.toContain("b.md");
   });
 });

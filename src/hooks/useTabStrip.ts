@@ -10,15 +10,23 @@ import {
   updateFiles,
 } from "@/lib/tabs";
 
+export type SetTabsState = (update: (prev: TabsState) => TabsState) => void;
+
 /**
  * The tab strip itself: which tabs exist, which one is active, their order, and
  * the per-tab view state (mode, edit buffer, scroll position). Document I/O
  * and the workspace tree live in their own hooks.
  */
 export function useTabStrip() {
-  const [state, setState] = useState<TabsState>({ tabs: [], activeTabId: null });
+  const [state, setRenderedState] = useState<TabsState>({ tabs: [], activeTabId: null });
+  // Moved by each change as it is made, not by the render that follows, so a
+  // close flush sees an edit or a save completion from the same tick. An
+  // updater must not call setState itself: its result would drop that change.
   const stateRef = useRef(state);
-  stateRef.current = state;
+  const setState = useCallback<SetTabsState>((update) => {
+    stateRef.current = update(stateRef.current);
+    setRenderedState(stateRef.current);
+  }, []);
   const scrollRefs = useRef<Map<string, number>>(new Map());
 
   const { tabs, activeTabId } = state;
@@ -47,7 +55,7 @@ export function useTabStrip() {
     (id: string) => {
       setState((prev) => withActiveTab(prev, id));
     },
-    [withActiveTab],
+    [setState, withActiveTab],
   );
 
   /** Activate the tab whose primary path matches; a no-op when none does. */
@@ -58,15 +66,18 @@ export function useTabStrip() {
         return match ? withActiveTab(prev, match.id) : prev;
       });
     },
-    [withActiveTab],
+    [setState, withActiveTab],
   );
 
   // Reorder the tab strip: move tab `id` to `toIndex` (clamped to the strip).
   // Only the array order changes; the active tab and every tab's state are
   // untouched, and persistence follows from reading the array order.
-  const moveTab = useCallback((id: string, toIndex: number) => {
-    setState((prev) => reorderTabs(prev, id, toIndex));
-  }, []);
+  const moveTab = useCallback(
+    (id: string, toIndex: number) => {
+      setState((prev) => reorderTabs(prev, id, toIndex));
+    },
+    [setState],
+  );
 
   // Move the active tab by `delta` positions (-1 left, +1 right); a no-op at
   // either end of the strip or with no active tab.
@@ -87,9 +98,14 @@ export function useTabStrip() {
   // the state object is returned untouched and React bails out of the render.
   // That keeps a no-op edit from churning identities (and rescheduling
   // autosave) on every keystroke round-trip through the editor.
-  const updateActiveFile = useCallback((id: string, mutator: (f: FileState) => FileState) => {
-    setState((prev) => updateFiles(prev, (tab) => (tab.id === id ? mutator(tab.file) : tab.file)));
-  }, []);
+  const updateActiveFile = useCallback(
+    (id: string, mutator: (f: FileState) => FileState) => {
+      setState((prev) =>
+        updateFiles(prev, (tab) => (tab.id === id ? mutator(tab.file) : tab.file)),
+      );
+    },
+    [setState],
+  );
 
   const setTabMode = useCallback(
     (id: string, mode: EditorMode) => {
