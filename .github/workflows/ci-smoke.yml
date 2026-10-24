@@ -51,6 +51,7 @@ jobs:
       - uses: ./.github/actions/rust-setup
       - run: bash scripts/bump-version.test.sh
       - run: bash scripts/release-changelog.test.sh
+      - run: bash scripts/release-assets.test.sh
       - run: bash scripts/check-ai-attribution.test.sh
       - run: bash scripts/ecosystem-health-check.test.sh
       # The title and body are read live, not from the event payload: a

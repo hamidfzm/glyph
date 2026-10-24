@@ -5,34 +5,22 @@ on:
     tags:
       - "v*"
 
-# Read-only by default: the publish-* jobs only download release assets and
-# push to satellite repos with their own secrets, so only the four jobs that
-# write to this repo's release get write (publish-aur uploads the PKGBUILD).
+# Read-only by default. The build legs and the publish-* jobs hold no write
+# to this repository: the bundles reach the release through one job,
+# publish-release, which also writes the checksums every other job verifies
+# its downloads against, and update-release-notes edits the notes.
 permissions:
   contents: read
 
 jobs:
-  # Create the release once before the build matrix; parallel tauri-action
-  # jobs racing to create it fail with "already_exists".
-  create-release:
-    runs-on: ubuntu-24.04
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
-        with:
-          persist-credentials: false
-      - name: Create GitHub release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 && exit 0
-          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
-            --title "Glyph $GITHUB_REF_NAME" \
-            --notes-file .github/release-install.md
-
+  # Builds only: the bundles go to the workflow's artifact store, and
+  # publish-release puts them on the release. A build leg runs the whole npm
+  # and cargo dependency tree, so none holds a token that could replace
+  # another platform's installer. The one secret it does hold, the Sentry
+  # token for source maps, reaches it through the `release` environment,
+  # which the repository settings restrict to `v*` tags.
   build:
-    needs: create-release
+    environment: release
     strategy:
       fail-fast: false
       matrix:
@@ -46,9 +34,6 @@ jobs:
           - platform: windows-latest
             args: ""
     runs-on: ${{ matrix.platform }}
-    # tauri-action uploads the bundles to the release.
-    permissions:
-      contents: write
     steps:
       # No token in the checkout, here and in every job: `pnpm install` and
       # the Rust build run every dependency's lifecycle and build scripts, and
@@ -74,7 +59,10 @@ jobs:
         with:
           workspaces: src-tauri
       - run: pnpm install --frozen-lockfile
+      # No tagName: the action builds, names the bundles in its output, and
+      # uploads nothing.
       - uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0.6.2
+        id: tauri
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Enables source-map upload from the Vite build (vite.config.ts). When
@@ -82,19 +70,79 @@ jobs:
           # succeeds.
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
         with:
-          tagName: ${{ github.ref_name }}
           args: ${{ matrix.args }}
-      # Gate channel publishing on the built-app smoke: a failure fails this
-      # build leg, and every publish-* job needs: build, so nothing is pushed
-      # to a package channel (the GitHub release and its assets are already
-      # uploaded by this point). One x64 Linux leg is enough (WebKitWebDriver).
+      # Gate publishing on the built-app smoke: a failure fails this build
+      # leg, publish-release needs every leg, and every publish-* job needs
+      # publish-release, so nothing reaches the release or a package channel.
+      # One x64 Linux leg is enough (WebKitWebDriver).
       - name: Built-app smoke test
         if: matrix.platform == 'ubuntu-22.04'
         timeout-minutes: 10
         uses: ./.github/actions/app-smoke
+      # The installers alone: on macOS the list also names the .app folder,
+      # which the .dmg carries. The steps that move the assets from here to
+      # the channels live in scripts/release-assets.sh, which
+      # scripts/release-assets.test.sh runs against a fake release.
+      - name: Collect the bundles
+        shell: bash
+        env:
+          ARTIFACT_PATHS: ${{ steps.tauri.outputs.artifactPaths }}
+        run: bash scripts/release-assets.sh collect "$RUNNER_TEMP/bundles" <<< "$ARTIFACT_PATHS"
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: bundles-${{ matrix.platform }}
+          path: ${{ runner.temp }}/bundles/*
+          if-no-files-found: error
+          retention-days: 7
+
+  # The one job that writes to the release. It runs no dependency code: it
+  # hashes what the build legs produced, attests where each file came from,
+  # and uploads them with SHA256SUMS, which every publish-* job below checks
+  # its downloads against (.github/actions/release-download).
+  publish-release:
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+      - name: Get version
+        id: version
+        uses: ./.github/actions/get-version
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          pattern: bundles-*
+          merge-multiple: true
+          path: ${{ runner.temp }}/assets
+      # The PKGBUILD is rendered here, from the hashes just computed, so the
+      # AUR job needs no write to the release; its line joins SHA256SUMS so
+      # that job verifies it like any other asset.
+      - name: Checksum the assets and render the PKGBUILD
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          ASSETS: ${{ runner.temp }}/assets
+        run: bash scripts/release-assets.sh checksum "$ASSETS" "$VERSION" aur/PKGBUILD package.json
+      # A signed statement, under GitHub's OIDC identity for this run, that
+      # these bytes came out of this workflow at this commit;
+      # `gh attestation verify <file> --repo hamidfzm/glyph` checks it.
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-checksums: ${{ runner.temp }}/assets/SHA256SUMS
+      - name: Create the release and upload the assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ASSETS: ${{ runner.temp }}/assets
+        run: |
+          gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 \
+            || gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
+              --title "Glyph $GITHUB_REF_NAME" \
+              --notes-file .github/release-install.md
+          gh release upload "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --clobber "$ASSETS"/*
 
   update-release-notes:
-    needs: build
+    needs: publish-release
     runs-on: ubuntu-24.04
     outputs:
       changelog: ${{ steps.notes.outputs.changelog }}
@@ -172,8 +220,9 @@ jobs:
           fi
 
   publish-homebrew:
-    needs: build
+    needs: publish-release
     runs-on: ubuntu-24.04
+    environment: release
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
@@ -181,15 +230,18 @@ jobs:
       - name: Get version
         id: version
         uses: ./.github/actions/get-version
-      - name: Download DMG and compute sha256
+      - uses: ./.github/actions/release-download
+        with:
+          patterns: |
+            Glyph_${{ steps.version.outputs.version }}_universal.dmg
+            Glyph_${{ steps.version.outputs.version }}_amd64.deb
+            Glyph_${{ steps.version.outputs.version }}_arm64.deb
+      - name: Compute the DMG sha256
         id: sha
         env:
-          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
-          gh release download "${{ github.ref_name }}" \
-            --repo "${{ github.repository }}" \
-            --pattern "Glyph_${{ steps.version.outputs.version }}_universal.dmg"
-          SHA=$(shasum -a 256 Glyph_${{ steps.version.outputs.version }}_universal.dmg | awk '{print $1}')
+          SHA=$(shasum -a 256 "Glyph_${VERSION}_universal.dmg" | awk '{print $1}')
           echo "sha256=$SHA" >> "$GITHUB_OUTPUT"
       - name: Update homebrew-tap
         env:
@@ -218,16 +270,10 @@ jobs:
               --field message="chore: add glyph cask $VERSION" \
               --field content="$(base64 -w0 /tmp/glyph.rb)"
           fi
-      - name: Download Linux debs and compute sha256
+      - name: Compute the Linux deb sha256
         id: linux_sha
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           VERSION="${{ steps.version.outputs.version }}"
-          gh release download "${{ github.ref_name }}" \
-            --repo "${{ github.repository }}" \
-            --pattern "Glyph_${VERSION}_amd64.deb" \
-            --pattern "Glyph_${VERSION}_arm64.deb"
           echo "sha256_amd64=$(shasum -a 256 "Glyph_${VERSION}_amd64.deb" | awk '{print $1}')" >> "$GITHUB_OUTPUT"
           echo "sha256_arm64=$(shasum -a 256 "Glyph_${VERSION}_arm64.deb" | awk '{print $1}')" >> "$GITHUB_OUTPUT"
       - name: Update homebrew-tap Linux formula
@@ -262,8 +308,9 @@ jobs:
           fi
 
   publish-chocolatey:
-    needs: [build, update-release-notes]
+    needs: [publish-release, update-release-notes]
     runs-on: windows-latest
+    environment: release
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
@@ -271,16 +318,14 @@ jobs:
       - name: Get version
         id: version
         uses: ./.github/actions/get-version
-      - name: Download MSI and compute sha256
+      - uses: ./.github/actions/release-download
+        with:
+          patterns: Glyph_${{ steps.version.outputs.version }}_x64_en-US.msi
+      - name: Compute the MSI sha256
         id: sha
         shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           $version = "${{ steps.version.outputs.version }}"
-          gh release download "${{ github.ref_name }}" `
-            --repo "${{ github.repository }}" `
-            --pattern "Glyph_${version}_x64_en-US.msi"
           $hash = (Get-FileHash "Glyph_${version}_x64_en-US.msi" -Algorithm SHA256).Hash.ToLower()
           "sha256=$hash" | Out-File -Append -FilePath $env:GITHUB_OUTPUT
       - name: Build and push Chocolatey package
@@ -332,8 +377,9 @@ jobs:
           choco push glyph.$version.nupkg --source https://push.chocolatey.org/ --api-key $env:CHOCO_API_KEY
 
   publish-scoop:
-    needs: build
+    needs: publish-release
     runs-on: ubuntu-24.04
+    environment: release
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
@@ -341,15 +387,13 @@ jobs:
       - name: Get version
         id: version
         uses: ./.github/actions/get-version
-      - name: Download MSI and compute sha256
+      - uses: ./.github/actions/release-download
+        with:
+          patterns: Glyph_${{ steps.version.outputs.version }}_x64_en-US.msi
+      - name: Compute the MSI sha256
         id: sha
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           VERSION="${{ steps.version.outputs.version }}"
-          gh release download "${{ github.ref_name }}" \
-            --repo "${{ github.repository }}" \
-            --pattern "Glyph_${VERSION}_x64_en-US.msi"
           SHA=$(shasum -a 256 "Glyph_${VERSION}_x64_en-US.msi" | awk '{print $1}')
           echo "sha256=$SHA" >> "$GITHUB_OUTPUT"
       - name: Update scoop-bucket
@@ -388,6 +432,7 @@ jobs:
     needs: update-release-notes
     if: needs.update-release-notes.outputs.latest == 'true'
     runs-on: ubuntu-24.04
+    environment: release
     permissions: {}
     strategy:
       fail-fast: false
@@ -428,9 +473,14 @@ jobs:
           fi
           gh workflow run "$WORKFLOW" --repo "$REPO" --ref main -f "$INPUT=$TAG"
 
+  # winget-releaser downloads the MSI itself, by name from the release, so
+  # this is the one channel that does not check SHA256SUMS; the manifest it
+  # submits carries the hash of what it downloaded, and Microsoft's
+  # validation installs from the same URL.
   publish-winget:
-    needs: build
+    needs: publish-release
     runs-on: windows-latest
+    environment: release
     steps:
       # Submits a manifest-update PR to microsoft/winget-pkgs for
       # hamidfzm.Glyph from the released MSI. Reuses TAP_GITHUB_TOKEN (the
@@ -473,16 +523,15 @@ jobs:
           token: ${{ secrets.TAP_GITHUB_TOKEN }}
 
   publish-aur:
-    needs: build
+    needs: publish-release
     runs-on: ubuntu-24.04
+    environment: release
     # AUR's SSH endpoint drops into maintenance for days at a time and refuses
-    # every push, which used to fail the whole release. The rendered PKGBUILD
-    # is uploaded to the release before the push so Arch users can build with
+    # every push, which used to fail the whole release. publish-release puts
+    # the rendered PKGBUILD on the release so Arch users can build with
     # `makepkg -si` meanwhile, and the push itself is non-fatal: re-run this
     # job once the AUR is back.
     continue-on-error: true
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
@@ -490,41 +539,27 @@ jobs:
       - name: Get version
         id: version
         uses: ./.github/actions/get-version
-      - name: Download debs and compute sha256
-        id: sha
+      # The PKGBUILD publish-release rendered, and SHA256SUMS for the deb
+      # hashes .SRCINFO repeats.
+      - uses: ./.github/actions/release-download
+        with:
+          patterns: PKGBUILD
+      - name: Render .SRCINFO
         env:
-          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
-          gh release download "${{ github.ref_name }}" \
-            --repo "${{ github.repository }}" \
-            --pattern "Glyph_${VERSION}_amd64.deb" \
-            --pattern "Glyph_${VERSION}_arm64.deb"
-          echo "sha256_amd64=$(shasum -a 256 "Glyph_${VERSION}_amd64.deb" | awk '{print $1}')" >> "$GITHUB_OUTPUT"
-          echo "sha256_arm64=$(shasum -a 256 "Glyph_${VERSION}_arm64.deb" | awk '{print $1}')" >> "$GITHUB_OUTPUT"
-      - name: Render PKGBUILD and .SRCINFO
-        run: |
-          VERSION="${{ steps.version.outputs.version }}"
-          SHA_AMD64="${{ steps.sha.outputs.sha256_amd64 }}"
-          SHA_ARM64="${{ steps.sha.outputs.sha256_arm64 }}"
+          SHA_AMD64=$(bash scripts/release-assets.sh hash-of "Glyph_${VERSION}_amd64.deb")
+          SHA_ARM64=$(bash scripts/release-assets.sh hash-of "Glyph_${VERSION}_arm64.deb")
+          test -n "$SHA_AMD64" && test -n "$SHA_ARM64"
           HOMEPAGE=$(jq -r .homepage package.json)
 
           mkdir -p /tmp/pkg
-          for file in PKGBUILD .SRCINFO; do
-            sed -e "s/{{VERSION}}/$VERSION/g" \
-              -e "s/{{SHA256_AMD64}}/$SHA_AMD64/g" \
-              -e "s/{{SHA256_ARM64}}/$SHA_ARM64/g" \
-              -e "s|{{HOMEPAGE}}|$HOMEPAGE|g" \
-              "aur/$file" > "/tmp/pkg/$file"
-          done
-      # Runs before the AUR push so an AUR outage still leaves Arch users a
-      # buildable PKGBUILD on the release page.
-      - name: Upload PKGBUILD to the release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release upload "${{ github.ref_name }}" /tmp/pkg/PKGBUILD \
-            --repo "${{ github.repository }}" --clobber
+          cp PKGBUILD /tmp/pkg/PKGBUILD
+          sed -e "s/{{VERSION}}/$VERSION/g" \
+            -e "s/{{SHA256_AMD64}}/$SHA_AMD64/g" \
+            -e "s/{{SHA256_ARM64}}/$SHA_ARM64/g" \
+            -e "s|{{HOMEPAGE}}|$HOMEPAGE|g" \
+            aur/.SRCINFO > /tmp/pkg/.SRCINFO
       - name: Update AUR package
         env:
           AUR_SSH_KEY: ${{ secrets.AUR_SSH_KEY }}
@@ -557,8 +592,9 @@ jobs:
           }
 
   publish-ppa:
-    needs: build
+    needs: publish-release
     runs-on: ubuntu-24.04
+    environment: release
     strategy:
       fail-fast: false
       matrix:
@@ -575,15 +611,12 @@ jobs:
       - name: Get version
         id: version
         uses: ./.github/actions/get-version
-      - name: Download debs and extract binaries
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - uses: ./.github/actions/release-download
+        with:
+          patterns: Glyph_${{ steps.version.outputs.version }}_amd64.deb
+      - name: Extract the binaries
         run: |
           VERSION="${{ steps.version.outputs.version }}"
-          gh release download "${{ github.ref_name }}" \
-            --repo "${{ github.repository }}" \
-            --pattern "Glyph_${VERSION}_amd64.deb" \
-            --pattern "Glyph_${VERSION}_arm64.deb"
           dpkg-deb -x "Glyph_${VERSION}_amd64.deb" /tmp/glyph-extracted
       - name: Import GPG key
         env:
@@ -653,8 +686,9 @@ jobs:
           dput ppa:hamidfzm/glyph glyph_${VERSION}-1~${SERIES}1_source.changes
 
   publish-debian:
-    needs: build
+    needs: publish-release
     runs-on: ubuntu-24.04
+    environment: release
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
@@ -667,15 +701,11 @@ jobs:
       - name: Get version
         id: version
         uses: ./.github/actions/get-version
-      - name: Download deb packages
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          VERSION="${{ steps.version.outputs.version }}"
-          gh release download "${{ github.ref_name }}" \
-            --repo "${{ github.repository }}" \
-            --pattern "Glyph_${VERSION}_amd64.deb" \
-            --pattern "Glyph_${VERSION}_arm64.deb"
+      - uses: ./.github/actions/release-download
+        with:
+          patterns: |
+            Glyph_${{ steps.version.outputs.version }}_amd64.deb
+            Glyph_${{ steps.version.outputs.version }}_arm64.deb
       - name: Clone apt-repo and update
         env:
           GH_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
@@ -746,7 +776,7 @@ jobs:
           }
 
   publish-snap:
-    needs: build
+    needs: publish-release
     strategy:
       fail-fast: false
       matrix:
@@ -756,6 +786,7 @@ jobs:
           - arch: arm64
             runner: ubuntu-22.04-arm
     runs-on: ${{ matrix.runner }}
+    environment: release
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
@@ -799,8 +830,9 @@ jobs:
           release: stable
 
   publish-dnf:
-    needs: build
+    needs: publish-release
     runs-on: ubuntu-24.04
+    environment: release
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
@@ -832,16 +864,12 @@ jobs:
         if: steps.gate.outputs.enabled == 'true'
         id: version
         uses: ./.github/actions/get-version
-      - name: Download RPM packages
+      - uses: ./.github/actions/release-download
         if: steps.gate.outputs.enabled == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          VERSION="${{ steps.version.outputs.version }}"
-          gh release download "${{ github.ref_name }}" \
-            --repo "${{ github.repository }}" \
-            --pattern "Glyph-${VERSION}-1.x86_64.rpm" \
-            --pattern "Glyph-${VERSION}-1.aarch64.rpm"
+        with:
+          patterns: |
+            Glyph-${{ steps.version.outputs.version }}-1.x86_64.rpm
+            Glyph-${{ steps.version.outputs.version }}-1.aarch64.rpm
       - name: Import GPG key
         if: steps.gate.outputs.enabled == 'true'
         env:
@@ -907,8 +935,9 @@ jobs:
           }
 
   publish-flathub:
-    needs: build
+    needs: publish-release
     runs-on: ubuntu-24.04
+    environment: release
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
@@ -935,17 +964,17 @@ jobs:
         if: steps.gate.outputs.enabled == 'true'
         id: version
         run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
-      - name: Download debs and compute sha256
+      - uses: ./.github/actions/release-download
+        if: steps.gate.outputs.enabled == 'true'
+        with:
+          patterns: |
+            Glyph_${{ steps.version.outputs.version }}_amd64.deb
+            Glyph_${{ steps.version.outputs.version }}_arm64.deb
+      - name: Compute the deb sha256
         if: steps.gate.outputs.enabled == 'true'
         id: sha
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           VERSION="${{ steps.version.outputs.version }}"
-          gh release download "${{ github.ref_name }}" \
-            --repo "${{ github.repository }}" \
-            --pattern "Glyph_${VERSION}_amd64.deb" \
-            --pattern "Glyph_${VERSION}_arm64.deb"
           echo "amd64=$(sha256sum "Glyph_${VERSION}_amd64.deb" | awk '{print $1}')" >> "$GITHUB_OUTPUT"
           echo "arm64=$(sha256sum "Glyph_${VERSION}_arm64.deb" | awk '{print $1}')" >> "$GITHUB_OUTPUT"
       - name: Update manifest and push to the Flathub app repo
@@ -996,7 +1025,7 @@ jobs:
           }
 
   publish-docker:
-    needs: build
+    needs: publish-release
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -1010,6 +1039,19 @@ jobs:
       - name: Get version
         id: version
         uses: ./.github/actions/get-version
+      # The image downloads the package itself (Dockerfile, `ADD`); these
+      # are the hashes it checks that download against.
+      - uses: ./.github/actions/release-download
+      - name: Read the package hashes
+        id: sha
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          for arch in amd64 arm64; do
+            sha=$(awk -v f="Glyph_${VERSION}_${arch}.deb" '$2 == f { print $1 }' SHA256SUMS)
+            test -n "$sha"
+            echo "$arch=$sha" >> "$GITHUB_OUTPUT"
+          done
       # arm64 is emulated. The image only unpacks a published package, so
       # there is nothing to cross-compile and one buildx run covers both.
       - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
@@ -1034,7 +1076,10 @@ jobs:
         with:
           context: .
           platforms: linux/amd64,linux/arm64
-          build-args: GLYPH_VERSION=${{ steps.version.outputs.version }}
+          build-args: |
+            GLYPH_VERSION=${{ steps.version.outputs.version }}
+            GLYPH_SHA256_AMD64=${{ steps.sha.outputs.amd64 }}
+            GLYPH_SHA256_ARM64=${{ steps.sha.outputs.arm64 }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           push: true

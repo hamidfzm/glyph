@@ -83,6 +83,13 @@ parts:
       fi
       test -n "$URL" || { echo "could not resolve a .deb URL for $DEB_ARCH" >&2; exit 1; }
       curl -fSL -o glyph.deb "$URL"
+      # The release's SHA256SUMS names every asset the build produced; a
+      # package replaced under the same name since is not the one listed.
+      curl -fSL -o SHA256SUMS "${URL%/*}/SHA256SUMS"
+      SHA=$(awk -v f="Glyph_${VERSION}_${DEB_ARCH}.deb" '$2 == f { print $1 }' SHA256SUMS)
+      test -n "$SHA" || { echo "Glyph_${VERSION}_${DEB_ARCH}.deb is not in SHA256SUMS" >&2; exit 1; }
+      echo "$SHA  glyph.deb" | sha256sum -c -
+      rm SHA256SUMS
       dpkg-deb -x glyph.deb .
       rm glyph.deb
       craftctl set version="$VERSION"
