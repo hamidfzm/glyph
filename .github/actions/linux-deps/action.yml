@@ -2,7 +2,9 @@ name: Install Linux dependencies
 description: Cache and install the webkit apt packages Tauri needs on Linux runners
 inputs:
   cache-key:
-    description: Key for the apt .deb cache
+    description: >-
+      Key for the apt .deb cache. The ISO week is appended, so the cache
+      follows Ubuntu's updates instead of freezing the week it was first saved.
     required: true
   extra-packages:
     description: Extra apt packages appended to the base webkit list
@@ -10,18 +12,43 @@ inputs:
 runs:
   using: composite
   steps:
+    # actions/cache never rewrites a key, so a fixed key keeps the .deb set
+    # from the week it was first saved: once Ubuntu publishes a new WebKit
+    # build, every job downloads the whole tree again, at whatever speed the
+    # mirror offers that hour, and the 8-minute step timeout is the result.
+    # The week in the key saves a fresh set once a week; the restore prefix
+    # still hands the previous set over for the packages that did not change.
+    - name: Name this week's cache
+      id: week
+      shell: bash
+      run: echo "week=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
     - name: Cache apt packages
       uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
       with:
         path: ~/apt-cache/*.deb
-        key: ${{ inputs.cache-key }}
+        key: ${{ inputs.cache-key }}-${{ steps.week.outputs.week }}
+        restore-keys: ${{ inputs.cache-key }}
     - name: Install apt packages
       shell: bash
       env:
         DEBIAN_FRONTEND: noninteractive
+        EXTRA_PACKAGES: ${{ inputs.extra-packages }}
       run: |
         mkdir -p ~/apt-cache/partial
+        # The runner image ships Microsoft's package source, which answers 403
+        # now and then and fails `apt-get update` outright; nothing here
+        # installs from it.
+        sudo rm -f /etc/apt/sources.list.d/microsoft*
         sudo apt-get update
+        # Without the recommends, which are the GStreamer, PipeWire and
+        # Sysprof trees: the build links none of them, the app smoke plays no
+        # media, and the AppImage does not bundle a media framework.
+        read -ra extra <<< "$EXTRA_PACKAGES"
         sudo apt-get -o Dir::Cache::archives="$HOME/apt-cache" \
           -o Binary::apt::APT::Keep-Downloaded-Packages=true \
-          install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf ${{ inputs.extra-packages }}
+          -o Acquire::Retries=3 \
+          install -y --no-install-recommends \
+          libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf "${extra[@]}"
+        # Drop the .debs a newer version replaced, so the cache does not grow
+        # week over week.
+        sudo apt-get -o Dir::Cache::archives="$HOME/apt-cache" autoclean
