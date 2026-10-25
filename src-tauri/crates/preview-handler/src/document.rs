@@ -4,8 +4,7 @@ use std::path::Path;
 
 use serde_json::json;
 
-/// Larger files get a notice instead of a render, so Explorer never waits on one.
-pub const MAX_PREVIEW_BYTES: u64 = 2 * 1024 * 1024;
+include!(concat!(env!("OUT_DIR"), "/limits.rs"));
 
 /// The JSON message the preview page renders for the file at `path`.
 /// `base_url` is where the page finds images relative to the file.
