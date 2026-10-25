@@ -28,6 +28,7 @@ import { useWindowReveal } from "@/hooks/useWindowReveal";
 import { useWorkspaceSearch } from "@/hooks/useWorkspaceSearch";
 import { autoSaveDocuments } from "@/lib/autoSaveDocuments";
 import { isImageFile } from "@/lib/imageExtensions";
+import { canShareLink } from "@/lib/shareLink";
 import { AIChatPanel } from "./ai/lazyAIChatPanel";
 import { AppBanners } from "./layout/AppBanners";
 import { AppModals } from "./layout/AppModals";
@@ -131,6 +132,7 @@ export function AppShell() {
     ttsAvailable: tts.available,
     hasDirty: activeFile?.dirty ?? false,
     autoSave,
+    canShareLink: canShareLink(activeFile),
   });
   useNativeMenuLabels();
   usePluginMenuItems(runPluginExporter);
@@ -149,6 +151,7 @@ export function AppShell() {
   const palette = useCommandPaletteController({
     platform,
     workspaceOpen: workspace !== null,
+    canShareLink: canShareLink(activeFile),
     workspaceFiles,
     tocEntries,
     actions: useMemo(

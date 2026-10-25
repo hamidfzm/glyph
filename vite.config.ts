@@ -44,10 +44,12 @@ export default defineConfig(async ({ mode }) => ({
         ]
       : []),
   ],
-  // Expose package.json facts to the app: the plugin API ceiling and the Sentry release.
+  // Expose package.json facts to the app: the plugin API ceiling, the Sentry release,
+  // and the homepage the web viewer is served under.
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
     __SENTRY_RELEASE__: JSON.stringify(sentryRelease),
+    __HOMEPAGE__: JSON.stringify(pkg.homepage),
   },
   // Source maps are only emitted when we're going to upload + delete them.
   build: {

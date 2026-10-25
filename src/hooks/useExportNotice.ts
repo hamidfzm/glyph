@@ -5,12 +5,15 @@ import type { SiteWarning } from "@/lib/siteWarnings";
  * How an export ended when it did not simply succeed: refused before it
  * started, failed part way, or (a website) written with something falling
  * short, which `warnings` lists and is never empty. `reason` is what the
- * export reported, shown as written (it is not translated).
+ * export reported, shown as written (it is not translated). A share link
+ * reports every outcome, success included, since a copied link carries the
+ * whole document.
  */
 export type ExportNoticeContent =
   | { kind: "insideWorkspace" }
   | { kind: "failed" | "siteFailed"; reason: string }
-  | { kind: "siteWarnings"; warnings: SiteWarning[] };
+  | { kind: "siteWarnings"; warnings: SiteWarning[] }
+  | { kind: "linkCopied" | "linkTooLong" | "linkFailed" };
 
 export interface ExportNoticeActions {
   showNotice: (notice: ExportNoticeContent) => void;
@@ -29,7 +32,8 @@ interface ExportNoticeState extends ExportNoticeActions {
 }
 
 /**
- * The one notice the document, plugin and website exports share. The actions
+ * The one notice the document, plugin and website exports and the share link
+ * share. The actions
  * keep their identity while the notice changes, so the export handlers built
  * on them (and the menu subscription built on those) are not rebuilt.
  */

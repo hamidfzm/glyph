@@ -14,6 +14,8 @@ export interface NativeMenuFlags {
   ttsAvailable: boolean;
   hasDirty: boolean;
   autoSave: boolean;
+  /** The active tab can open in the web viewer (`canShareLink`). */
+  canShareLink: boolean;
 }
 
 // Keeps native menu items in sync with what the user can actually do.
@@ -29,6 +31,7 @@ export function useNativeMenuState(flags: NativeMenuFlags) {
     ttsAvailable,
     hasDirty,
     autoSave,
+    canShareLink,
   } = flags;
   const pushRef = useRef(async () => {});
 
@@ -47,6 +50,7 @@ export function useNativeMenuState(flags: NativeMenuFlags) {
             ttsAvailable,
             hasDirty,
             autoSave,
+            canShareLink,
           },
         });
       } catch (err) {
@@ -55,7 +59,17 @@ export function useNativeMenuState(flags: NativeMenuFlags) {
     };
     pushRef.current = push;
     void push();
-  }, [hasTab, hasFile, hasContent, hasWorkspace, aiConfigured, ttsAvailable, hasDirty, autoSave]);
+  }, [
+    hasTab,
+    hasFile,
+    hasContent,
+    hasWorkspace,
+    aiConfigured,
+    ttsAvailable,
+    hasDirty,
+    autoSave,
+    canShareLink,
+  ]);
 
   // Every desktop platform but Windows shares one app menu between windows, so
   // it holds the last window's push; the window gaining focus reasserts its own.

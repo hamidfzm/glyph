@@ -208,6 +208,7 @@ pub fn menu_action_for_id(id: &str) -> Option<MenuAction> {
         "export-epub" => emit("menu-export-epub"),
         "export-pdf" => emit("menu-export-pdf"),
         "export-website" => emit("menu-export-website"),
+        "copy-share-link" => emit("menu-copy-share-link"),
         "workspace-settings" => emit("menu-workspace-settings"),
         "close" => Some(MenuAction::CloseWindow),
         "toggle-files-sidebar" => emit("menu-toggle-files-sidebar"),
@@ -561,6 +562,10 @@ mod tests {
         assert_eq!(
             menu_action_for_id("export-website"),
             Some(emit("menu-export-website"))
+        );
+        assert_eq!(
+            menu_action_for_id("copy-share-link"),
+            Some(emit("menu-copy-share-link"))
         );
         assert_eq!(
             menu_action_for_id("workspace-settings"),

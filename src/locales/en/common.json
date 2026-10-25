@@ -114,6 +114,9 @@
     "failed": "The export failed.",
     "siteFailed": "The website export failed.",
     "insideWorkspace": "The website can't be exported into the workspace it is made from. Choose a folder outside it.",
+    "linkCopied": "Share link copied. It carries the whole document, so anyone who has the link can read it.",
+    "linkTooLong": "This document is too large to share as a link.",
+    "linkFailed": "Couldn't copy the link.",
     "dismiss": "Dismiss export notice"
   },
   "contextMenu": {

@@ -1,39 +1,40 @@
 import { useTranslation } from "react-i18next";
 import { BannerCloseIcon } from "@/components/icons/BannerCloseIcon";
+import { CheckIcon } from "@/components/icons/CheckIcon";
 import { WarningIcon } from "@/components/icons/WarningIcon";
 import type { ExportNoticeContent } from "@/hooks/useExportNotice";
+import { type ExportNoticeTone, exportNoticeTone } from "@/lib/exportNoticeTone";
 
 interface ExportNoticeProps {
   notice: ExportNoticeContent;
   onDismiss: () => void;
 }
 
-const ACCENT_CLASS = {
+const ACCENT_CLASS: Record<ExportNoticeTone, string> = {
+  info: "border-s-[var(--color-accent)] text-[var(--color-accent)]",
   warning: "border-s-[var(--color-warning,#b45309)] text-[var(--color-warning,#b45309)]",
   error: "border-s-[var(--color-error)] text-[var(--color-error)]",
-} as const;
+};
 
 /**
  * Toast for an export that needs the user's attention after it ended. A
  * website that was written with something falling short is a warning, one
- * message per shortfall; a refusal or a failed export is an error. Unlike the
+ * message per shortfall; a refusal or a failed export is an error. A copied
+ * share link is information: the link carries the whole document. Unlike the
  * progress toast it does not go away on its own: an export can outlast the
  * user's attention.
  */
 export function ExportNotice({ notice, onDismiss }: ExportNoticeProps) {
   const { t } = useTranslation("common");
-  const isWarning = notice.kind === "siteWarnings";
-  const tone = isWarning ? "warning" : "error";
-  const messages = isWarning ? notice.warnings : [notice];
+  const tone = exportNoticeTone(notice);
+  const messages = notice.kind === "siteWarnings" ? notice.warnings : [notice];
   return (
     <div
-      role="alert"
+      role={tone === "info" ? "status" : "alert"}
       data-export-ignore="true"
       className={`pointer-events-auto flex items-start gap-3 max-w-[min(32rem,90vw)] px-4 py-2 rounded-lg border border-[var(--color-border)] border-s-4 bg-[var(--color-surface)] text-sm shadow-lg ${ACCENT_CLASS[tone]}`}
     >
-      <span className="mt-1 shrink-0">
-        <WarningIcon />
-      </span>
+      <span className="mt-1 shrink-0">{tone === "info" ? <CheckIcon /> : <WarningIcon />}</span>
       <div className="min-w-0 max-h-[40vh] overflow-y-auto wrap-break-word space-y-3 text-[var(--color-text-primary)]">
         {messages.map((message) => (
           <div key={message.kind}>

@@ -105,6 +105,17 @@ describe("ExportNotice", () => {
     expect(screen.getByText("/out/a.html").tagName).toBe("BDI");
   });
 
+  it("announces a copied share link politely, saying who can read it", () => {
+    render(<ExportNotice {...defaultProps} notice={{ kind: "linkCopied" }} />);
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.getByRole("status")).toHaveTextContent("anyone who has the link can read it");
+  });
+
+  it("raises a share link that could not be made as an alert", () => {
+    render(<ExportNotice {...defaultProps} notice={{ kind: "linkTooLong" }} />);
+    expect(screen.getByRole("alert")).toHaveTextContent("too large to share as a link");
+  });
+
   it("dismisses on click", () => {
     const onDismiss = vi.fn();
     render(<ExportNotice {...defaultProps} onDismiss={onDismiss} />);
