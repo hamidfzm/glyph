@@ -1,8 +1,5 @@
 import Foundation
 
-/// Larger files get a notice instead of a render, so Quick Look never waits on one.
-let maxPreviewBytes = 2 * 1024 * 1024
-
 /// The message the preview page renders for the file at `url`
 /// (src/preview/hostMessage.ts). `baseUrl` is where the page finds images
 /// relative to the file. Mirrors the Windows handler's document.rs.
