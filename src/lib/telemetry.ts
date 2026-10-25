@@ -7,7 +7,6 @@ import { currentPlatform } from "@/lib/platform";
 // build script reads the same file (see build.rs) so the frontend and backend
 // clients always target the same project. DSNs are public client identifiers,
 // not secrets, so committing this is intentional.
-// biome-ignore lint/style/noRestrictedImports: lives outside src/, but it is the canonical config
 import sentryConfig from "../../src-tauri/sentry.json";
 
 const SENTRY_DSN = sentryConfig.dsn;
