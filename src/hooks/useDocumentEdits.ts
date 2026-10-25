@@ -2,7 +2,13 @@ import { invoke } from "@tauri-apps/api/core";
 import { type RefObject, useCallback, useRef } from "react";
 import type { EnqueueWrite } from "@/hooks/useWriteQueue";
 import { emptyHistory, popRedo, popUndo, pushEntry, type TabHistory } from "@/lib/editHistory";
+import {
+  type FencedBlock,
+  replaceFencedBlockBody,
+  replaceSourceDocument,
+} from "@/lib/fencedBlockEdit";
 import { EDITOR_MODE } from "@/lib/settings";
+import { isFencedDocument } from "@/lib/sourceDocuments";
 import { activeFileOf, type FileState, liveContentOf, type TabsState } from "@/lib/tabs";
 import { toggleTaskAtLine } from "@/lib/taskList";
 
@@ -14,9 +20,9 @@ interface UseDocumentEditsOptions {
 }
 
 /**
- * Programmatic (non-typed) document edits (checklist toggles and canvas
- * commits) with a per-tab undo/redo stack. The text editor keeps its own
- * history for typed input.
+ * Programmatic (non-typed) document edits (checklist toggles, canvas commits,
+ * and plugin renderers saving their block) with a per-tab undo/redo stack.
+ * The text editor keeps its own history for typed input.
  */
 export function useDocumentEdits({
   stateRef,
@@ -76,6 +82,19 @@ export function useDocumentEdits({
     [enqueueWrite, markSelfSave, updateActiveFile],
   );
 
+  // Apply an edit and push one undo entry for it.
+  const recordEdit = useCallback(
+    async (id: string, file: FileState, before: string, next: string): Promise<boolean> => {
+      const applied = await applyProgrammaticEdit(id, file, next);
+      if (applied) {
+        const current = editHistory.current.get(id) ?? emptyHistory();
+        editHistory.current.set(id, pushEntry(current, { before, after: next }));
+      }
+      return applied;
+    },
+    [applyProgrammaticEdit],
+  );
+
   // Toggle a checklist item by source line number. Pushes the change onto the
   // tab's history stack so it can be undone.
   const toggleTask = useCallback(
@@ -87,14 +106,9 @@ export function useDocumentEdits({
       if (source == null) return;
       const next = toggleTaskAtLine(source, line);
       if (next === source) return;
-
-      const applied = await applyProgrammaticEdit(id, file, next);
-      if (applied) {
-        const current = editHistory.current.get(id) ?? emptyHistory();
-        editHistory.current.set(id, pushEntry(current, { before: source, after: next }));
-      }
+      await recordEdit(id, file, source, next);
     },
-    [applyProgrammaticEdit, findFile],
+    [findFile, recordEdit],
   );
 
   // Commit a finished document edit produced by a non-text editor (e.g. the
@@ -108,13 +122,29 @@ export function useDocumentEdits({
       const before = liveContentOf(file) ?? "";
       /* v8 ignore stop */
       if (next === before) return;
-      const applied = await applyProgrammaticEdit(id, file, next);
-      if (applied) {
-        const current = editHistory.current.get(id) ?? emptyHistory();
-        editHistory.current.set(id, pushEntry(current, { before, after: next }));
-      }
+      await recordEdit(id, file, before, next);
     },
-    [applyProgrammaticEdit, findFile],
+    [findFile, recordEdit],
+  );
+
+  // Save a plugin renderer's block of the file at `path`. A source document is
+  // that block, so its whole text is replaced. False when the tab shows another
+  // file now or its text no longer holds the block as it rendered: replacing
+  // it then would clobber newer edits.
+  const editFencedBlock = useCallback(
+    async (id: string, path: string, block: FencedBlock, code: string): Promise<boolean> => {
+      const file = findFile(id);
+      if (!file || file.path !== path) return false;
+      const source = liveContentOf(file);
+      if (source == null) return false;
+      const next = isFencedDocument(file.path)
+        ? replaceSourceDocument(source, block.code, code)
+        : replaceFencedBlockBody(source, block, code);
+      if (next === null) return false;
+      if (next === source) return true;
+      return recordEdit(id, file, source, next);
+    },
+    [findFile, recordEdit],
   );
 
   // Step a tab across a history entry. An entry is a whole-document snapshot,
@@ -159,5 +189,5 @@ export function useDocumentEdits({
     [replay],
   );
 
-  return { toggleTask, commitEdit, undoEdit, redoEdit, forgetHistory };
+  return { toggleTask, commitEdit, editFencedBlock, undoEdit, redoEdit, forgetHistory };
 }

@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { ask } from "@tauri-apps/plugin-dialog";
 import { useCallback, useEffect, useRef } from "react";
+import { flushSync } from "react-dom";
 import { useTranslation } from "react-i18next";
 import type { UnsavedChoice } from "@/components/modals/UnsavedChangesModal";
 import { useDiskReload } from "@/hooks/useDiskReload";
@@ -23,6 +24,7 @@ import { useWriteQueue } from "@/hooks/useWriteQueue";
 import { isCliExportProcess } from "@/lib/cliExport";
 import { pruneGraphViews } from "@/lib/graphViewStore";
 import { basename, isPathInside, movedPath } from "@/lib/paths";
+import { closeOverlays } from "@/lib/plugins/overlays";
 import { EDITOR_MODE, type EditorMode } from "@/lib/settings";
 import { type FileTab, fileTabs, type PersistedTab, removeTabs } from "@/lib/tabs";
 import type { RelinkRequest } from "@/lib/vault";
@@ -168,7 +170,7 @@ export function useTabs(options: UseTabsOptions) {
 
   // One queue for every document write, so a save and a programmatic edit of
   // the same file can never overlap.
-  const enqueueWrite = useWriteQueue();
+  const { enqueueWrite, writesSettled } = useWriteQueue();
 
   const { saveDocument, saveUntilClean } = useDocumentSave({
     stateRef,
@@ -181,12 +183,13 @@ export function useTabs(options: UseTabsOptions) {
     enqueueWrite,
   });
 
-  const { toggleTask, commitEdit, undoEdit, redoEdit, forgetHistory } = useDocumentEdits({
-    stateRef,
-    updateActiveFile,
-    markSelfSave,
-    enqueueWrite,
-  });
+  const { toggleTask, commitEdit, editFencedBlock, undoEdit, redoEdit, forgetHistory } =
+    useDocumentEdits({
+      stateRef,
+      updateActiveFile,
+      markSelfSave,
+      enqueueWrite,
+    });
 
   const reloadFromDisk = useDiskReload({ setState, forgetHistory, selfSaveCount });
 
@@ -209,6 +212,11 @@ export function useTabs(options: UseTabsOptions) {
   // opened inside a workspace being closed) is saved too.
   const flushForClose = useCallback(
     async (inScope?: (tab: FileTab) => boolean): Promise<boolean> => {
+      // A plugin overlay can hold an edit of its own (a drawing being edited).
+      // Closing it runs its cleanups now, which save into the tabs, and the
+      // writes they start finish before the tabs are checked.
+      const closedOverlay = flushSync(closeOverlays);
+      if (closedOverlay) await writesSettled();
       const dirtyTabs = () =>
         fileTabs(stateRef.current).filter((tab) => tab.file.dirty && (!inScope || inScope(tab)));
       const dirty = dirtyTabs();
@@ -237,7 +245,7 @@ export function useTabs(options: UseTabsOptions) {
         cancelLabel: t("unsavedChanges.cancel"),
       });
     },
-    [saveUntilClean, stateRef, t],
+    [saveUntilClean, stateRef, t, writesSettled],
   );
 
   // Filled after `useWorkspaceSession` below; the lifecycle needs the capture/
@@ -457,6 +465,7 @@ export function useTabs(options: UseTabsOptions) {
     updateEditContent,
     saveDocument,
     toggleTask,
+    editFencedBlock,
     undoEdit,
     redoEdit,
     saveScrollPosition,
