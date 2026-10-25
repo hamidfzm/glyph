@@ -785,18 +785,44 @@ jobs:
         run: |
           HOMEPAGE=$(jq -r .homepage package.json)
           sed -i "s|^website: .*|website: $HOMEPAGE|" snap/snapcraft.yaml
+      # The same steps snapcore/action-build and action-publish ran. Those
+      # actions are unmaintained and still target Node 20. The Snap Store pins
+      # no finer than a track, so each tool is held to one.
+      - name: Install LXD and snapcraft
+        if: steps.gate.outputs.enabled == 'true'
+        run: |
+          # snap-confine refuses a / that root does not own, as on these runners.
+          sudo chown root:root /
+          sudo groupadd --force --system lxd
+          sudo usermod --append --groups lxd "$USER"
+          # An image that seeds LXD gets moved onto the track instead.
+          if snap list lxd >/dev/null 2>&1; then
+            sudo snap refresh lxd --channel=6/stable
+          else
+            sudo snap install lxd --channel=6/stable
+          fi
+          sudo lxd init --auto
+          # Docker's FORWARD policy drops the LXD build container's traffic.
+          sudo iptables -P FORWARD ACCEPT
+          sudo snap install snapcraft --classic --channel=9.x/stable
       - name: Build snap
         if: steps.gate.outputs.enabled == 'true'
         id: build
-        uses: snapcore/action-build@3bdaa03e1ba6bf59a65f84a751d943d549a54e79 # v1.3.0
+        env:
+          SNAPCRAFT_BUILD_ENVIRONMENT: lxd
+        run: |
+          export SNAPCRAFT_IMAGE_INFO="{\"build_url\":\"https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
+          # sudo -u starts a session that has the lxd group added above.
+          sudo -u "$USER" -E snapcraft
+          snaps=(*.snap)
+          test -f "${snaps[0]}" || { echo "snapcraft produced no .snap" >&2; exit 1; }
+          echo "snap=${snaps[0]}" >> "$GITHUB_OUTPUT"
       - name: Publish snap to stable
         if: steps.gate.outputs.enabled == 'true'
-        uses: snapcore/action-publish@214b86e5ca036ead1668c79afb81e550e6c54d40 # v1.2.0
         env:
           SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
-        with:
-          snap: ${{ steps.build.outputs.snap }}
-          release: stable
+          SNAP_FILE: ${{ steps.build.outputs.snap }}
+        run: snapcraft upload "$SNAP_FILE" --release stable
 
   publish-dnf:
     needs: build

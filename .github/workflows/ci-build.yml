@@ -208,15 +208,13 @@ jobs:
           cache: gradle
       - name: Set up Android SDK
         uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
-      - name: Cache NDK
-        id: ndk-cache
-        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
-        with:
-          path: ${{ env.ANDROID_HOME }}/ndk/${{ env.NDK_VERSION }}
-          key: ndk-${{ env.NDK_VERSION }}
+      # The ubuntu-24.04 image ships this NDK, owned by root, so a cache restored
+      # over it fails. Install it only on an image that lacks it.
       - name: Install NDK
-        if: steps.ndk-cache.outputs.cache-hit != 'true'
-        run: sdkmanager "ndk;${{ env.NDK_VERSION }}"
+        run: |
+          if [ ! -d "$ANDROID_HOME/ndk/$NDK_VERSION" ]; then
+            sdkmanager "ndk;$NDK_VERSION"
+          fi
       - run: pnpm install --frozen-lockfile
       - name: Build Android APK (debug, aarch64)
         env:
