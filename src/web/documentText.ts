@@ -1,6 +1,5 @@
 import { adaptMmdContent } from "@/lib/mmd";
 import type { PreviewMessage } from "@/preview/startPreview";
-// biome-ignore lint/style/noRestrictedImports: lives outside src/, but it is the canonical config
 import previewConfig from "../../src-tauri/preview.json";
 
 /** The cap the Windows and Quick Look previews apply too: all three read preview.json. */
