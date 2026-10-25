@@ -14,7 +14,7 @@ use crate::grants::{self, is_symlink, GrantRegistry};
 /// crosses IPC and sits in the renderer's editor, so this is the one bound on
 /// what a workspace can make the app hold; a notebook with embedded images is
 /// the largest thing opened in practice, and it fits with room to spare. The
-/// index stops at 5 MiB and the preview handlers at 2 MiB.
+/// index stops at 5 MiB and the previews at 2 MiB (`src-tauri/preview.json`).
 pub const READ_MAX_FILE_BYTES: u64 = 64 * MIB;
 const MIB: u64 = 1024 * 1024;
 
