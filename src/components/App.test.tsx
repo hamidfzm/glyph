@@ -174,7 +174,7 @@ describe("App", () => {
     expect(notice).toHaveTextContent("The export failed.");
     expect(notice).toHaveTextContent("disk full");
 
-    fireEvent.click(screen.getByRole("button", { name: "Dismiss export notice" }));
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss notice" }));
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 

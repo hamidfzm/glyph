@@ -117,7 +117,7 @@
     "linkCopied": "Enlace para compartir copiado. Contiene el documento completo, así que cualquiera que tenga el enlace puede leerlo.",
     "linkTooLong": "Este documento es demasiado grande para compartirlo como enlace.",
     "linkFailed": "No se pudo copiar el enlace.",
-    "dismiss": "Descartar aviso de exportación"
+    "dismiss": "Descartar aviso"
   },
   "contextMenu": {
     "copy": "Copiar",

@@ -20,9 +20,10 @@ const ACCENT_CLASS: Record<ExportNoticeTone, string> = {
  * Toast for an export that needs the user's attention after it ended. A
  * website that was written with something falling short is a warning, one
  * message per shortfall; a refusal or a failed export is an error. A copied
- * share link is information: the link carries the whole document. Unlike the
- * progress toast it does not go away on its own: an export can outlast the
- * user's attention.
+ * share link is information, and an alert too, since a status region is not
+ * reliably announced when it appears with its text. Unlike the progress toast
+ * it does not go away on its own: an export can outlast the user's attention,
+ * and a copied link's notice says the link carries the whole document.
  */
 export function ExportNotice({ notice, onDismiss }: ExportNoticeProps) {
   const { t } = useTranslation("common");
@@ -30,7 +31,7 @@ export function ExportNotice({ notice, onDismiss }: ExportNoticeProps) {
   const messages = notice.kind === "siteWarnings" ? notice.warnings : [notice];
   return (
     <div
-      role={tone === "info" ? "status" : "alert"}
+      role="alert"
       data-export-ignore="true"
       className={`pointer-events-auto flex items-start gap-3 max-w-[min(32rem,90vw)] px-4 py-2 rounded-lg border border-[var(--color-border)] border-s-4 bg-[var(--color-surface)] text-sm shadow-lg ${ACCENT_CLASS[tone]}`}
     >

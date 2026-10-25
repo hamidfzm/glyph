@@ -117,7 +117,7 @@
     "linkCopied": "Share link copied. It carries the whole document, so anyone who has the link can read it.",
     "linkTooLong": "This document is too large to share as a link.",
     "linkFailed": "Couldn't copy the link.",
-    "dismiss": "Dismiss export notice"
+    "dismiss": "Dismiss notice"
   },
   "contextMenu": {
     "copy": "Copy",

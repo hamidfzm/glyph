@@ -298,7 +298,8 @@ keys over it. What holds it in:
   keys are off.
 - **A size cap.** Files over 2 MiB get a notice instead of a render, so a
   large file cannot stall Explorer's pane. Quick Look and the web viewer
-  apply the same cap, all three reading it from `src-tauri/preview.json`.
+  apply the same cap, as does the app's Copy Share Link, all reading it
+  from `src-tauri/preview.json`.
 - **Process isolation.** The handler runs in Explorer's `prevhost.exe`
   surrogate, not in Explorer, and the WebView2 renderer keeps its own sandbox.
   A crash or a hang takes down the surrogate only.

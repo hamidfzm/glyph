@@ -1,6 +1,7 @@
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { useCallback, useRef } from "react";
 import type { ExportNoticeContent } from "@/hooks/useExportNotice";
+import { errorMessage } from "@/lib/errorMessage";
 import { canShareLink, shareLinkFor } from "@/lib/shareLink";
 import { type FileState, liveContentOf } from "@/lib/tabs";
 
@@ -15,25 +16,31 @@ interface ShareLinkOptions {
  * no user activation, and WebKit's clipboard API refuses a write without one.
  */
 export function useShareLink({ file, showNotice }: ShareLinkOptions): () => void {
-  // Only the newest request writes, so a slow encode never replaces a newer link.
+  // Only the newest request writes or reports, so a slow encode never replaces
+  // a newer link.
   const latest = useRef(0);
+  // Writes run one at a time: two plugin calls in flight can land in either order.
+  const writes = useRef<Promise<void>>(Promise.resolve());
   return useCallback(() => {
     const content = canShareLink(file) ? liveContentOf(file) : null;
     if (content === null) return;
     const id = ++latest.current;
+    const isLatest = () => id === latest.current;
     const report = (notice: ExportNoticeContent) => {
-      if (id === latest.current) showNotice(notice);
+      if (isLatest()) showNotice(notice);
     };
     shareLinkFor(content)
       .then(async (link) => {
-        if (id !== latest.current) return;
+        if (!isLatest()) return;
         if (link === null) {
           report({ kind: "linkTooLong" });
           return;
         }
-        await writeText(link);
+        const write = writes.current.then(() => (isLatest() ? writeText(link) : undefined));
+        writes.current = write.catch(() => undefined);
+        await write;
         report({ kind: "linkCopied" });
       })
-      .catch(() => report({ kind: "linkFailed" }));
+      .catch((err: unknown) => report({ kind: "linkFailed", reason: errorMessage(err) }));
   }, [file, showNotice]);
 }

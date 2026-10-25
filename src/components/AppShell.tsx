@@ -123,6 +123,7 @@ export function AppShell() {
   const { aiController, tts, exporters, siteExporter, exportNotice, runPluginExporter } =
     controllers;
 
+  const shareable = canShareLink(activeFile);
   useNativeMenuState({
     hasTab: openTabs.length > 0,
     hasFile: activeFile?.content != null,
@@ -132,7 +133,7 @@ export function AppShell() {
     ttsAvailable: tts.available,
     hasDirty: activeFile?.dirty ?? false,
     autoSave,
-    canShareLink: canShareLink(activeFile),
+    canShareLink: shareable,
   });
   useNativeMenuLabels();
   usePluginMenuItems(runPluginExporter);
@@ -151,7 +152,7 @@ export function AppShell() {
   const palette = useCommandPaletteController({
     platform,
     workspaceOpen: workspace !== null,
-    canShareLink: canShareLink(activeFile),
+    canShareLink: shareable,
     workspaceFiles,
     tocEntries,
     actions: useMemo(

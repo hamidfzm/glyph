@@ -15,7 +15,7 @@ describe("exportNoticeTone", () => {
     { kind: "failed", reason: "disk full" },
     { kind: "siteFailed", reason: "disk full" },
     { kind: "linkTooLong" },
-    { kind: "linkFailed" },
+    { kind: "linkFailed", reason: "clipboard busy" },
   ] as const)("treats $kind as an error", (notice) => {
     expect(exportNoticeTone(notice)).toBe("error");
   });

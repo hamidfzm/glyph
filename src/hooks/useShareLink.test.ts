@@ -55,7 +55,12 @@ describe("useShareLink", () => {
 
     copy();
 
-    await vi.waitFor(() => expect(showNotice).toHaveBeenCalledWith({ kind: "linkFailed" }));
+    await vi.waitFor(() =>
+      expect(showNotice).toHaveBeenCalledWith({
+        kind: "linkFailed",
+        reason: "clipboard unavailable",
+      }),
+    );
     expect(showNotice).toHaveBeenCalledOnce();
   });
 
@@ -65,7 +70,12 @@ describe("useShareLink", () => {
 
     copy();
 
-    await vi.waitFor(() => expect(showNotice).toHaveBeenCalledWith({ kind: "linkFailed" }));
+    await vi.waitFor(() =>
+      expect(showNotice).toHaveBeenCalledWith({
+        kind: "linkFailed",
+        reason: "no CompressionStream",
+      }),
+    );
     expect(writeText).not.toHaveBeenCalled();
   });
 
@@ -87,22 +97,58 @@ describe("useShareLink", () => {
     expect(showNotice).toHaveBeenCalledOnce();
   });
 
-  it("says nothing for a copy whose write ends after a newer copy started", async () => {
-    vi.mocked(shareLinkFor).mockResolvedValue("https://example.test/view/#v1.abc");
-    let finishWrite: () => void = () => {};
+  it("writes a newer copy after an older write still in flight, and reports only the newer", async () => {
+    vi.mocked(shareLinkFor)
+      .mockResolvedValueOnce("https://example.test/view/#v1.first")
+      .mockResolvedValueOnce("https://example.test/view/#v1.second");
+    let finishFirstWrite: () => void = () => {};
     vi.mocked(writeText)
-      .mockImplementationOnce(() => new Promise<void>((resolve) => (finishWrite = resolve)))
+      .mockImplementationOnce(() => new Promise<void>((resolve) => (finishFirstWrite = resolve)))
       .mockResolvedValueOnce(undefined);
     const { copy, showNotice } = copyWith(file());
 
     copy();
     await vi.waitFor(() => expect(writeText).toHaveBeenCalledOnce());
     copy();
-    await vi.waitFor(() => expect(showNotice).toHaveBeenCalledWith({ kind: "linkCopied" }));
-    finishWrite();
     await new Promise((resolve) => setTimeout(resolve, 0));
+    // Two plugin writes in flight could land in either order, so the newer waits.
+    expect(writeText).toHaveBeenCalledOnce();
+    finishFirstWrite();
 
-    expect(writeText).toHaveBeenCalledTimes(2);
+    await vi.waitFor(() => expect(showNotice).toHaveBeenCalledWith({ kind: "linkCopied" }));
+    expect(vi.mocked(writeText).mock.calls).toEqual([
+      ["https://example.test/view/#v1.first"],
+      ["https://example.test/view/#v1.second"],
+    ]);
+    expect(showNotice).toHaveBeenCalledOnce();
+  });
+
+  it("skips a queued write that a newer copy overtook while it waited", async () => {
+    let finishThirdEncode: (link: string) => void = () => {};
+    vi.mocked(shareLinkFor)
+      .mockResolvedValueOnce("https://example.test/view/#v1.first")
+      .mockResolvedValueOnce("https://example.test/view/#v1.second")
+      .mockImplementationOnce(() => new Promise((resolve) => (finishThirdEncode = resolve)));
+    let finishFirstWrite: () => void = () => {};
+    vi.mocked(writeText)
+      .mockImplementationOnce(() => new Promise<void>((resolve) => (finishFirstWrite = resolve)))
+      .mockResolvedValue(undefined);
+    const { copy, showNotice } = copyWith(file());
+
+    copy();
+    await vi.waitFor(() => expect(writeText).toHaveBeenCalledOnce());
+    copy();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    copy();
+    finishFirstWrite();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    finishThirdEncode("https://example.test/view/#v1.third");
+
+    await vi.waitFor(() => expect(showNotice).toHaveBeenCalledWith({ kind: "linkCopied" }));
+    expect(vi.mocked(writeText).mock.calls).toEqual([
+      ["https://example.test/view/#v1.first"],
+      ["https://example.test/view/#v1.third"],
+    ]);
     expect(showNotice).toHaveBeenCalledOnce();
   });
 

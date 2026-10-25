@@ -13,7 +13,8 @@ export type ExportNoticeContent =
   | { kind: "insideWorkspace" }
   | { kind: "failed" | "siteFailed"; reason: string }
   | { kind: "siteWarnings"; warnings: SiteWarning[] }
-  | { kind: "linkCopied" | "linkTooLong" | "linkFailed" };
+  | { kind: "linkCopied" | "linkTooLong" }
+  | { kind: "linkFailed"; reason: string };
 
 export interface ExportNoticeActions {
   showNotice: (notice: ExportNoticeContent) => void;
@@ -33,9 +34,9 @@ interface ExportNoticeState extends ExportNoticeActions {
 
 /**
  * The one notice the document, plugin and website exports and the share link
- * share. The actions
- * keep their identity while the notice changes, so the export handlers built
- * on them (and the menu subscription built on those) are not rebuilt.
+ * share. The actions keep their identity while the notice changes, so the
+ * export handlers built on them (and the menu subscription built on those)
+ * are not rebuilt.
  */
 export function useExportNotice(): ExportNoticeState {
   const [notice, setNotice] = useState<ExportNoticeContent | null>(null);

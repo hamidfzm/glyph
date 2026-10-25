@@ -105,21 +105,24 @@ describe("ExportNotice", () => {
     expect(screen.getByText("/out/a.html").tagName).toBe("BDI");
   });
 
-  it("announces a copied share link politely, saying who can read it", () => {
+  it("announces a copied share link, saying who can read it", () => {
     render(<ExportNotice {...defaultProps} notice={{ kind: "linkCopied" }} />);
-    expect(screen.queryByRole("alert")).toBeNull();
-    expect(screen.getByRole("status")).toHaveTextContent("anyone who has the link can read it");
+    expect(screen.getByRole("alert")).toHaveTextContent("anyone who has the link can read it");
   });
 
-  it("raises a share link that could not be made as an alert", () => {
-    render(<ExportNotice {...defaultProps} notice={{ kind: "linkTooLong" }} />);
-    expect(screen.getByRole("alert")).toHaveTextContent("too large to share as a link");
+  it("says why a share link could not be copied", () => {
+    render(
+      <ExportNotice {...defaultProps} notice={{ kind: "linkFailed", reason: "clipboard busy" }} />,
+    );
+    const notice = screen.getByRole("alert");
+    expect(notice).toHaveTextContent("Couldn't copy the link.");
+    expect(notice).toHaveTextContent("clipboard busy");
   });
 
   it("dismisses on click", () => {
     const onDismiss = vi.fn();
     render(<ExportNotice {...defaultProps} onDismiss={onDismiss} />);
-    fireEvent.click(screen.getByRole("button", { name: "Dismiss export notice" }));
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss notice" }));
     expect(onDismiss).toHaveBeenCalledOnce();
   });
 
