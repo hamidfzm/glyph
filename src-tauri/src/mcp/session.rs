@@ -46,13 +46,13 @@ pub(super) fn open_state(
 ) -> OpenState {
     let (settings, sessions, app_running) = match stores {
         Some(dir) => (
-            data_dir::read_store_in(dir, "settings.json"),
-            data_dir::read_store_in(dir, "workspace-sessions.json"),
+            data_dir::read_store_in(dir, crate::setup::SETTINGS_STORE),
+            data_dir::read_store_in(dir, crate::setup::SESSIONS_STORE),
             data_dir::running_in(dir),
         ),
         None => (
-            data_dir::read_store("settings.json"),
-            data_dir::read_store("workspace-sessions.json"),
+            data_dir::read_store(crate::setup::SETTINGS_STORE),
+            data_dir::read_store(crate::setup::SESSIONS_STORE),
             data_dir::app_running(),
         ),
     };

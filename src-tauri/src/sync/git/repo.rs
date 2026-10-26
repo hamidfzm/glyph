@@ -21,6 +21,21 @@ pub fn init_repo(path: &Path, default_branch: &str) -> Result<PathBuf, SyncError
     Ok(path.to_path_buf())
 }
 
+/// Make checkouts of `path` write every blob as a plain file with the bytes
+/// it holds: no symbolic links (a link from a remote would lead a later write
+/// anywhere on disk) and no line-ending conversion (an export must compare
+/// byte for byte with what it last wrote).
+pub fn pin_checkout_config(path: &Path) -> Result<(), SyncError> {
+    let repo = Repository::open(path).map_err(|e| SyncError::Backend(e.message().to_string()))?;
+    let mut config = repo
+        .config()
+        .map_err(|e| SyncError::Backend(e.message().to_string()))?;
+    config
+        .set_bool("core.symlinks", false)
+        .and_then(|()| config.set_bool("core.autocrlf", false))
+        .map_err(|e| SyncError::Backend(e.message().to_string()))
+}
+
 /// Add an `origin` remote pointing at `url` to a repository at `path`.
 pub fn set_origin(path: &Path, url: &str) -> Result<(), SyncError> {
     let repo = Repository::open(path).map_err(|e| SyncError::Backend(e.message().to_string()))?;
@@ -75,6 +90,17 @@ mod tests {
         let repo = Repository::open(tmp.path()).unwrap();
         let remote = repo.find_remote("origin").unwrap();
         assert_eq!(remote.url().unwrap(), "https://example.com/b.git");
+    }
+
+    #[test]
+    fn pin_checkout_config_turns_off_links_and_line_ending_conversion() {
+        let tmp = TempDir::new().unwrap();
+        init_repo(tmp.path(), crate::sync::DEFAULT_REMOTE_BRANCH).unwrap();
+        pin_checkout_config(tmp.path()).unwrap();
+        let config = Repository::open(tmp.path()).unwrap().config().unwrap();
+        assert!(!config.get_bool("core.symlinks").unwrap());
+        assert!(!config.get_bool("core.autocrlf").unwrap());
+        assert!(pin_checkout_config(&tmp.path().join("missing")).is_err());
     }
 
     #[test]

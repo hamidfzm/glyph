@@ -5,6 +5,8 @@
 //! - `AuthFailed` → ask for credentials again.
 //! - `Network` → surface a retryable "couldn't reach the remote" notice.
 //! - `Conflict` → open the conflict-resolution UI (future PR).
+//! - `PushRejected` → the remote refused the update; nothing reached it.
+//! - `Busy` → another operation holds the repository; try again after it.
 //! - `Io` and `Backend` → log and show a generic error.
 //!
 //! Backends should map their library-specific failures into these
@@ -32,6 +34,12 @@ pub enum SyncError {
 
     #[error("remote URL must use https:// (without credentials), ssh://, or user@host:path")]
     InvalidRemoteUrl,
+
+    #[error("the remote refused the push: {0}")]
+    PushRejected(String),
+
+    #[error("another sync is already running")]
+    Busy,
 
     #[error("i/o error: {0}")]
     Io(String),
@@ -80,6 +88,14 @@ mod tests {
             SyncError::Backend("libgit2 boom".to_string()).to_string(),
             "backend error: libgit2 boom"
         );
+        assert_eq!(
+            SyncError::PushRejected("refs/heads/main: protected".to_string()).to_string(),
+            "the remote refused the push: refs/heads/main: protected"
+        );
+        assert_eq!(
+            SyncError::Busy.to_string(),
+            "another sync is already running"
+        );
     }
 
     #[test]
@@ -99,5 +115,10 @@ mod tests {
         let json = serde_json::to_value(SyncError::Conflict(vec!["x".into()])).unwrap();
         assert_eq!(json["kind"], "conflict");
         assert_eq!(json["message"], serde_json::json!(["x"]));
+        let json = serde_json::to_value(SyncError::PushRejected("why".into())).unwrap();
+        assert_eq!(json["kind"], "push-rejected");
+        assert_eq!(json["message"], "why");
+        let json = serde_json::to_value(SyncError::Busy).unwrap();
+        assert_eq!(json["kind"], "busy");
     }
 }

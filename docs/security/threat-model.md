@@ -161,7 +161,8 @@ looked up (see "Network paths" below).
 | `workspace_get_plugin_settings`, `workspace_set_plugin_settings` | granted workspace, and a well-formed plugin id (it becomes a key in the committed `.glyph/config.json`). The settings are an opaque JSON object capped at 64 KiB per plugin; nothing in the backend treats a value as a path. The symbolic-link refusal in the row above applies |
 | `create_workspace_file` | `root` must be a granted workspace. The path is workspace-relative (`..`, a drive letter, or a backslash is refused) and must canonicalize strictly inside that workspace, so a symlink resolving outside it, or into another granted workspace, is refused. A hidden name anywhere in the resolved path is refused too, which keeps `.git/hooks` and `.glyph` out of reach. The file is opened with `create_new`: one that already exists is reported back and never written to |
 | `sync_*` | granted workspace; `sync_init_repo` and `sync_set_origin` accept only `https://` without credentials, `ssh://`, or scp-like `user@host:path` remotes, since libgit2 would also take a local path or `file://` (pulling any local repository into a granted workspace) and cleartext `http://`/`git://`. The HTTPS token is bound, when `sync_set_token` stores it, to the authority (host, and port if named) of the remote the workspace is configured with at that moment, and the credential callback offers it to that authority alone: `sync_set_origin`, and `.git/config` with it, can name any `https://` host, and a token sent wherever that points would reach whoever runs it. A token entered before a remote is configured binds to the first `https://` remote it is used against, and a token stored by an earlier build binds the same way at its first use. Changing the remote to another host means entering the token again. The binding is kept in the keychain beside the token, never in a file the renderer writes. A challenge the bound token does not answer fails the fetch or push: the callback never falls back to libgit2's default credential, which on Windows answers with the signed-in account's own credentials (NTLM or Negotiate) to whatever host the remote names. SSH remotes ask the agent as before. `sync_init_repo` also refuses a default branch that is not a valid reference name, since the name is written into `.git/HEAD` as given |
-| `install_plugin` | consumes the pending picked folder; no path argument |
+| `settings_sync_*` | no path argument. The settings repo is a folder the backend creates and owns under the app data dir (`settings-sync/`), and the stores it reads and writes are the ones the backend opened at startup, so the renderer names nothing libgit2 opens or a write lands in. `settings_sync_connect` accepts the remotes `sync_init_repo` does and refuses a token for a remote that is not `https://`; the token is bound to that remote's authority and kept, only once the connect succeeds, in two keychain accounts of its own (`settings-sync-token`, `settings-sync-token-host`), apart from the workspace tokens and off the webview allowlist. `settings_sync_set_token` refuses without a connected `https://` remote, and changing the remote means disconnecting first. One lock covers connect, sync, the first-connect choice, resolve and disconnect, and a second operation meanwhile gets `busy` rather than waiting. `settings_sync_resolve` takes one pick per conflicted path, refuses any other set of paths before the index changes, and writes no file itself: it stages the picked side's entry, commits with both parents, and lets libgit2's checkout write the picked paths |
+| `install_plugin` | consumes the pending picked folder; no path argument. Like a registry install, it records the source and time of the install in a marker written after the plugin's files, under a name no manifest may declare |
 | `install_plugin_from_registry` | takes a plugin id and nothing else. The backend fetches the registry index from its fixed URL, finds the entry, downloads the package the entry names (the marketplace hosts alone, a redirect included, 50 MiB at most), and verifies the sha256 and the manifest id before anything is written, so a package that lies about itself never lands on another installed plugin |
 | `finish_cli_export` | ends the process, so it is refused unless a CLI export is in progress: the command is registered in every session, and a renderer could otherwise end an interactive one |
 
@@ -488,6 +489,46 @@ folder at rest, not against another process rewriting them in between. The
 machine's own git configuration (global, system) is the user's and is not
 judged.
 
+## The settings repo
+
+Settings sync keeps the user's portable setup in a git remote of its own, so
+whoever can write to that remote can write what this machine imports. The
+backend decides both what leaves the machine and what lands, from one list in
+`src-tauri/src/sync/settings_repo/settings.rs`.
+
+- **What never syncs.** Recent files, open tabs and the active tab (absolute
+  paths the backend turns into file grants at launch), `ai.apiKeys`,
+  `ai.ollamaUrl` (where prompts go), `ai.agentWriteTools` (the MCP write
+  switch), the default-app prompt, the external-link confirmation, update
+  checks, and the whole `privacy` group are left out of every export and
+  ignored in every import, along with plugin grants and full-trust approvals,
+  workspace sessions, window state and every keychain entry.
+- **What comes in is read as data.** An import reads the merged commit from
+  git's object store, never the working tree, and only the fixed names
+  (`settings/<group>.json` for the synced groups, `plugins/<id>.json` for a
+  well-formed id, 500 at most). A link, a submodule, a file over 64 KiB, or a
+  file that is not a JSON object is left out and reported, and a group whose
+  file is there but unreadable keeps its local values rather than going back
+  to defaults. Values land three-way, leaf by leaf, so a setting changed here
+  since the last export is kept. The renderer drops a stored value whose type
+  differs from its default when it loads settings.
+- **Writes stay in two folders.** The clone is made with `core.symlinks` and
+  `core.autocrlf` off, so a checkout writes a link a remote sent as a plain
+  file. An export writes and removes only entries of `settings/` and
+  `plugins/`, and refuses a link or a file where either folder, or one of
+  their files, should be. On Windows the clone's own files pass the same
+  network-path check as a workspace repository before libgit2 opens it.
+- **No plugin code comes from the repo.** A plugin file names a source, a
+  version, an enabled state and settings. A missing marketplace plugin is
+  offered for install from the registry, checked against its hash, and asks
+  for consent on this machine like any install; one installed from a folder
+  elsewhere is only listed. An enable that would need consent waits for the
+  user. A plugin is offered for removal only when the repo lost the very
+  install this machine synced, which the install marker tells apart from a
+  reinstall.
+- **A refused push is an error.** libgit2 reports a remote's refusal of a ref
+  only through a callback; the push reads it there, for workspace sync too.
+
 ## MCP server (`glyph mcp`)
 
 `glyph mcp` serves the vault index to an MCP client over stdin and stdout. It
@@ -771,3 +812,19 @@ the way a renderer-supplied path is.
   plugin checks them against its own allowlist when it reads them. The backend
   reserves the `glyph.core.` id prefix, so an installed plugin cannot take a
   core plugin's settings, grants, or host slot.
+- **A settings write can straddle an import.** A window saves settings by
+  reading the store and writing it back, two IPC calls; an import that lands
+  in between is lost from that window's write, and the next sync pushes the
+  older value. The Sync tab writes pending settings before it syncs, and the
+  backend reads and writes back to back, which leaves milliseconds exposed.
+- **Other windows' plugin lists go stale.** After a sync installs, removes
+  or turns off a plugin in one window, another open window keeps its own list
+  until it restarts, and turning a plugin on or off there rewrites the
+  disabled list from that copy.
+- **Plugin settings sync as they are.** A plugin that keeps a secret in
+  `ctx.settings` sends it to the settings repo with the rest of its settings.
+- **The remote shapes the portable settings.** Anyone who can write to the
+  settings repo can change this machine's theme, hotkeys, editor and Markdown
+  options, AI provider and model, and which core plugins run. The never-sync
+  list keeps paths, secrets, the AI endpoint and capability switches out of
+  its reach.

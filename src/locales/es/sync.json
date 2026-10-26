@@ -81,6 +81,70 @@
     "backend": "Error del backend de sincronización.",
     "backendDetail": "Error del backend de sincronización: {{message}}",
     "invalidRemoteUrl": "La URL remota debe empezar por https:// o ssh:// (o tener la forma usuario@host:ruta). Los tokens de acceso van en el campo de token, no en la URL.",
-    "unknown": "Error de sincronización desconocido."
+    "unknown": "Error de sincronización desconocido.",
+    "pushRejected": "El remoto rechazó el envío.",
+    "pushRejectedDetail": "El remoto rechazó el envío: {{message}}",
+    "busy": "Ya hay una sincronización en curso. Vuelve a intentarlo cuando termine."
+  },
+  "settingsRepo": {
+    "description": "Guarda tu configuración de Glyph en un repositorio git propio y úsala en cada equipo que conectes: ajustes, atajos y los complementos que instalaste. Las claves de API, los archivos recientes, los permisos de complementos y el consentimiento de informes de errores se quedan en cada equipo.",
+    "remotePlaceholder": "https://github.com/tu/glyph-setup.git",
+    "tokenNote": "Guardado en el llavero de tu sistema, solo para el repositorio de ajustes.",
+    "connect": "Conectar",
+    "connectedTo": "Sincronizando con <strong>{{remote}}</strong> en <strong>{{branch}}</strong>.",
+    "saveToken": "Guardar token",
+    "disconnect": "Desconectar",
+    "choice": {
+      "title": "Este repositorio ya contiene una configuración de Glyph",
+      "message": "Elige con qué configuración empieza este equipo. No cambia nada hasta que elijas.",
+      "useSynced": "Usar la configuración sincronizada",
+      "useSyncedHint": "Usar la configuración sincronizada: reemplaza los ajustes de este equipo. Los complementos que solo están aquí se quedan y se suman a la configuración sincronizada.",
+      "replaceSynced": "Reemplazarla por la de este equipo",
+      "replaceSyncedHint": "Reemplazarla por la de este equipo: el repositorio conserva su historial y la configuración sincronizada pasa a ser la de este equipo."
+    },
+    "conflicts": {
+      "title": "Cambiado en ambos equipos",
+      "message": "Elige qué versión de cada archivo conservar y luego resuelve. No se sincroniza nada hasta entonces.",
+      "keepLocal": "Conservar la de este equipo",
+      "takeRemote": "Tomar la sincronizada",
+      "legend": "Versión de {{file}} que se conserva",
+      "resolve": "Resolver"
+    },
+    "files": {
+      "settings": "Ajustes de {{group}}",
+      "plugin": "Complemento {{id}}"
+    },
+    "plugins": {
+      "title": "Complementos de tu configuración sincronizada",
+      "missing": "No instalados en este equipo",
+      "install": "Instalar",
+      "installAll": "Instalar todos",
+      "installName": "Instalar {{name}}",
+      "version": "Versión {{version}}",
+      "toEnable": "Activados en tu configuración sincronizada",
+      "offHere": "Desactivado en este equipo",
+      "enable": "Activar",
+      "enableName": "Activar {{name}}",
+      "manual": "Instálalos a mano",
+      "reason": {
+        "local": "Versión {{version}}, instalado desde una carpeta en otro equipo",
+        "unlisted": "Versión {{version}}, ya no está entre los complementos disponibles"
+      }
+    },
+    "skipped": {
+      "title": "Excluido de la última sincronización:",
+      "item": "{{file}}: {{reason}}",
+      "reason": {
+        "notAFile": "no es un archivo normal",
+        "notAFolder": "no es una carpeta",
+        "tooLarge": "demasiado grande",
+        "notJson": "no es JSON válido",
+        "notAnObject": "no es un objeto JSON",
+        "unknownName": "no es un archivo que Glyph sincronice",
+        "duplicateName": "el mismo nombre con otras mayúsculas",
+        "tooMany": "más archivos de complementos de los que Glyph lee",
+        "badEntry": "no es una entrada de complemento"
+      }
+    }
   }
 }

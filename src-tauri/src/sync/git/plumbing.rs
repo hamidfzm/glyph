@@ -4,14 +4,23 @@
 //! implementation (the sync orchestration) and this one the git plumbing it
 //! calls.
 
+use std::cell::RefCell;
+use std::collections::BTreeMap;
 use std::path::Path;
 
-use git2::{BranchType, FetchOptions, PushOptions, Repository, StatusOptions};
+use git2::{BranchType, FetchOptions, IndexEntry, PushOptions, Repository, StatusOptions};
 
 use crate::sync::SyncError;
 
 use super::backend::GitBackend;
 use super::{map_remote_error, ORIGIN};
+
+/// The two sides of one conflicted path. Either is `None` when that side
+/// deleted the file.
+pub(super) struct ConflictSides {
+    pub(super) ours: Option<IndexEntry>,
+    pub(super) theirs: Option<IndexEntry>,
+}
 
 impl GitBackend {
     /// True if the working tree differs from HEAD in any visible way.
@@ -136,7 +145,15 @@ impl GitBackend {
     }
 
     pub(super) fn collect_conflicts(repo: &Repository) -> Result<Vec<String>, SyncError> {
-        let mut out = Vec::new();
+        Ok(Self::conflict_entries(repo)?.into_keys().collect())
+    }
+
+    /// Every conflicted path in the index with its "ours" and "theirs"
+    /// entries (`None` where that side deleted the file), keyed by path.
+    pub(super) fn conflict_entries(
+        repo: &Repository,
+    ) -> Result<BTreeMap<String, ConflictSides>, SyncError> {
+        let mut out = BTreeMap::new();
         let index = repo
             .index()
             .map_err(|e| SyncError::Backend(e.message().to_string()))?;
@@ -156,11 +173,15 @@ impl GitBackend {
                 .or(entry.ancestor.as_ref())
                 .map(|e| String::from_utf8_lossy(&e.path).into_owned());
             if let Some(p) = path {
-                out.push(p);
+                out.insert(
+                    p,
+                    ConflictSides {
+                        ours: entry.our,
+                        theirs: entry.their,
+                    },
+                );
             }
         }
-        out.sort();
-        out.dedup();
         Ok(out)
     }
 
@@ -188,17 +209,33 @@ impl GitBackend {
         Ok(())
     }
 
+    /// Push the branch. A remote that refuses the update (a protected branch,
+    /// a hook, a ref that moved since the fetch) still lets `push` return
+    /// `Ok`: libgit2 reports the refusal only through the
+    /// `push_update_reference` callback, so it is read from there.
     pub(super) fn push_branch(&self, repo: &Repository) -> Result<(), SyncError> {
         let mut remote = repo
             .find_remote(ORIGIN)
             .map_err(|_| SyncError::NotConfigured)?;
+        let rejected = RefCell::new(None);
+        let mut callbacks = self.credentials_callbacks();
+        callbacks.push_update_reference(|refname, status| {
+            if let Some(reason) = status {
+                *rejected.borrow_mut() = Some(format!("{refname}: {reason}"));
+            }
+            Ok(())
+        });
         let mut opts = PushOptions::new();
-        opts.remote_callbacks(self.credentials_callbacks());
+        opts.remote_callbacks(callbacks);
         let refspec = format!("refs/heads/{0}:refs/heads/{0}", self.config.remote_branch);
         remote
             .push(&[&refspec], Some(&mut opts))
             .map_err(map_remote_error)?;
-        Ok(())
+        drop(opts);
+        match rejected.into_inner() {
+            Some(reason) => Err(SyncError::PushRejected(reason)),
+            None => Ok(()),
+        }
     }
 
     /// Whether the `.glyph/` config directory is already present in HEAD.

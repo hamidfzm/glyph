@@ -81,6 +81,70 @@
     "backend": "Fehler im Synchronisierungs-Backend.",
     "backendDetail": "Fehler im Synchronisierungs-Backend: {{message}}",
     "invalidRemoteUrl": "Die Remote-URL muss mit https:// oder ssh:// beginnen (oder die Form user@host:pfad haben). Zugriffstoken gehören in das Token-Feld, nicht in die URL.",
-    "unknown": "Unbekannter Synchronisierungsfehler."
+    "unknown": "Unbekannter Synchronisierungsfehler.",
+    "pushRejected": "Das Remote hat den Push abgelehnt.",
+    "pushRejectedDetail": "Das Remote hat den Push abgelehnt: {{message}}",
+    "busy": "Eine Synchronisierung läuft bereits. Versuche es erneut, wenn sie fertig ist."
+  },
+  "settingsRepo": {
+    "description": "Bewahre dein Glyph-Setup in einem eigenen Git-Repository auf und nutze es auf jedem Rechner, den du verbindest: Einstellungen, Tastenkürzel und die Plugins, die du installiert hast. API-Schlüssel, zuletzt geöffnete Dateien, Plugin-Berechtigungen und die Zustimmung zu Fehlerberichten bleiben auf jedem Rechner.",
+    "remotePlaceholder": "https://github.com/du/glyph-setup.git",
+    "tokenNote": "Im Schlüsselbund deines Betriebssystems gespeichert, nur für das Einstellungs-Repository.",
+    "connect": "Verbinden",
+    "connectedTo": "Synchronisiert mit <strong>{{remote}}</strong> auf <strong>{{branch}}</strong>.",
+    "saveToken": "Token speichern",
+    "disconnect": "Trennen",
+    "choice": {
+      "title": "Dieses Repository enthält bereits ein Glyph-Setup",
+      "message": "Wähle, mit welchem Setup dieser Rechner beginnt. Bis du wählst, ändert sich nichts.",
+      "useSynced": "Synchronisiertes Setup verwenden",
+      "useSyncedHint": "Synchronisiertes Setup verwenden: ersetzt die Einstellungen dieses Rechners. Plugins, die nur hier installiert sind, bleiben und werden Teil des synchronisierten Setups.",
+      "replaceSynced": "Durch das Setup dieses Rechners ersetzen",
+      "replaceSyncedHint": "Durch das Setup dieses Rechners ersetzen: Das Repository behält seinen Verlauf, und das synchronisierte Setup wird zu dem dieses Rechners."
+    },
+    "conflicts": {
+      "title": "Auf beiden Rechnern geändert",
+      "message": "Wähle für jede Datei, welche Version bleibt, und löse dann auf. Bis dahin wird nichts synchronisiert.",
+      "keepLocal": "Version dieses Rechners behalten",
+      "takeRemote": "Synchronisierte Version übernehmen",
+      "legend": "Zu behaltende Version von {{file}}",
+      "resolve": "Auflösen"
+    },
+    "files": {
+      "settings": "Einstellungen: {{group}}",
+      "plugin": "Plugin {{id}}"
+    },
+    "plugins": {
+      "title": "Plugins aus deinem synchronisierten Setup",
+      "missing": "Auf diesem Rechner nicht installiert",
+      "install": "Installieren",
+      "installAll": "Alle installieren",
+      "installName": "{{name}} installieren",
+      "version": "Version {{version}}",
+      "toEnable": "In deinem synchronisierten Setup eingeschaltet",
+      "offHere": "Auf diesem Rechner ausgeschaltet",
+      "enable": "Einschalten",
+      "enableName": "{{name}} einschalten",
+      "manual": "Diese von Hand installieren",
+      "reason": {
+        "local": "Version {{version}}, auf einem anderen Rechner aus einem Ordner installiert",
+        "unlisted": "Version {{version}}, nicht mehr unter den verfügbaren Plugins"
+      }
+    },
+    "skipped": {
+      "title": "Bei der letzten Synchronisierung ausgelassen:",
+      "item": "{{file}}: {{reason}}",
+      "reason": {
+        "notAFile": "keine normale Datei",
+        "notAFolder": "kein Ordner",
+        "tooLarge": "zu groß",
+        "notJson": "kein gültiges JSON",
+        "notAnObject": "kein JSON-Objekt",
+        "unknownName": "keine Datei, die Glyph synchronisiert",
+        "duplicateName": "derselbe Name in anderer Groß- und Kleinschreibung",
+        "tooMany": "mehr Plugin-Dateien, als Glyph liest",
+        "badEntry": "kein Plugin-Eintrag"
+      }
+    }
   }
 }

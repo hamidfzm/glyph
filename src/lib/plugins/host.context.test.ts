@@ -164,7 +164,8 @@ describe("createPluginHost plugin context", () => {
 
     expect(backend.load).toHaveBeenCalledWith("com.x.demo");
     expect(seen).toBe(12);
-    expect(save).toHaveBeenLastCalledWith("com.x.demo", { size: 14, theme: "dark" });
+    expect(save).toHaveBeenCalledWith("com.x.demo", "size", 14);
+    expect(save).toHaveBeenLastCalledWith("com.x.demo", "theme", "dark");
   });
 
   it("routes ctx.registerTranslations to the injected i18n hook, outside the app's namespaces", async () => {
