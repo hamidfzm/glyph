@@ -1755,27 +1755,35 @@ mod assistant {
         let refusal = app.refused("list_tags", json!({ "vault": other }));
         assert!(refusal.contains("is not an open vault"), "{refusal}");
         assert!(refusal.contains("cannot ask the user"), "{refusal}");
-        // Paths the grants admit, which only the vault being read keeps out.
-        let note = in_vault(&app.other, "Index.md");
-        let climbing = format!(
-            "../{}/Index.md",
-            app.other.file_name().unwrap().to_string_lossy()
-        );
-        let board = in_vault(&app.other, "Board.canvas");
-        for (tool, args) in [
-            ("read_note", json!({ "ref": note })),
-            ("read_note", json!({ "ref": climbing })),
-            ("backlinks", json!({ "ref": note })),
-            ("resolve_link", json!({ "ref": "Index", "from": note })),
-            ("read_canvas", json!({ "path": board })),
-        ] {
-            let refusal = app.refused(tool, args.clone());
-            assert!(
-                refusal.contains("is not in the vault"),
-                "{tool}({args}): {refusal}"
-            );
+        // Paths the grants admit, which only the vault being read keeps out,
+        // and which say nothing of whether a file is there.
+        let folder = app.other.file_name().unwrap().to_string_lossy().to_string();
+        let refusals = |note: &str, board: &str| -> Vec<String> {
+            let absolute = in_vault(&app.other, note);
+            [
+                ("read_note", json!({ "ref": absolute })),
+                ("read_note", json!({ "ref": format!("../{folder}/{note}") })),
+                ("backlinks", json!({ "ref": absolute })),
+                ("resolve_link", json!({ "ref": "Index", "from": absolute })),
+                (
+                    "read_canvas",
+                    json!({ "path": in_vault(&app.other, board) }),
+                ),
+            ]
+            .into_iter()
+            .map(|(tool, args)| {
+                app.refused(tool, args)
+                    .replace(note, "<note>")
+                    .replace(board, "<board>")
+            })
+            .collect()
+        };
+        let there = refusals("Index.md", "Board.canvas");
+        assert_eq!(there, refusals("Missing.md", "Missing.canvas"));
+        for refusal in &there {
             assert!(!refusal.contains("pass `vault`"), "{refusal}");
         }
+        assert!(there[0].contains("is not in the vault"), "{}", there[0]);
 
         let context = app.ok("vault_context", json!({}));
         assert_eq!(context["vaults"].as_array().unwrap().len(), 1);

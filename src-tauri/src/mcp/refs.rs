@@ -284,22 +284,30 @@ pub(super) fn note_path(
     // An absolute `raw` replaces the root it is joined to.
     let candidate = Path::new(root).join(raw);
     let checked = session.grants.ensure_readable(&candidate.to_string_lossy());
-    let readable_file = checked.as_ref().is_ok_and(|path| path.is_file());
+    // Asked only inside this vault: the grants admit every vault the app has
+    // open, and a path into another must not learn whether a file is there.
+    let inside = checked
+        .as_ref()
+        .ok()
+        .and_then(|canonical| vault.inside_root(canonical));
+    let readable_file = inside.is_some() && checked.as_ref().is_ok_and(|path| path.is_file());
     // Nothing to read here, so perhaps a wikilink target instead.
     if !absolute && !readable_file {
         return Ok(None);
     }
     let canonical = checked?;
-    if !canonical.is_file() {
-        return Err(format!("{raw} is not a file"));
-    }
-    let Some((indexed, _)) = vault.inside_root(&canonical) else {
-        let others = match session.open.roots.len() {
-            0 | 1 => "",
-            _ => "; pass `vault` to read another one",
+    let Some((indexed, _)) = inside else {
+        let can_pick_another = session.open.roots.len() > 1 || session.allow_vault.is_some();
+        let others = if can_pick_another {
+            "; pass `vault` to read another one"
+        } else {
+            ""
         };
         return Err(format!("{raw} is not in the vault {root}{others}"));
     };
+    if !canonical.is_file() {
+        return Err(format!("{raw} is not a file"));
+    }
     let indexed = indexed.to_string_lossy().to_string();
     if vault.note(&indexed).is_none() {
         return Err(format!(

@@ -60,6 +60,7 @@
     "arguments": "Solicitado",
     "result": "Resultado",
     "resultCut": "Se muestran los primeros {{shown}} de {{total}} caracteres. El asistente los recibió todos.",
-    "budget": "Se detuvo tras {{limit}} consultas, el máximo para una pregunta, así que a esta respuesta puede faltarle algo."
+    "budget": "Se detuvo tras {{limit}} consultas, el máximo para una pregunta, así que a esta respuesta puede faltarle algo.",
+    "unsupported": "Este modelo no puede usar herramientas, así que el asistente respondió a partir del documento abierto y la lista de archivos."
   }
 }

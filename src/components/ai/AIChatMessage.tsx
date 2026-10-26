@@ -83,6 +83,7 @@ export function AIChatMessage({
           </ReactMarkdown>
         </div>
       )}
+      {turn.toolsSkipped && <div className="ai-tool-call-note">{t("tools.unsupported")}</div>}
       {turn.stoppedAtBudget && (
         <div className="ai-tool-call-note">{t("tools.budget", { limit: MAX_TOOL_CALLS })}</div>
       )}

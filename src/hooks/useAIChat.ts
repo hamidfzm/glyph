@@ -10,7 +10,7 @@ import {
   withToolResult,
 } from "@/lib/ai/chatTurn";
 import type { ToolLoopEnd } from "@/lib/ai/toolLoop";
-import { rememberToolsRefused, toolsOffered } from "@/lib/ai/toolSupport";
+import { rememberToolsRefused, toolsOffered, toolsRefusedByModel } from "@/lib/ai/toolSupport";
 import { type ToolDefinition, ToolsUnsupportedError } from "@/lib/ai/types";
 import { type AIDocContext, buildSystemPrompt } from "@/lib/aiPrompts";
 import { errorMessage } from "@/lib/errorMessage";
@@ -108,7 +108,9 @@ export function useAIChat(aiSettings: AISettings, getDocContext: () => AIDocCont
           rememberToolsRefused(aiSettings);
           ended = await ask([]);
         }
-        finish((turn) => withReplyEnded(turn, ended));
+        // Said on the reply: an answer without the tools is not the one asked for.
+        const toolsSkipped = Boolean(doc?.workspaceRoot) && toolsRefusedByModel(aiSettings);
+        finish((turn) => ({ ...withReplyEnded(turn, ended), toolsSkipped }));
       } catch (err) {
         setError(errorMessage(err));
         finish(withRunningStopped);

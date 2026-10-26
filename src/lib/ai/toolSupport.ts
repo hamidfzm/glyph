@@ -19,10 +19,15 @@ export function assistantToolsOn(ai: AISettings, provider: AIToolProvider): bool
   return typeof chosen === "boolean" ? chosen : ASSISTANT_TOOLS_DEFAULT[provider];
 }
 
+/** The user wants the tools, but the Ollama model refused them. */
+export function toolsRefusedByModel(ai: AISettings): boolean {
+  if (ai.provider !== "ollama") return false;
+  return assistantToolsOn(ai, ai.provider) && refused.has(modelKey(ai));
+}
+
 /** Whether a reply may call the vault tools: the user allows it for this
  *  provider, and an Ollama model has not refused them. */
 export function toolsOffered(ai: AISettings): boolean {
-  if (ai.provider === "none") return false;
-  if (ai.provider === "ollama" && refused.has(modelKey(ai))) return false;
+  if (ai.provider === "none" || toolsRefusedByModel(ai)) return false;
   return assistantToolsOn(ai, ai.provider);
 }

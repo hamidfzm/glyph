@@ -108,11 +108,6 @@ export async function runToolLoop(loop: ToolLoop): Promise<ToolLoopEnd> {
         results.push(notRun(call, STOPPED));
         continue;
       }
-      // A provider may return a call it was not offered; it is not run.
-      if (!offered.has(call.name)) {
-        results.push(notRun(call, NOT_OFFERED));
-        continue;
-      }
       if (used >= MAX_TOOL_CALLS) {
         refusedForBudget = true;
         results.push(notRun(call, BUDGET_SPENT));
@@ -120,6 +115,14 @@ export async function runToolLoop(loop: ToolLoop): Promise<ToolLoopEnd> {
       }
       used += 1;
       loop.onCall(call);
+      // A model may call a name it was not offered, as a planted note may ask
+      // it to. It is not run, but it counts, so asking again cannot loop.
+      if (!offered.has(call.name)) {
+        const refusal = notRun(call, NOT_OFFERED);
+        loop.onResult(refusal);
+        results.push(refusal);
+        continue;
+      }
       // A call already running in the app finishes there, but the reply does
       // not wait for it once the user stops, and what it found is not sent.
       const result = await Promise.race([loop.runTool(call), stopped]);

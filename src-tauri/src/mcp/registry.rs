@@ -35,7 +35,7 @@ pub struct Session<'a> {
 }
 
 /// Who drives the session.
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy)]
 pub enum Caller {
     /// `glyph mcp`: nothing keeps the index current between calls, so each
     /// call catches it up with the disk.

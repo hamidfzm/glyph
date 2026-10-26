@@ -79,6 +79,7 @@ describe("useAIChat with the vault tools", () => {
     expect(result.current.turns[1]).toMatchObject({
       content: "It is about recipes.",
       toolCalls: [{ key: 0, call: asked, status: "done", result: '{"content":"Recipes"}' }],
+      toolsSkipped: false,
     });
 
     await act(async () => {
@@ -106,6 +107,9 @@ describe("useAIChat with the vault tools", () => {
 
     expect(result.current.error).toBeNull();
     expect(result.current.turns[1].content).toBe("ok");
+    // Each reply says it was answered without the tools.
+    expect(result.current.turns[1].toolsSkipped).toBe(true);
+    expect(result.current.turns[3].toolsSkipped).toBe(true);
     const [, retry] = chat.mock.calls[1];
     expect(retry.tools).toEqual([]);
     expect(retry.system).toContain("/ws/Cooking.md");

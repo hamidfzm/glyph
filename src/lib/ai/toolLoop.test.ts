@@ -211,7 +211,21 @@ describe("runToolLoop", () => {
     expect(result?.content).not.toContain("Index.md");
   });
 
-  it("runs no call the reply was not offered", async () => {
+  it("counts a call to a tool it was not offered, and keeps asking for one from looping", async () => {
+    const made = { id: "x", name: "web_search", input: {} };
+    const chat = scripted({ text: "", toolCalls: [made] });
+    const { loop } = loopOver(chat);
+
+    const ended = await runToolLoop(loop);
+
+    expect(loop.runTool).not.toHaveBeenCalled();
+    expect(loop.onCall).toHaveBeenCalledTimes(MAX_TOOL_CALLS);
+    expect(ended.end).toBe("budget");
+    expect(chat).toHaveBeenCalledTimes(MAX_TOOL_CALLS + 2);
+    expectReplayable(ended.exchange);
+  });
+
+  it("runs no call the reply was not offered, and shows it as failed", async () => {
     const chat = scripted(
       { text: "", toolCalls: [{ id: "x", name: "export", input: { ref: "Index" } }] },
       answerWith("I can only read."),
@@ -221,6 +235,7 @@ describe("runToolLoop", () => {
     const ended = await runToolLoop(loop);
 
     expect(loop.runTool).not.toHaveBeenCalled();
+    expect(loop.onResult).toHaveBeenCalledWith(expect.objectContaining({ isError: true }));
     expect(ended.exchange[1]).toEqual({
       role: "tool",
       results: [

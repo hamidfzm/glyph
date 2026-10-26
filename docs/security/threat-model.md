@@ -625,7 +625,9 @@ exist on desktop only, like `glyph mcp`.
   passes `ensure_workspace`. Grants are app-wide, so another window's
   workspace is granted too: the scoping comes from the session's roots, among
   which a tool's `vault` argument can only pick, and from the vault a call
-  reads through, which refuses an absolute or `..` path into another vault.
+  reads through, which refuses an absolute or `..` path into another vault
+  before it asks the disk anything, so the refusal is the same whether a file
+  is there or not.
   No folder can be added. A `vault` naming any other folder passes the
   network-path check, is resolved once to match it against the roots, and is
   refused, since the session has no way to ask the user for more.

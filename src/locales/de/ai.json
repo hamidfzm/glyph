@@ -60,6 +60,7 @@
     "arguments": "Angefragt",
     "result": "Ergebnis",
     "resultCut": "Angezeigt werden die ersten {{shown}} von {{total}} Zeichen. Der Assistent hat alle erhalten.",
-    "budget": "Nach {{limit}} Abfragen gestoppt, dem Maximum für eine Frage. Dieser Antwort kann daher etwas fehlen."
+    "budget": "Nach {{limit}} Abfragen gestoppt, dem Maximum für eine Frage. Dieser Antwort kann daher etwas fehlen.",
+    "unsupported": "Dieses Modell kann keine Werkzeuge nutzen, daher hat der Assistent aus dem geöffneten Dokument und der Dateiliste geantwortet."
   }
 }

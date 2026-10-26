@@ -3,7 +3,9 @@ import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { SettingsContext, type SettingsContextValue } from "@/contexts/SettingsContext";
-import { type AISettings, DEFAULT_SETTINGS } from "@/lib/settings";
+import { type AISettings, DEFAULT_SETTINGS, type Settings } from "@/lib/settings";
+import { setNestedValue } from "@/lib/settingsObject";
+import { mergeChangedPaths } from "@/lib/settingsWrite";
 import { AssistantToolsSection } from "./AssistantToolsSection";
 
 function setup(
@@ -42,6 +44,24 @@ describe("AssistantToolsSection", () => {
   it("says where a local model's reads go", () => {
     setup("ollama");
     expect(screen.getByText(/the Ollama server set above/)).toBeInTheDocument();
+  });
+
+  // The settings store writes only paths its defaults hold, so a switch whose
+  // path is not among them would change nothing.
+  it("writes a choice the settings store keeps, leaving the other providers to the default", async () => {
+    const { updateSettings } = setup("ollama");
+    const toggle = screen.getByRole("checkbox", { name: "Let the assistant read notes" });
+    expect(toggle).toBeChecked();
+    await userEvent.click(toggle);
+
+    const [path, value] = updateSettings.mock.calls[0];
+    const pending = setNestedValue(
+      DEFAULT_SETTINGS as unknown as Record<string, unknown>,
+      path,
+      value,
+    ) as unknown as Settings;
+    const saved = mergeChangedPaths(null, pending, [path]);
+    expect(saved.ai.assistantTools).toEqual({ claude: null, openai: null, ollama: false });
   });
 
   it("turns the tools on or off for the current provider only", async () => {

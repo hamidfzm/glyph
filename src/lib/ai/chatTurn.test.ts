@@ -48,6 +48,17 @@ describe("chatHistory", () => {
     ]);
   });
 
+  it("sends an earlier reply as text even when the latest one has no calls to replay", () => {
+    const failed: ChatTurn = { id: 4, role: "assistant", content: "Partial answer." };
+    const again: ChatTurn = { id: 3, role: "user", content: "And now?" };
+    expect(chatHistory([question, reply, again, failed], true)).toEqual([
+      { role: "user", content: "What links here?" },
+      { role: "assistant", content: "Checking. Nothing links here." },
+      { role: "user", content: "And now?" },
+      { role: "assistant", content: "Partial answer." },
+    ]);
+  });
+
   it("replays only the latest reply's calls, so earlier results are not sent again", () => {
     const later: ChatTurn = { ...reply, id: 4, content: "Still nothing." };
     const again: ChatTurn = { id: 3, role: "user", content: "And now?" };

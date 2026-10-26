@@ -26,6 +26,8 @@ export interface ChatTurn {
   exchange?: ChatMessage[];
   /** The reply ended at the tool call budget. */
   stoppedAtBudget?: boolean;
+  /** The tools were wanted, but the model takes none, so it answered without them. */
+  toolsSkipped?: boolean;
 }
 
 /**
@@ -35,7 +37,8 @@ export interface ChatTurn {
  * request that offers no tools may not carry them at all.
  */
 export function chatHistory(turns: readonly ChatTurn[], withTools: boolean): ChatMessage[] {
-  const replayed = withTools ? [...turns].reverse().find((turn) => turn.exchange) : undefined;
+  const latest = [...turns].reverse().find((turn) => turn.role === "assistant");
+  const replayed = withTools ? latest : undefined;
   return turns.flatMap((turn): ChatMessage[] => {
     if (turn.role === "user") return [{ role: "user", content: turn.content }];
     if (turn === replayed && turn.exchange) return turn.exchange;

@@ -60,6 +60,7 @@
     "arguments": "Asked for",
     "result": "Returned",
     "resultCut": "Showing the first {{shown}} of {{total}} characters. The assistant received all of them.",
-    "budget": "Stopped after {{limit}} lookups, the most one question may make, so this answer may be missing something."
+    "budget": "Stopped after {{limit}} lookups, the most one question may make, so this answer may be missing something.",
+    "unsupported": "This model cannot use tools, so the assistant answered from the open document and the list of files."
   }
 }

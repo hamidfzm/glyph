@@ -151,9 +151,10 @@ export interface AISettings {
   agentWriteTools: Record<string, boolean>;
   /** Whether the in-app assistant may read the window's notes through the
    *  vault tools, per provider, since what it reads goes to that provider.
-   *  Only a choice the user made is stored; the rest follow
-   *  `ASSISTANT_TOOLS_DEFAULT`, so a later change of default reaches them. */
-  assistantTools: Partial<Record<AIToolProvider, boolean>>;
+   *  `null` until the user chooses, and `ASSISTANT_TOOLS_DEFAULT` decides
+   *  then, so a later change of default reaches them. One key per provider,
+   *  as for `agentWriteTools`. */
+  assistantTools: Record<AIToolProvider, boolean | null>;
 }
 
 export type AIToolProvider = Exclude<AISettings["provider"], "none">;
@@ -329,7 +330,7 @@ export const DEFAULT_SETTINGS: Settings = {
       rename_note: false,
       move_note: false,
     },
-    assistantTools: {},
+    assistantTools: { claude: null, openai: null, ollama: null },
   },
   print: {
     pageBreakLevel: "none",

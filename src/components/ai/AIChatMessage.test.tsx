@@ -148,6 +148,15 @@ describe("AIChatMessage", () => {
     expect(screen.getByRole("status", { name: "Thinking…" })).toBeInTheDocument();
   });
 
+  it("says when a model that takes no tools answered without them", () => {
+    render(
+      <AIChatMessage
+        turn={{ id: 1, role: "assistant", content: "From the list.", toolsSkipped: true }}
+      />,
+    );
+    expect(screen.getByText(/This model cannot use tools/)).toBeInTheDocument();
+  });
+
   it("says when the call budget ended a reply, and offers no actions for a reply with no text", () => {
     render(
       <AIChatMessage
