@@ -5,6 +5,7 @@ import { matchesAccelerator } from "@/lib/accelerator";
 import { resolveBindings } from "@/lib/keybindings";
 import { KEYBOARD_EVENT } from "@/lib/keyboard";
 import { isMac } from "@/lib/platform";
+import { overlays } from "@/lib/plugins/overlays";
 
 interface UseDocumentUndoRedoOptions {
   activeTabId: string | null;
@@ -47,6 +48,9 @@ export function useDocumentUndoRedo({
       if (!isUndo && !isRedo) return;
       const target = event.target as Element | null;
       if (target?.closest(".cm-editor")) return;
+      // A plugin overlay covers the document; its keys are its own (a drawing
+      // editor's undo), and undoing the hidden document would write to disk.
+      if (overlays.list().length > 0) return;
       if (!activeTabId) return;
       event.preventDefault();
       if (isUndo) onUndo(activeTabId);

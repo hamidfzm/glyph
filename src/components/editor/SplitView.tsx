@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { MarkdownViewer } from "@/components/markdown/MarkdownViewer";
 import { useSettings } from "@/hooks/useSettings";
 import { useSyncedScroll } from "@/hooks/useSyncedScroll";
+import type { FencedBlock } from "@/lib/fencedBlockEdit";
 import { MarkdownEditor } from "./MarkdownEditor";
 
 interface SplitViewProps {
@@ -15,6 +16,7 @@ interface SplitViewProps {
   onOpenWikilink?: (path: string, heading?: string) => void;
   onOpenRelativeFile?: (path: string) => void;
   onTaskToggle?: (line: number) => void;
+  onFencedBlockEdit?: (block: FencedBlock, code: string) => Promise<boolean>;
 }
 
 const PREVIEW_DEBOUNCE = 300;
@@ -29,6 +31,7 @@ export function SplitView({
   onOpenWikilink,
   onOpenRelativeFile,
   onTaskToggle,
+  onFencedBlockEdit,
 }: SplitViewProps) {
   const [previewContent, setPreviewContent] = useState(content);
   // One Find shortcut, two panes: the focused one answers it.
@@ -96,6 +99,7 @@ export function SplitView({
           onOpenWikilink={onOpenWikilink}
           onOpenRelativeFile={onOpenRelativeFile}
           onTaskToggle={onTaskToggle}
+          onFencedBlockEdit={onFencedBlockEdit}
           sourceLines={syncScroll}
         />
       </div>

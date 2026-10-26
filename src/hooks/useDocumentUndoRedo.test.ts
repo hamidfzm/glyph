@@ -1,5 +1,6 @@
 import { renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { showOverlay } from "@/lib/plugins/overlays";
 import { useDocumentUndoRedo } from "./useDocumentUndoRedo";
 
 function dispatch(init: KeyboardEventInit, target?: Element) {
@@ -26,6 +27,23 @@ describe("useDocumentUndoRedo", () => {
     expect(onUndo).toHaveBeenCalledWith("tab-1");
     expect(onRedo).not.toHaveBeenCalled();
     expect(event.defaultPrevented).toBe(true);
+  });
+
+  it("leaves undo to a plugin overlay while one is open", () => {
+    const onUndo = vi.fn();
+    renderHook(() =>
+      useDocumentUndoRedo({ activeTabId: "tab-1", platform: "macos", onUndo, onRedo: vi.fn() }),
+    );
+    const close = showOverlay({
+      id: "editor",
+      label: "Editor",
+      mount: () => {},
+      close: () => close(),
+    });
+    const event = dispatch({ code: "KeyZ", key: "z", metaKey: true });
+    close();
+    expect(onUndo).not.toHaveBeenCalled();
+    expect(event.defaultPrevented).toBe(false);
   });
 
   it("calls onRedo for Shift+Cmd+Z", () => {
