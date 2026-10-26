@@ -1,12 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { decodeDocument } from "@/lib/linkCodec";
 import { MAX_DOCUMENT_BYTES } from "@/lib/previewDocument";
-import { type FileState, makeFileState } from "@/lib/tabs";
-import { canShareLink, shareLinkFor, WEB_VIEWER_URL } from "./shareLink";
-
-function file(overrides: Partial<FileState>): FileState {
-  return { ...makeFileState("/notes/readme.md", "view"), content: "# Hi", ...overrides };
-}
+import { shareLinkFor, WEB_VIEWER_URL } from "./shareLink";
 
 /** Random 7-bit ASCII, one byte a character, which deflate barely shrinks. */
 function incompressible(length: number): string {
@@ -60,31 +55,5 @@ describe("shareLinkFor", () => {
     // Seven random bits a byte deflate to about 7/8, and base64 adds a third:
     // a link about 1.17 times the cap, which is also the URL ceiling (2 MiB).
     expect(await shareLinkFor(incompressible(MAX_DOCUMENT_BYTES))).toBeNull();
-  });
-});
-
-describe("canShareLink", () => {
-  it("accepts a loaded markdown file", () => {
-    expect(canShareLink(file({}))).toBe(true);
-    expect(canShareLink(file({ path: "/notes/flow.mmd" }))).toBe(true);
-  });
-
-  it("accepts an untitled document, whose path is only a title", () => {
-    expect(canShareLink(file({ path: "Untitled-1", virtual: true, content: "" }))).toBe(true);
-  });
-
-  it.each([
-    ["canvas", "/notes/board.canvas"],
-    ["notebook", "/notes/analysis.ipynb"],
-    ["D2 diagram", "/notes/arch.d2"],
-    ["image", "/notes/photo.png"],
-  ])("refuses a %s, which the viewer cannot render", (_name, path) => {
-    expect(canShareLink(file({ path }))).toBe(false);
-  });
-
-  it("refuses a file still loading, and no tab at all", () => {
-    expect(canShareLink(file({ content: null }))).toBe(false);
-    expect(canShareLink(null)).toBe(false);
-    expect(canShareLink(undefined)).toBe(false);
   });
 });

@@ -1,8 +1,8 @@
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { useCallback, useRef } from "react";
 import type { ExportNoticeContent } from "@/hooks/useExportNotice";
+import { canShareLink } from "@/lib/canShareLink";
 import { errorMessage } from "@/lib/errorMessage";
-import { canShareLink, shareLinkFor } from "@/lib/shareLink";
 import { type FileState, liveContentOf } from "@/lib/tabs";
 
 interface ShareLinkOptions {
@@ -29,7 +29,9 @@ export function useShareLink({ file, showNotice }: ShareLinkOptions): () => void
     const report = (notice: ExportNoticeContent) => {
       if (isLatest()) showNotice(notice);
     };
-    shareLinkFor(content)
+    // The codec loads on first use, so it stays out of the startup bundle.
+    import("@/lib/shareLink")
+      .then(({ shareLinkFor }) => shareLinkFor(content))
       .then(async (link) => {
         if (!isLatest()) return;
         if (link === null) {

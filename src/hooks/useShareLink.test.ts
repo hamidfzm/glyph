@@ -87,6 +87,8 @@ describe("useShareLink", () => {
     const { copy, showNotice } = copyWith(file());
 
     copy();
+    // The second copy starts once the first is encoding (and its import has settled).
+    await vi.waitFor(() => expect(shareLinkFor).toHaveBeenCalledOnce());
     copy();
     await vi.waitFor(() => expect(showNotice).toHaveBeenCalledWith({ kind: "linkCopied" }));
     finishFirst("https://example.test/view/#v1.first");
