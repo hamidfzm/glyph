@@ -3,9 +3,9 @@ import { useTranslation } from "react-i18next";
 import { ClearChatIcon } from "@/components/icons/ClearChatIcon";
 import { ModalCloseIcon } from "@/components/icons/ModalCloseIcon";
 import { ResizeHandle } from "@/components/layout/ResizeHandle";
-import type { ChatTurn } from "@/hooks/useAIChat";
 import { usePanelResize } from "@/hooks/usePanelResize";
 import { useSettings } from "@/hooks/useSettings";
+import type { ChatTurn } from "@/lib/ai/chatTurn";
 import type { AIAction } from "@/lib/aiPrompts";
 import {
   AI_PANEL_WIDTH_DEFAULT,

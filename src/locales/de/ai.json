@@ -37,5 +37,29 @@
   "readAloud": "Vorlesen",
   "error": {
     "notConfigured": "Kein KI-Anbieter konfiguriert. Öffne die Einstellungen, um einen KI-Anbieter einzurichten."
+  },
+  "tools": {
+    "label": "Abfragen des Assistenten",
+    "names": {
+      "vault_context": "Überblick über den Arbeitsbereich",
+      "resolve_link": "Link auflösen",
+      "read_note": "Notiz lesen",
+      "note_info": "Notizdetails",
+      "backlinks": "Rückverweise",
+      "graph_neighbors": "Verknüpfte Notizen",
+      "vault_report": "Zustand des Arbeitsbereichs",
+      "list_tags": "Tags",
+      "notes_by_tag": "Notizen mit Tag",
+      "read_canvas": "Canvas lesen"
+    },
+    "status": {
+      "running": "Wird gelesen…",
+      "failed": "Fehlgeschlagen",
+      "stopped": "Gestoppt"
+    },
+    "arguments": "Angefragt",
+    "result": "Ergebnis",
+    "resultCut": "Angezeigt werden die ersten {{shown}} von {{total}} Zeichen. Der Assistent hat alle erhalten.",
+    "budget": "Nach {{limit}} Abfragen gestoppt, dem Maximum für eine Frage. Dieser Antwort kann daher etwas fehlen."
   }
 }

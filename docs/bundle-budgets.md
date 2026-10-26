@@ -37,8 +37,10 @@ optional loads on first use:
 - Editor (CodeMirror), notebook, canvas, graph view, and the settings modals
   are `lazy()` components (`lazyEditor`, `lazyNotebook`, `lazyCanvas`,
   `lazyGraph`, `lazySettings`, `lazyWorkspaceSettings`).
-- The AI chat panel (`lazyAIChatPanel`) loads on first open, and the plugin
-  marketplace rides in the settings chunk as its Plugins tab.
+- The AI chat panel (`lazyAIChatPanel`) loads on first open, and the AI
+  providers and the assistant's tool loop load on the first question
+  (`useAIChat`). The plugin marketplace rides in the settings chunk as its
+  Plugins tab.
 - Syntax highlighting and the gemoji table load when a document first needs
   them (`lazyHighlight`, `lazyGemoji`), and so does KaTeX, through the math
   core plugin's lazy rehype contribution (`src/plugins/core/math/`).

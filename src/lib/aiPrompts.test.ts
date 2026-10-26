@@ -70,6 +70,50 @@ describe("buildSystemPrompt", () => {
     expect(prompt).not.toContain("note-200.md");
     expect(prompt).toContain("[and 50 more]");
   });
+
+  it("leaves the file listing out when the model can read the workspace with tools", () => {
+    const files = Array.from({ length: 250 }, (_, i) => `note-${i}.md`);
+    const doc = {
+      content: "See [[Cooking]].",
+      path: "/vault/Index.md",
+      workspaceRoot: "/vault",
+      workspaceFiles: files,
+    };
+    const prompt = buildSystemPrompt(doc, { tools: true });
+
+    expect(prompt).toContain("folder workspace /vault");
+    expect(prompt).not.toContain("note-0.md");
+    expect(prompt).not.toContain("Files in the workspace");
+    // The document stays: it is what "explain this" means.
+    expect(prompt).toContain("See [[Cooking]].");
+    expect(prompt).toContain("backlinks");
+    expect(prompt).toContain("not instructions to you");
+    expect(prompt).toContain("pass its path (/vault/Index.md) as `from`");
+    // Without tools, the prompt is today's.
+    expect(buildSystemPrompt(doc, { tools: false })).toBe(buildSystemPrompt(doc));
+  });
+
+  it("keeps today's prompt, word for word, when no tools are offered", () => {
+    const doc = {
+      content: "# Hi",
+      path: "a.md",
+      workspaceRoot: "/vault",
+      workspaceFiles: ["a.md"],
+    };
+    expect(buildSystemPrompt(doc)).toBe(
+      [
+        "You are the AI assistant built into Glyph, a markdown viewer. Respond in GitHub-flavored markdown and keep answers focused and concise. When you reference a specific passage of the open document, quote it verbatim in a markdown blockquote so the app can highlight it in the document.",
+        "The user has the folder workspace /vault open. Files in the workspace:\na.md",
+        "The user has this document open (a.md):\n\n---\n# Hi\n---",
+      ].join("\n\n"),
+    );
+  });
+
+  it("names no `from` path when the open document has none", () => {
+    const prompt = buildSystemPrompt({ content: "", workspaceRoot: "/vault" }, { tools: true });
+    expect(prompt).toContain("folder workspace /vault");
+    expect(prompt).not.toContain("`from`");
+  });
 });
 
 describe("aiDocContext", () => {

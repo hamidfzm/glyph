@@ -1,6 +1,6 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { ChatMessage, ChatOptions } from "@/lib/ai/types";
+import type { ChatMessage, ChatOptions, ChatReply } from "@/lib/ai/types";
 import { createAIProvider } from "@/lib/ai-providers";
 import { DEFAULT_SETTINGS } from "@/lib/settings";
 import { useAIChat } from "./useAIChat";
@@ -14,8 +14,12 @@ const mockCreate = vi.mocked(createAIProvider);
 
 const ollamaSettings = { ...DEFAULT_SETTINGS.ai, provider: "ollama" as const };
 
+/** A provider whose replies are the text `chat` resolves to, never a tool call. */
 function mockProvider(chat: (messages: ChatMessage[], options?: ChatOptions) => Promise<string>) {
-  const spy = vi.fn(chat);
+  const spy = vi.fn(async (messages: ChatMessage[], options?: ChatOptions) => ({
+    text: await chat(messages, options),
+    toolCalls: [],
+  }));
   mockCreate.mockReturnValue({ chat: spy });
   return spy;
 }
@@ -99,7 +103,9 @@ describe("useAIChat", () => {
     });
 
     expect(result.current.turns[0].display).toBe("Summarize");
-    expect(chat.mock.calls[0][0][0].content).toContain("long text");
+    expect(chat.mock.calls[0][0][0]).toMatchObject({
+      content: expect.stringContaining("long text"),
+    });
   });
 
   it("surfaces provider errors and drops the empty assistant turn", async () => {
@@ -137,14 +143,14 @@ describe("useAIChat", () => {
       .fn()
       .mockImplementationOnce(
         (_messages: ChatMessage[], options?: ChatOptions) =>
-          new Promise<string>((_resolve, reject) => {
+          new Promise<ChatReply>((_resolve, reject) => {
             firstReject = reject;
             options?.signal?.addEventListener("abort", () =>
               reject(new DOMException("aborted", "AbortError")),
             );
           }),
       )
-      .mockResolvedValue("second reply");
+      .mockResolvedValue({ text: "second reply", toolCalls: [] });
     mockCreate.mockReturnValue({ chat });
     const { result } = renderHook(() => useAIChat(ollamaSettings, () => null));
 

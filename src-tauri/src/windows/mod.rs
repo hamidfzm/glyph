@@ -191,7 +191,8 @@ pub fn route_opens(
 /// Tracks what each window currently shows (its folder workspace and its open
 /// file tabs) and what is waiting for it, plus a counter for minting unique
 /// labels for spawned windows. The frontend keeps the first two maps current
-/// via the `set_window_workspace` and `set_window_files` commands.
+/// via the `set_window_workspace` and `set_window_files` commands, and the
+/// in-app assistant reads a window's vault and tabs from them.
 #[derive(Default)]
 pub struct WindowRegistry {
     inner: Mutex<Windows>,
@@ -317,6 +318,14 @@ impl WindowRegistry {
         windows.unsaved.remove(label);
         windows.pending.remove(label);
         windows.mounted.remove(label);
+    }
+
+    /// The workspace and the file tabs one window last reported.
+    pub fn shown_in(&self, label: &str) -> (Option<String>, Vec<String>) {
+        let windows = self.inner.lock().unwrap();
+        let workspace = windows.workspaces.get(label).cloned().flatten();
+        let files = windows.files.get(label).cloned().unwrap_or_default();
+        (workspace, files)
     }
 
     /// A stable snapshot of what every window shows, for routing.

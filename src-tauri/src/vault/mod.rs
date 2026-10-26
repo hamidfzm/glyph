@@ -51,6 +51,6 @@ pub use queries::Direction;
 pub use relink::{relocate, Relink};
 pub(crate) use relink::{respelled, write_unchanged};
 pub(crate) use resolve::split_heading;
-pub(crate) use store::with_synced_vault;
 pub use store::{apply_changes, forget, VaultStore};
+pub(crate) use store::{with_synced_vault, with_vault};
 pub(crate) use tasks::{parse_tasks, task_text, Task};

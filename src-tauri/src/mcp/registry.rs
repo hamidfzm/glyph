@@ -1,6 +1,6 @@
 //! The tools, and a way to call them that knows nothing of any transport: the
-//! stdio adapter drives it today, and an in-app caller can drive it the same
-//! way. Handlers never read stdin, write stdout, or exit.
+//! stdio adapter and the in-app assistant both drive it. Handlers never read
+//! stdin, write stdout, or exit.
 
 use std::panic::AssertUnwindSafe;
 use std::path::Path;
@@ -19,7 +19,8 @@ pub struct Session<'a> {
     pub grants: &'a GrantRegistry,
     pub vaults: &'a VaultStore,
     /// What the user has open: read from the persisted stores by the stdio
-    /// adapter before each call, passed live by an in-app caller.
+    /// adapter before each call, built from the calling window's live report
+    /// by the in-app assistant.
     pub open: &'a OpenState,
     /// What the running app's windows hold, asked when a call is about to
     /// write: a list read as the call began is stale once the user has been
@@ -30,6 +31,19 @@ pub struct Session<'a> {
     /// Asks the user to let the session serve a folder it was not given;
     /// `None` when nothing can ask them.
     pub allow_vault: Option<&'a AllowVault<'a>>,
+    pub caller: Caller,
+}
+
+/// Who drives the session.
+#[derive(Clone, Copy, PartialEq)]
+pub enum Caller {
+    /// `glyph mcp`: nothing keeps the index current between calls, so each
+    /// call catches it up with the disk.
+    Stdio,
+    /// The in-app assistant: it reads the index the app's watcher keeps
+    /// current, as the UI does, rather than walking the vault under the
+    /// store's lock that the UI's own queries wait on.
+    App,
 }
 
 /// Asks the user to let the session serve `root`: Ok once they have, and
@@ -97,15 +111,17 @@ pub fn edits_on(open: &OpenState) -> Vec<&'static str> {
     edits.map(|tool| tool.name).collect()
 }
 
+/// The tools that only read, whatever a session has turned on.
+pub fn read_only() -> impl Iterator<Item = &'static ToolDef> {
+    TOOLS.iter().filter(|tool| tool.effect == Effect::ReadOnly)
+}
+
 /// The most one result may carry, serialized. Listings and text are cut far
 /// below this; it bounds whatever a note's own content could still inflate.
 const MAX_RESULT_BYTES: usize = 1024 * 1024;
 
 pub fn dispatch(name: &str, args: Value, session: &Session) -> Result<String, ToolError> {
-    let tool = TOOLS
-        .iter()
-        .find(|tool| tool.name == name)
-        .ok_or_else(|| ToolError::Unknown(name.to_string()))?;
+    let tool = find(name)?;
     // Checked here and not only where the tools are listed: a client can call
     // a name it was never offered.
     if !tool.is_on(session.open) {
@@ -113,14 +129,34 @@ pub fn dispatch(name: &str, args: Value, session: &Session) -> Result<String, To
             "{name} is turned off. It changes notes, so the user has to turn it on in Glyph: Settings, AI, Agent tools."
         )));
     }
-    // A client may leave out the arguments of a tool that takes none.
-    let args = if args.is_null() { json!({}) } else { args };
     run_tool(tool, session, args)
+}
+
+/// [`dispatch`] for a caller that may only read: a tool that starts the app,
+/// writes a file or changes a note is refused even when the session turned it
+/// on, since a model can call a name it was never offered.
+pub fn dispatch_read(name: &str, args: Value, session: &Session) -> Result<String, ToolError> {
+    let tool = find(name)?;
+    if tool.effect != Effect::ReadOnly {
+        return Err(ToolError::Failed(format!(
+            "{name} is not available here: the assistant in Glyph can only read notes."
+        )));
+    }
+    run_tool(tool, session, args)
+}
+
+fn find(name: &str) -> Result<&'static ToolDef, ToolError> {
+    TOOLS
+        .iter()
+        .find(|tool| tool.name == name)
+        .ok_or_else(|| ToolError::Unknown(name.to_string()))
 }
 
 /// One handler, run so that neither a bug that panics nor an outsized answer
 /// ends the session. The answer comes as JSON text, ready to send.
 fn run_tool(tool: &ToolDef, session: &Session, args: Value) -> Result<String, ToolError> {
+    // A client may leave out the arguments of a tool that takes none.
+    let args = if args.is_null() { json!({}) } else { args };
     let ran = std::panic::catch_unwind(AssertUnwindSafe(|| {
         (tool.handler)(session, args).map(|answer| answer.to_string())
     }));

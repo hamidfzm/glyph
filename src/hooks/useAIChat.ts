@@ -1,29 +1,27 @@
 import { useCallback, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import type { ChatMessage } from "@/lib/ai/types";
-import { createAIProvider } from "@/lib/ai-providers";
+import { assistantTools, runAssistantTool } from "@/lib/ai/assistantTools";
+import {
+  type ChatTurn,
+  chatHistory,
+  withReplyEnded,
+  withRunningStopped,
+  withToolCall,
+  withToolResult,
+} from "@/lib/ai/chatTurn";
+import type { ToolLoopEnd } from "@/lib/ai/toolLoop";
+import { rememberToolsRefused, toolsOffered } from "@/lib/ai/toolSupport";
+import { type ToolDefinition, ToolsUnsupportedError } from "@/lib/ai/types";
 import { type AIDocContext, buildSystemPrompt } from "@/lib/aiPrompts";
 import { errorMessage } from "@/lib/errorMessage";
 import { quotedImageUrls } from "@/lib/quotedImageUrls";
 import type { AISettings } from "@/lib/settings";
 
-export interface ChatTurn {
-  id: number;
-  role: "user" | "assistant";
-  /** What is sent to the model. */
-  content: string;
-  /** Short label shown in the transcript instead of `content` (quick actions
-   *  embed long passages the user shouldn't have to re-read). */
-  display?: string;
-  /** Image URLs the document named when this reply was requested; a reply
-   *  image loads only when its URL is among them. Assistant turns only. */
-  quotedImageUrls?: readonly string[];
-}
-
 /**
  * Streaming multi-turn chat against the configured AI provider. The open
  * document rides along as the system prompt (via `getDocContext`, read fresh
- * on every send). Assistant turns fill in token-by-token as chunks arrive.
+ * on every send). Where the provider takes tools, the model may read the
+ * window's notes through them first; each call shows on the reply.
  */
 export function useAIChat(aiSettings: AISettings, getDocContext: () => AIDocContext | null) {
   const { t } = useTranslation("ai");
@@ -39,23 +37,25 @@ export function useAIChat(aiSettings: AISettings, getDocContext: () => AIDocCont
 
   const send = useCallback(
     async (content: string, display?: string) => {
+      // Loaded on first use, to keep the providers and the loop out of the
+      // startup bundle.
+      const [{ createAIProvider }, { runToolLoop }] = await Promise.all([
+        import("@/lib/ai-providers"),
+        import("@/lib/ai/toolLoop"),
+      ]);
       const provider = createAIProvider(aiSettings);
       if (!provider) {
         setError(t("error.notConfigured"));
         return;
       }
 
-      // A new send cancels any in-flight stream (its partial turn is kept).
+      // A new send cancels any in-flight reply (its partial turn is kept).
       abortRef.current?.abort();
       const controller = new AbortController();
       abortRef.current = controller;
       setError(null);
 
-      const history: ChatMessage[] = turnsRef.current
-        .filter((turn) => turn.content)
-        .map(({ role, content: c }) => ({ role, content: c }));
-      history.push({ role: "user", content });
-
+      const previous = turnsRef.current;
       // Read once per send: the history outlives document switches, so the
       // reply keeps the URLs of the document it was asked about.
       const doc = getDocContext();
@@ -72,33 +72,46 @@ export function useAIChat(aiSettings: AISettings, getDocContext: () => AIDocCont
         },
       ]);
       setStreaming(true);
+      const update = (change: (turn: ChatTurn) => ChatTurn) =>
+        setTurns((prev) => prev.map((turn) => (turn.id === assistantId ? change(turn) : turn)));
+      // An assistant turn that never got a token or a call is dropped rather
+      // than left as an empty bubble.
+      const finish = (change: (turn: ChatTurn) => ChatTurn) =>
+        setTurns((prev) =>
+          prev
+            .map((turn) => (turn.id === assistantId ? change(turn) : turn))
+            .filter((turn) => turn.id !== assistantId || turn.content || turn.toolCalls),
+        );
 
       try {
-        const full = await provider.chat(history, {
-          system: buildSystemPrompt(doc),
-          signal: controller.signal,
-          onChunk: (delta) =>
-            setTurns((prev) =>
-              prev.map((turn) =>
-                turn.id === assistantId ? { ...turn, content: turn.content + delta } : turn,
-              ),
-            ),
-        });
-        // Reconcile with the resolved text so a reply that arrived without
-        // chunk callbacks (non-streaming fallback) still fills the turn.
-        setTurns((prev) =>
-          prev.map((turn) =>
-            turn.id === assistantId && turn.content !== full ? { ...turn, content: full } : turn,
-          ),
-        );
-      } catch (err) {
-        // Stop/abort keeps whatever streamed in; real failures also surface
-        // the error. Either way an assistant turn that never got a token is
-        // dropped rather than left as an empty bubble.
-        if (!(err instanceof DOMException && err.name === "AbortError")) {
-          setError(errorMessage(err));
+        const ask = (tools: readonly ToolDefinition[]) =>
+          runToolLoop({
+            provider,
+            history: [...chatHistory(previous, tools.length > 0), { role: "user", content }],
+            system: buildSystemPrompt(doc, { tools: tools.length > 0 }),
+            tools,
+            signal: controller.signal,
+            onChunk: (delta) => update((turn) => ({ ...turn, content: turn.content + delta })),
+            onCall: (call) => update((turn) => withToolCall(turn, call)),
+            onResult: (result) => update((turn) => withToolResult(turn, result)),
+            runTool: (call) => runAssistantTool(call, doc?.path),
+          });
+        // The tools read the window's workspace, so without one they have nothing to read.
+        const offered = Boolean(doc?.workspaceRoot) && toolsOffered(aiSettings);
+        const tools = offered ? await assistantTools() : [];
+        let ended: ToolLoopEnd;
+        try {
+          ended = await ask(tools);
+        } catch (err) {
+          if (!(err instanceof ToolsUnsupportedError)) throw err;
+          // This model takes no tools: answer as before, from the prompt alone.
+          rememberToolsRefused(aiSettings);
+          ended = await ask([]);
         }
-        setTurns((prev) => prev.filter((turn) => turn.id !== assistantId || turn.content));
+        finish((turn) => withReplyEnded(turn, ended));
+      } catch (err) {
+        setError(errorMessage(err));
+        finish(withRunningStopped);
       } finally {
         if (abortRef.current === controller) {
           abortRef.current = null;
