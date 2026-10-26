@@ -52,6 +52,10 @@ updates:
         update-types: ["version-update:semver-major"]
       # Owned by the `tauri` group above.
       - dependency-name: "@tauri-apps/*"
+      # This release's browser build cannot load the font for text inside an
+      # SVG diagram, so exported PDFs draw diagram labels in a fallback face.
+      - dependency-name: "pdfmake"
+        versions: ["0.3.12"]
     groups:
       dev-dependencies:
         # Catches Biome, vitest, TypeScript, Tailwind, husky, lint-staged,

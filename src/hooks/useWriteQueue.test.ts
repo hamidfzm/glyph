@@ -4,13 +4,35 @@ import { deferred } from "@/test/deferred";
 import { useWriteQueue } from "./useWriteQueue";
 
 describe("useWriteQueue", () => {
+  it("settles once every write asked for so far has finished, a failed one included", async () => {
+    const { result } = renderHook(() => useWriteQueue());
+    const gate = deferred();
+    const held = result.current.enqueueWrite("/p/a.md", () => gate.promise);
+    const failed = result.current.enqueueWrite("/p/b.md", () =>
+      Promise.reject(new Error("disk full")),
+    );
+    await expect(failed).rejects.toThrow("disk full");
+
+    let settled = false;
+    const settling = result.current.writesSettled().then(() => {
+      settled = true;
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(settled).toBe(false);
+
+    gate.resolve();
+    await held;
+    await settling;
+    expect(settled).toBe(true);
+  });
+
   it("holds a write to the same path until the one before it has finished", async () => {
     const { result } = renderHook(() => useWriteQueue());
     const gate = deferred();
     const second = vi.fn(async () => "second");
 
-    const first = result.current("/p/a.md", () => gate.promise.then(() => "first"));
-    const queued = result.current("/p/a.md", second);
+    const first = result.current.enqueueWrite("/p/a.md", () => gate.promise.then(() => "first"));
+    const queued = result.current.enqueueWrite("/p/a.md", second);
     await new Promise((resolve) => setTimeout(resolve, 0));
     const startedEarly = second.mock.calls.length > 0;
 
@@ -25,8 +47,8 @@ describe("useWriteQueue", () => {
     const gate = deferred();
     const other = vi.fn(async () => {});
 
-    const held = result.current("/p/a.md", () => gate.promise);
-    await result.current("/p/b.md", other);
+    const held = result.current.enqueueWrite("/p/a.md", () => gate.promise);
+    await result.current.enqueueWrite("/p/b.md", other);
     expect(other).toHaveBeenCalledOnce();
 
     gate.resolve();
@@ -37,8 +59,10 @@ describe("useWriteQueue", () => {
     const { result } = renderHook(() => useWriteQueue());
     const next = vi.fn(async () => {});
 
-    const failing = result.current("/p/a.md", () => Promise.reject(new Error("disk full")));
-    const queued = result.current("/p/a.md", next);
+    const failing = result.current.enqueueWrite("/p/a.md", () =>
+      Promise.reject(new Error("disk full")),
+    );
+    const queued = result.current.enqueueWrite("/p/a.md", next);
 
     await expect(failing).rejects.toThrow("disk full");
     await queued;

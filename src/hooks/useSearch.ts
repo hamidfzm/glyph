@@ -39,9 +39,11 @@ function highlightMatches(container: HTMLElement, query: string): SplitText[] {
   const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
     acceptNode(node) {
       const parent = node.parentElement;
+      // An HTML <mark> inside SVG text would hide the label it splits, so a
+      // diagram a plugin draws is left alone.
       if (
         parent?.closest(
-          "mark.search-highlight, script, style, .mermaid-diagram, .markdown-media-print",
+          "mark.search-highlight, script, style, .mermaid-diagram, .markdown-media-print, [data-fenced-language] svg",
         )
       ) {
         return NodeFilter.FILTER_REJECT;

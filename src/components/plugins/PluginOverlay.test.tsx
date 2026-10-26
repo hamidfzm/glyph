@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { flushSync } from "react-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { overlays, showOverlay } from "@/lib/plugins/overlays";
+import { closeOverlays, overlays, showOverlay } from "@/lib/plugins/overlays";
 import type { OverlayContribution } from "@/lib/plugins/types";
 import { expectConsole } from "@/test/consoleGuard";
 import { PluginOverlay } from "./PluginOverlay";
@@ -60,6 +61,20 @@ describe("PluginOverlay", () => {
     expect(close).toHaveBeenCalled();
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     expect(cleanup).toHaveBeenCalled();
+  });
+
+  it("runs the plugin's cleanup before a synchronous close returns", async () => {
+    const cleanup = vi.fn();
+    render(<PluginOverlay />);
+    open({ mount: (_el, registerCleanup) => registerCleanup(cleanup) });
+    await screen.findByRole("dialog");
+
+    let ranBeforeReturn = false;
+    act(() => {
+      flushSync(closeOverlays);
+      ranBeforeReturn = cleanup.mock.calls.length > 0;
+    });
+    expect(ranBeforeReturn).toBe(true);
   });
 
   it("sees Escape before any key handler the plugin adds while mounting", async () => {

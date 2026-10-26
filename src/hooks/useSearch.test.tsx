@@ -329,6 +329,22 @@ describe("useSearch", () => {
     expect(result.current.matchCount).toBe(0);
   });
 
+  it("leaves the text of a diagram a plugin draws untouched", () => {
+    const { ref, result } = setup(
+      '<p>label</p><div data-fenced-language="excalidraw"><svg><text>label</text></svg></div>',
+    );
+
+    act(() => {
+      result.current.setQuery("label");
+    });
+    act(() => {
+      vi.advanceTimersByTime(150);
+    });
+
+    expect(result.current.matchCount).toBe(1);
+    expect(ref.current?.querySelector("svg text")?.innerHTML).toBe("label");
+  });
+
   it("does not count the print-only media name, which nobody can scroll to", () => {
     const { result } = setup('<p>clip</p><span class="markdown-media-print">clip.mp4</span>');
 
