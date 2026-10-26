@@ -1,11 +1,17 @@
 import { type ComponentPropsWithoutRef, isValidElement, type ReactNode } from "react";
-import { FencedMountSlot } from "@/components/plugins/FencedMountSlot";
+import type { ExtraProps } from "react-markdown";
 import { useLightbox } from "@/contexts/LightboxContext";
 import { usePluginsOptional } from "@/contexts/PluginsContext";
 import { useRegistryEntries } from "@/hooks/usePluginRegistry";
-import { isFencedRendererMount } from "@/lib/plugins/fencedRenderers";
+import type { FencedBlock } from "@/lib/fencedBlockEdit";
 import { CopyButton } from "./CopyButton";
 import { CsvTable } from "./CsvTable";
+import { PluginFencedBlock } from "./PluginFencedBlock";
+
+interface CodeBlockProps extends ComponentPropsWithoutRef<"pre">, ExtraProps {
+  /** Save a plugin-rendered block; only the document's own viewer passes it. */
+  onFencedBlockEdit?: (block: FencedBlock, code: string) => Promise<boolean>;
+}
 
 interface CodeProps {
   className?: string;
@@ -21,8 +27,8 @@ function extractText(node: ReactNode): string {
   return "";
 }
 
-export function CodeBlockComponent(props: ComponentPropsWithoutRef<"pre">) {
-  const { children, ...rest } = props;
+export function CodeBlockComponent(props: CodeBlockProps) {
+  const { children, node, onFencedBlockEdit, ...rest } = props;
   const plugins = usePluginsOptional();
   const fencedRenderers = useRegistryEntries(plugins?.fencedRenderers ?? null);
   const lightbox = useLightbox();
@@ -42,23 +48,18 @@ export function CodeBlockComponent(props: ComponentPropsWithoutRef<"pre">) {
     const lang = /\blanguage-([\w-]+)\b/.exec(className)?.[1];
     const custom = lang && fencedRenderers.find((r) => r.language === lang);
     if (custom) {
-      const code = extractText(children.props.children).trim();
-      const openLightbox = lightbox?.openSrc;
-      let rendered: ReactNode;
-      if (isFencedRendererMount(custom.render)) {
-        rendered = (
-          <FencedMountSlot renderer={custom.render} code={code} openLightbox={openLightbox} />
-        );
-      } else {
-        const Render = custom.render;
-        rendered = <Render code={code} openLightbox={openLightbox} />;
-      }
-      // Print and PDF export find the block by these to re-render it through
-      // the plugin's renderStatic.
+      // Keyed by language: react-markdown keys blocks by position, and a block
+      // of another language taking this place is another block.
       return (
-        <div data-fenced-language={custom.language} data-fenced-source={code}>
-          {rendered}
-        </div>
+        <PluginFencedBlock
+          key={custom.language}
+          renderer={custom}
+          code={extractText(children.props.children).trim()}
+          startLine={node?.position?.start.line}
+          endLine={node?.position?.end.line}
+          openLightbox={lightbox?.openSrc}
+          onFencedBlockEdit={onFencedBlockEdit}
+        />
       );
     }
   }
