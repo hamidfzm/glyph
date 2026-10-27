@@ -337,6 +337,27 @@ mod tests {
     }
 
     #[test]
+    fn read_directory_lists_plugin_file_types_below_the_granted_root() {
+        let root = unique_tmp("read_dir_plugin_depth");
+        let nested = root.join("drawings").join("2026");
+        fs::create_dir_all(&nested).unwrap();
+        fs::write(nested.join("sketch.excalidraw"), "{}").unwrap();
+        fs::write(nested.join("notes.txt"), "x").unwrap();
+
+        let app = app_with_workspace(&root);
+        let entries = read_directory(
+            nested.to_string_lossy().to_string(),
+            vec!["excalidraw".to_string()],
+            app.state::<GrantRegistry>(),
+        )
+        .unwrap();
+
+        let names: Vec<&str> = entries.iter().map(|e| e.name.as_str()).collect();
+        assert_eq!(names, vec!["sketch.excalidraw"]);
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
     fn read_directory_without_plugin_types_lists_the_built_in_set() {
         let dir = unique_tmp("read_dir_no_plugin_types");
         fs::write(dir.join("readme.md"), "x").unwrap();
@@ -364,8 +385,19 @@ mod tests {
         fs::write(dir.join("readme.md"), "x").unwrap();
         fs::write(dir.join("notes.txt"), "x").unwrap();
 
+        // Non-ASCII letters and digits too: the frontend's rule is ASCII only.
         for bad in [
-            "", ".txt", "*", "t?t", "../txt", "a/b", "a\\b", "TXT", "tx t",
+            "",
+            ".txt",
+            "*",
+            "t?t",
+            "../txt",
+            "a/b",
+            "a\\b",
+            "TXT",
+            "tx t",
+            "caf\u{e9}",
+            "\u{663}",
         ] {
             let err = names_listed(&dir, &["excalidraw", bad]).expect_err(bad);
             assert!(
