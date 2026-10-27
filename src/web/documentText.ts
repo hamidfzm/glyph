@@ -1,8 +1,9 @@
 import { adaptMmdContent } from "@/lib/mmd";
 import type { PreviewMessage } from "@/preview/startPreview";
+import previewConfig from "../../src-tauri/preview.json";
 
-/** The OS previews' cap (preview-handler document.rs, Quick Look Document.swift). */
-export const MAX_DOCUMENT_BYTES = 2 * 1024 * 1024;
+/** The cap the Windows and Quick Look previews apply too: all three read preview.json. */
+export const MAX_DOCUMENT_BYTES = previewConfig.maxDocumentBytes;
 
 /** Strict UTF-8, as the OS previews require; a leading BOM is dropped. */
 export function decodeUtf8(bytes: Uint8Array): string | null {

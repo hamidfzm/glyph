@@ -11,9 +11,7 @@
 // cannot drift. Adding an extension is a one-line edit to one JSON file, and
 // tests then ask for it wherever a platform lists extensions by hand (the
 // macOS Info.plist, the Windows preview handler, the Linux MIME package).
-// biome-ignore lint/style/noRestrictedImports: lives outside src/, but it is the canonical config
 import declaredConfig from "../../src-tauri/extensions.json";
-// biome-ignore lint/style/noRestrictedImports: lives outside src/, but it is the canonical config
 import tauriConfig from "../../src-tauri/tauri.conf.json";
 
 type FileAssociation = { ext?: unknown; mimeType?: unknown };

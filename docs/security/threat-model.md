@@ -298,7 +298,8 @@ keys over it. What holds it in:
   New windows are refused, host objects, dev tools and browser accelerator
   keys are off.
 - **A size cap.** Files over 2 MiB get a notice instead of a render, so a
-  large file cannot stall Explorer's pane.
+  large file cannot stall Explorer's pane. Quick Look and the web viewer
+  apply the same cap, all three reading it from `src-tauri/preview.json`.
 - **Process isolation.** The handler runs in Explorer's `prevhost.exe`
   surrogate, not in Explorer, and the WebView2 renderer keeps its own sandbox.
   A crash or a hang takes down the surrogate only.

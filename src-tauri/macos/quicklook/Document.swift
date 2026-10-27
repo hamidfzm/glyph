@@ -1,11 +1,9 @@
 import Foundation
 
-/// Larger files get a notice instead of a render, so Quick Look never waits on one.
-let maxPreviewBytes = 2 * 1024 * 1024
-
 /// The message the preview page renders for the file at `url`
 /// (src/preview/hostMessage.ts). `baseUrl` is where the page finds images
 /// relative to the file. Mirrors the Windows handler's document.rs.
+/// `maxPreviewBytes` is generated from src-tauri/preview.json by scripts/build-quicklook.mjs.
 func hostMessage(for url: URL, baseUrl: String, cap: Int = maxPreviewBytes) -> [String: Any] {
     guard let data = readCapped(url, cap: cap) else { return ["kind": "unreadable"] }
     if data.count > cap {
