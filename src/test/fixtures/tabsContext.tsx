@@ -31,6 +31,7 @@ export function tabsContextValue(over: Partial<TabsContextValue> = {}): TabsCont
     createCanvasInWorkspace: vi.fn(),
     createCanvas: vi.fn(),
     commitEdit: vi.fn(),
+    editFencedBlock: vi.fn(),
     createFolder: vi.fn(),
     renamePath: vi.fn(),
     duplicatePath: vi.fn(),

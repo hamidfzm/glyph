@@ -10,6 +10,7 @@ import { useLazyMarkdownPlugins } from "@/hooks/useLazyMarkdownPlugins";
 import { useRegistryEntries } from "@/hooks/usePluginRegistry";
 import { useSettings } from "@/hooks/useSettings";
 import { useWikilinkResolutions } from "@/hooks/useWikilinkResolutions";
+import type { FencedBlock } from "@/lib/fencedBlockEdit";
 import { parseFrontmatter } from "@/lib/frontmatter";
 import { buildRehypePlugins, buildRemarkPlugins } from "@/lib/markdown/pipeline";
 import { resolveWorkspacePath } from "@/lib/relativePath";
@@ -31,6 +32,8 @@ interface MarkdownContentProps {
   /** Open a workspace document by absolute path (used for resolved relative links). */
   onOpenRelativeFile?: (path: string) => void;
   onTaskToggle?: (line: number) => void;
+  /** Save a plugin-rendered fenced block; only the document's own viewer passes it. */
+  onFencedBlockEdit?: (block: FencedBlock, code: string) => Promise<boolean>;
   /** Render a YAML frontmatter block when present. Defaults to true. */
   showFrontmatter?: boolean;
   /** Stamp `data-line` on top-level blocks, for split view scroll sync. */
@@ -49,6 +52,7 @@ export function MarkdownContent({
   onOpenWikilink,
   onOpenRelativeFile,
   onTaskToggle,
+  onFencedBlockEdit,
   showFrontmatter = true,
   sourceLines = false,
 }: MarkdownContentProps) {
@@ -139,6 +143,13 @@ export function MarkdownContent({
     [onTaskToggle],
   );
 
+  const CodeBlock = useCallback(
+    (props: React.ComponentProps<typeof CodeBlockComponent>) => (
+      <CodeBlockComponent {...props} onFencedBlockEdit={onFencedBlockEdit} />
+    ),
+    [onFencedBlockEdit],
+  );
+
   return (
     <EmbedContext.Provider value={embedValue}>
       <LightboxProvider>
@@ -153,7 +164,7 @@ export function MarkdownContent({
             video: VideoComponent,
             audio: AudioComponent,
             source: MediaSourceComponent,
-            pre: CodeBlockComponent,
+            pre: CodeBlock,
             li: TaskListLi,
             div: DivComponent,
             table: TableComponent,

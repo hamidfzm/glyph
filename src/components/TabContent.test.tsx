@@ -1,6 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { TabsContextValue } from "@/contexts/TabsContext";
+import type { FencedBlock } from "@/lib/fencedBlockEdit";
 import type { EditorMode } from "@/lib/settings";
 import type { FileTab, GraphTab } from "@/lib/tabs";
 import { TabsWrapper, tabsContextValue } from "@/test/fixtures/tabsContext";
@@ -52,12 +53,30 @@ vi.mock("./graph/lazyGraph", () => ({
   ),
 }));
 
+// The handler the viewer last received, so a test can save a block through it.
+const viewer = vi.hoisted(() => ({
+  onFencedBlockEdit: undefined as
+    | ((block: FencedBlock, code: string) => Promise<boolean>)
+    | undefined,
+}));
+
 vi.mock("./markdown/MarkdownViewer", () => ({
-  MarkdownViewer: ({ filePath, content }: { filePath?: string; content: string }) => (
-    <div data-testid="markdown-viewer" data-content={content}>
-      {filePath}
-    </div>
-  ),
+  MarkdownViewer: ({
+    filePath,
+    content,
+    onFencedBlockEdit,
+  }: {
+    filePath?: string;
+    content: string;
+    onFencedBlockEdit?: (block: FencedBlock, code: string) => Promise<boolean>;
+  }) => {
+    viewer.onFencedBlockEdit = onFencedBlockEdit;
+    return (
+      <div data-testid="markdown-viewer" data-content={content}>
+        {filePath}
+      </div>
+    );
+  },
 }));
 
 vi.mock("./markdown/ImageViewer", () => ({
@@ -377,6 +396,32 @@ describe("TabContent", () => {
     expect(screen.queryByTestId("lazy-editor")).toBeNull();
     getByTestId("canvas-editor").click();
     expect(commitEdit).toHaveBeenCalledWith(tab.id, "CANVAS");
+  });
+
+  it("saves a plugin block of the viewed document through editFencedBlock", async () => {
+    const tab = makeFileTab("view");
+    const editFencedBlock = vi.fn().mockResolvedValue(true);
+    renderTabContent({
+      activeTab: tab,
+      activeTabId: tab.id,
+      activeFile: tab.file,
+      editFencedBlock,
+    });
+    const block = { startLine: 1, endLine: 3, code: "old" };
+
+    await expect(viewer.onFencedBlockEdit?.(block, "new")).resolves.toBe(true);
+    expect(editFencedBlock).toHaveBeenCalledWith(tab.id, "/p/file.md", block, "new");
+  });
+
+  it("refuses a plugin block save when no tab id is active", async () => {
+    const tab = makeFileTab("view");
+    const editFencedBlock = vi.fn();
+    renderTabContent({ activeTab: tab, activeTabId: null, activeFile: tab.file, editFencedBlock });
+
+    await expect(
+      viewer.onFencedBlockEdit?.({ startLine: 1, endLine: 3, code: "old" }, "new"),
+    ).resolves.toBe(false);
+    expect(editFencedBlock).not.toHaveBeenCalled();
   });
 
   it("drops canvas commits when no tab id is active", () => {

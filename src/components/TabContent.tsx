@@ -3,6 +3,7 @@ import { useTabsContext } from "@/contexts/TabsContext";
 import { useCanSplit } from "@/hooks/useMediaQuery";
 import { useTaskList } from "@/hooks/useTaskList";
 import { isCanvasFile } from "@/lib/canvasExtensions";
+import type { FencedBlock } from "@/lib/fencedBlockEdit";
 import { isImageFile } from "@/lib/imageExtensions";
 import { isNotebookFile } from "@/lib/notebookExtensions";
 import { EDITOR_MODE, effectiveEditorMode } from "@/lib/settings";
@@ -33,6 +34,7 @@ export function TabContent({ searchOpen, onSearchClose }: TabContentProps) {
     saveScrollPosition,
     updateEditContent,
     commitEdit,
+    editFencedBlock,
     toggleTask,
   } = useTabsContext();
 
@@ -41,6 +43,15 @@ export function TabContent({ searchOpen, onSearchClose }: TabContentProps) {
       if (activeTabId) commitEdit(activeTabId, serialized);
     },
     [activeTabId, commitEdit],
+  );
+
+  const activePath = activeTab?.kind === "file" ? activeTab.file.path : null;
+  const handleFencedBlockEdit = useCallback(
+    async (block: FencedBlock, code: string) => {
+      if (!activeTabId || activePath === null) return false;
+      return editFencedBlock(activeTabId, activePath, block, code);
+    },
+    [activeTabId, activePath, editFencedBlock],
   );
 
   const { handleToggle: handleTaskToggle } = useTaskList({ activeTabId, toggleTask });
@@ -158,6 +169,7 @@ export function TabContent({ searchOpen, onSearchClose }: TabContentProps) {
             onOpenWikilink={handleOpenWikilink}
             onOpenRelativeFile={openFile}
             onTaskToggle={handleTaskToggle}
+            onFencedBlockEdit={handleFencedBlockEdit}
           />
         </div>
       </NoteZoomLayer>
@@ -180,6 +192,7 @@ export function TabContent({ searchOpen, onSearchClose }: TabContentProps) {
         onOpenWikilink={handleOpenWikilink}
         onOpenRelativeFile={openFile}
         onTaskToggle={handleTaskToggle}
+        onFencedBlockEdit={handleFencedBlockEdit}
       />
     </NoteZoomLayer>
   );
