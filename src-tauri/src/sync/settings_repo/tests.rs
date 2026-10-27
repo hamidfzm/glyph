@@ -202,6 +202,25 @@ fn using_the_synced_setup_takes_its_settings_and_keeps_this_machines_plugins() {
 }
 
 #[test]
+fn a_choice_that_fails_to_land_can_be_made_again() {
+    let cloud = Cloud::new();
+    let a = Machine::with_settings(json!({"appearance": {"theme": "dark"}}));
+    connect(&cloud, "a", &a);
+    let b = Machine::with_settings(json!({}));
+    let (paths, _) = connect(&cloud, "b", &b);
+    // A folder where the state file goes fails the landing.
+    let _ = fs::remove_file(paths.state());
+    fs::create_dir_all(paths.state().join("blocker")).unwrap();
+    assert!(flow::choose(&paths, &b, None, SetupChoice::UseSynced).is_err());
+    assert_eq!(load_config(&paths).unwrap().unwrap().phase, Phase::Choosing);
+
+    fs::remove_dir_all(paths.state()).unwrap();
+    flow::choose(&paths, &b, None, SetupChoice::UseSynced).unwrap();
+    assert_eq!(load_config(&paths).unwrap().unwrap().phase, Phase::Active);
+    assert_eq!(b.settings_now()["appearance"], json!({"theme": "dark"}));
+}
+
+#[test]
 fn replacing_the_synced_setup_keeps_the_remotes_history() {
     let cloud = Cloud::new();
     let a = Machine::with_settings(
@@ -888,12 +907,14 @@ mod ipc {
         assert_eq!(refused.unwrap_err()["kind"], "invalid-state");
 
         // A remote that cannot be reached: nothing is kept, the token neither.
-        let unreachable = call(
-            &webview,
-            "settings_sync_connect",
-            json!({"remoteUrl": "https://127.0.0.1:1/setup.git", "branch": "main", "author": null, "token": "NS-token"}),
-        );
-        assert!(unreachable.is_err());
+        for token in [json!("NS-token"), Value::Null] {
+            let unreachable = call(
+                &webview,
+                "settings_sync_connect",
+                json!({"remoteUrl": "https://127.0.0.1:1/setup.git", "branch": "main", "author": null, "token": token}),
+            );
+            assert!(unreachable.is_err());
+        }
         assert_eq!(
             call(&webview, "settings_sync_get_config", json!({})),
             Ok(Value::Null)
@@ -1015,5 +1036,22 @@ mod ipc {
             call(&webview, "settings_sync_has_token", json!({})),
             Ok(json!(false))
         );
+    }
+
+    #[test]
+    fn a_disabled_list_that_is_not_a_list_disables_nothing() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let locations = Locations {
+            app_data: tmp.path().join("data"),
+            settings_store: tmp.path().join("settings.json"),
+            plugins_store: tmp.path().join("plugins.json"),
+            plugins_root: tmp.path().join("plugins"),
+        };
+        let (app, _webview) = build(locations.clone());
+        app.store(&locations.plugins_store)
+            .unwrap()
+            .set("disabled", json!("x.x"));
+        let local = TauriLocal::new(app.handle().clone(), locations);
+        assert!(local.disabled_plugins().unwrap().is_empty());
     }
 }

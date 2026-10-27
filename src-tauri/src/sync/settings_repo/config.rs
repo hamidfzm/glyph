@@ -120,9 +120,7 @@ pub(super) fn read_json<T: DeserializeOwned>(path: &Path) -> Result<Option<T>, S
 /// leaves half a file.
 pub(super) fn write_json<T: Serialize>(path: &Path, value: &T) -> Result<(), SyncError> {
     let json = serde_json::to_vec_pretty(value).map_err(|e| SyncError::Backend(e.to_string()))?;
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
-    }
+    path.parent().map(fs::create_dir_all).transpose()?;
     let partial = path.with_extension("json.partial");
     fs::write(&partial, json)?;
     fs::rename(&partial, path)?;

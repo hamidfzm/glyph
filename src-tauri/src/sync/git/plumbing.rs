@@ -84,6 +84,17 @@ impl GitBackend {
         let mut index = repo
             .index()
             .map_err(|e| SyncError::Backend(e.message().to_string()))?;
+        Self::commit_tree_of(repo, &mut index, signature, message, parents)
+    }
+
+    /// Commit `index` as it is in memory, whether or not it was written.
+    pub(super) fn commit_tree_of(
+        repo: &Repository,
+        index: &mut git2::Index,
+        signature: &git2::Signature<'_>,
+        message: &str,
+        parents: Vec<git2::Commit<'_>>,
+    ) -> Result<git2::Oid, SyncError> {
         let tree_oid = index
             .write_tree()
             .map_err(|e| SyncError::Backend(e.message().to_string()))?;

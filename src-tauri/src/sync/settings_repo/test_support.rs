@@ -16,10 +16,7 @@ use super::config::{Phase, RepoPaths, SettingsRepoConfig};
 use super::local::{LocalPlugin, LocalSetup, Object};
 
 pub(super) fn object(value: Value) -> Object {
-    match value {
-        Value::Object(map) => map,
-        other => panic!("not an object: {other}"),
-    }
+    serde_json::from_value(value).expect("an object")
 }
 
 /// A bare repository every machine of a test syncs through.

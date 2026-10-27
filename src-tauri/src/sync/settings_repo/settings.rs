@@ -192,15 +192,9 @@ pub(super) fn three_way(
 
 #[cfg(test)]
 mod tests {
+    use super::super::test_support::object;
     use super::*;
     use serde_json::json;
-
-    fn object(value: Value) -> Object {
-        match value {
-            Value::Object(map) => map,
-            _ => unreachable!(),
-        }
-    }
 
     fn none() -> BTreeSet<String> {
         BTreeSet::new()

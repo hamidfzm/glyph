@@ -134,16 +134,16 @@ impl<R: Runtime> LocalSetup for TauriLocal<R> {
         };
         let mut plugins = Vec::new();
         for entry in entries {
-            let dir = entry?.path();
-            // Installs name the folder after the plugin's id.
-            let Some(id) = dir.file_name().and_then(|n| n.to_str()) else {
-                continue;
-            };
-            if !dir.is_dir() || !is_well_formed_id(id) {
+            let entry = entry?;
+            // Installs name the folder after the plugin's id; a name that is
+            // not UTF-8 reads lossily here and fails the id check.
+            let id = entry.file_name().to_string_lossy().into_owned();
+            let dir = entry.path();
+            if !dir.is_dir() || !is_well_formed_id(&id) {
                 continue;
             }
             plugins.push(LocalPlugin {
-                id: id.to_string(),
+                id,
                 version: inspect_dir(&dir).ok().map(|manifest| manifest.version),
                 marker: read_install_marker(&dir),
             });
@@ -153,11 +153,8 @@ impl<R: Runtime> LocalSetup for TauriLocal<R> {
     }
 
     fn announce(&self, plugin_ids: Vec<String>) {
-        if let Err(e) = self
+        let _ = self
             .app
-            .emit(SETTINGS_SYNCED_EVENT, SettingsSynced { plugin_ids })
-        {
-            eprintln!("settings sync: failed to announce the import: {e}");
-        }
+            .emit(SETTINGS_SYNCED_EVENT, SettingsSynced { plugin_ids });
     }
 }

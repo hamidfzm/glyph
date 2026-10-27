@@ -243,16 +243,10 @@ fn sorted(value: &Value) -> Value {
 
 #[cfg(test)]
 mod tests {
+    use super::super::test_support::object;
     use super::*;
     use serde_json::json;
     use tempfile::TempDir;
-
-    fn object(value: Value) -> Object {
-        match value {
-            Value::Object(map) => map,
-            _ => unreachable!(),
-        }
-    }
 
     /// A repo whose one commit holds `settings/` built by `fill`.
     fn repo_with(
@@ -421,6 +415,15 @@ mod tests {
         fs::create_dir_all(tmp.path().join("plugins/a.b.json")).unwrap();
         remove_object(tmp.path(), PLUGINS_DIR, "a.b").unwrap();
         assert!(!tmp.path().join("plugins/a.b.json").exists());
+    }
+
+    #[test]
+    fn a_clone_that_is_a_file_takes_no_writes() {
+        let tmp = TempDir::new().unwrap();
+        let file = tmp.path().join("repo");
+        fs::write(&file, "").unwrap();
+        assert!(write_object(&file, SETTINGS_DIR, "x", &Object::new()).is_err());
+        assert_eq!(fs::read_to_string(&file).unwrap(), "");
     }
 
     #[cfg(unix)]

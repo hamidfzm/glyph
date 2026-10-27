@@ -253,3 +253,16 @@ pub async fn settings_sync_disconnect<R: Runtime>(
     }
     forgotten
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_repo_lives_in_the_apps_own_data_folder() {
+        let app = tauri::test::mock_app();
+        let paths = paths_of(app.handle(), &SettingsSyncState::new()).unwrap();
+        let app_data = app.path().app_data_dir().unwrap();
+        assert_eq!(paths.root(), app_data.join("settings-sync"));
+    }
+}

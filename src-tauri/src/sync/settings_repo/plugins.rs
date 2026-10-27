@@ -182,11 +182,9 @@ fn entry(
     }))
 }
 
+/// The map an object literal holds.
 fn object(value: Value) -> Object {
-    match value {
-        Value::Object(map) => map,
-        _ => Object::new(),
-    }
+    serde_json::from_value(value).unwrap_or_default()
 }
 
 #[derive(Deserialize)]

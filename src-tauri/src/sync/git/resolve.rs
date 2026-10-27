@@ -118,19 +118,21 @@ impl GitBackend {
                     .map_err(|e| SyncError::Backend(e.message().to_string()))?;
             }
         }
-        index
-            .write()
-            .map_err(|e| SyncError::Backend(e.message().to_string()))?;
-
         let signature = self.signature()?;
         let head = Self::head_commit(&repo)?
             .ok_or_else(|| SyncError::InvalidState("HEAD missing during merge".into()))?;
-        Self::commit_index(
+        // Written only once committed: a failed commit leaves the conflicts
+        // on disk to resolve again.
+        Self::commit_tree_of(
             &repo,
+            &mut index,
             &signature,
             &merge_commit_message(),
             vec![head, merge_head],
         )?;
+        index
+            .write()
+            .map_err(|e| SyncError::Backend(e.message().to_string()))?;
         repo.cleanup_state()
             .map_err(|e| SyncError::Backend(e.message().to_string()))?;
 
@@ -147,12 +149,8 @@ impl GitBackend {
         repo.checkout_head(Some(&mut checkout))
             .map_err(|e| SyncError::Backend(e.message().to_string()))?;
 
-        let mut pushed_count = 0;
-        if self.has_remote() {
-            let (ahead, _) = Self::ahead_behind(&repo, &self.config.remote_branch)?;
-            self.push_branch(&repo)?;
-            pushed_count = ahead;
-        }
+        let (pushed_count, _) = Self::ahead_behind(&repo, &self.config.remote_branch)?;
+        self.push_branch(&repo)?;
         Ok(SyncResult {
             kind: BackendKind::Git,
             pulled_count: 1,
@@ -284,6 +282,21 @@ mod tests {
         assert!(again.conflicts.is_empty());
         assert_eq!(again.committed_count, 0);
         assert_eq!(again.pushed_count, 0);
+    }
+
+    #[test]
+    fn a_resolution_whose_commit_fails_can_be_made_again() {
+        let f = conflicted(Some("mine\n"), Some("theirs\n"));
+        // A held branch lock makes the merge commit fail.
+        let lock = f.workspace.join(".git/refs/heads/main.lock");
+        fs::write(&lock, "").unwrap();
+        let picks = [pick("notes.md", ConflictSide::Local)];
+        assert!(f.backend().resolve_conflicts(&picks).is_err());
+        assert_eq!(f.backend().status().unwrap().conflicts, ["notes.md"]);
+
+        fs::remove_file(&lock).unwrap();
+        f.backend().resolve_conflicts(&picks).unwrap();
+        assert_eq!(remote_file(&f, "notes.md").as_deref(), Some("mine\n"));
     }
 
     #[test]

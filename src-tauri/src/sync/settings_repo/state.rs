@@ -145,6 +145,7 @@ mod tests {
         let _guard = crate::secrets::test_store::install();
         SettingsSyncState::new().clear_token();
         crate::secrets::test_store::set_error(TOKEN_ACCOUNT, "locked");
+        crate::secrets::test_store::set_error(HOST_ACCOUNT, "locked");
         let state = SettingsSyncState::new();
         assert!(state.has_token().is_err());
         // The token still works for this session.
@@ -152,5 +153,6 @@ mod tests {
         assert!(state.has_token().unwrap());
         state.clear_token();
         crate::secrets::test_store::clear_error(TOKEN_ACCOUNT);
+        crate::secrets::test_store::clear_error(HOST_ACCOUNT);
     }
 }
