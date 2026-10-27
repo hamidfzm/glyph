@@ -405,9 +405,8 @@ mod tests {
     #[test]
     fn forward_file_event_drops_watcher_errors() {
         let mut fired = false;
-        forward_file_event(Err(notify::Error::generic("backend failure")), || {
-            fired = true
-        });
+        let failure = Err(notify::Error::generic("backend failure"));
+        forward_file_event(failure, || fired = true);
         assert!(!fired);
     }
 
