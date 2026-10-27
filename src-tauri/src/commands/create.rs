@@ -523,8 +523,9 @@ mod tests {
             let folder = dir.join("Untitled Folder");
             fs::create_dir_all(folder.join("hooks")).unwrap();
             fs::write(folder.join("hooks").join("pre-commit"), "#!/bin/sh\n").unwrap();
+            // The rename's own check, not only the one `relocate` repeats.
             let err = rename_path(s(&folder), name.to_string(), root.clone()).unwrap_err();
-            assert!(err.contains(".git"), "{err}");
+            assert_eq!(err, "Refusing to name an entry .git");
             assert!(folder.join("hooks").join("pre-commit").is_file());
             let landed = listed(dir).iter().any(|n| n.eq_ignore_ascii_case(".git"));
             assert!(!landed, "{name} landed in {}", dir.display());
@@ -533,7 +534,8 @@ mod tests {
         // A file named `.git` is a gitfile: it sends git to the folder it names.
         let plain = ws.join("notes");
         fs::write(&plain, "gitdir: ../elsewhere\n").unwrap();
-        assert!(rename_path(s(&plain), ".git".to_string(), root.clone()).is_err());
+        let err = rename_path(s(&plain), ".git".to_string(), root.clone()).unwrap_err();
+        assert_eq!(err, "Refusing to name an entry .git");
         assert!(plain.is_file());
         assert!(!ws.join(".git").exists());
         // A note keeps its extension, so the name it lands on is not git's.
