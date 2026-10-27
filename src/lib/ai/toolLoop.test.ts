@@ -273,6 +273,17 @@ describe("runToolLoop", () => {
     expect(quiet.exchange.at(-1)?.role).toBe("tool");
   });
 
+  it("sends nothing for a reply already stopped", async () => {
+    const chat = scripted(async (_messages, options) => {
+      if (options?.signal?.aborted) throw abortError();
+      return answerWith("too late");
+    });
+    const { loop, controller } = loopOver(chat);
+    controller.abort();
+
+    await expect(runToolLoop(loop)).resolves.toEqual({ exchange: [], text: "", end: "stopped" });
+  });
+
   it("passes a provider's own failure through", async () => {
     const chat = scripted(async () => {
       throw new Error("rate limited");

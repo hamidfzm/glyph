@@ -159,6 +159,16 @@ describe("OpenAIProvider tool calls", () => {
     });
   });
 
+  it("still yields a call from a piece that names nothing, for the tool to refuse", async () => {
+    mockFetch.mockResolvedValueOnce(
+      streamResponse(['data: {"choices":[{"delta":{"tool_calls":[{}]}}]}', "data: [DONE]"]),
+    );
+    const reply = await provider.chat([{ role: "user", content: "hi" }], {
+      tools: [READ_NOTE_TOOL],
+    });
+    expect(reply.toolCalls).toEqual([{ id: "", name: "", input: {} }]);
+  });
+
   it("passes arguments that do not parse on as text, and replays them unchanged", async () => {
     mockFetch.mockResolvedValueOnce(
       streamResponse([

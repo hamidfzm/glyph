@@ -147,7 +147,7 @@ describe("OllamaProvider tool calls", () => {
       streamResponse([
         '{"message":{"role":"assistant","content":"Checking."},"done":false}',
         '{"message":{"role":"assistant","content":"","tool_calls":[{"function":{"name":"backlinks","arguments":{"ref":"Index"}}}]},"done":false}',
-        '{"message":{"role":"assistant","content":"","tool_calls":[{"id":"x","function":{"name":"list_tags","arguments":"{}"}},{"function":{"name":"vault_context"}}]},"done":true}',
+        '{"message":{"role":"assistant","content":"","tool_calls":[{"id":"x","function":{"name":"list_tags","arguments":"{}"}},{"function":{"name":"vault_context"}},{}]},"done":true}',
       ]),
     );
 
@@ -161,6 +161,7 @@ describe("OllamaProvider tool calls", () => {
         { id: "call_0", name: "backlinks", input: { ref: "Index" } },
         { id: "x", name: "list_tags", input: {} },
         { id: "call_1", name: "vault_context", input: {} },
+        { id: "call_2", name: "", input: {} },
       ],
     });
   });

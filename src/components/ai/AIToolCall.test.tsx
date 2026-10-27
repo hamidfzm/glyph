@@ -74,6 +74,19 @@ describe("AIToolCall", () => {
     expect(screen.getByText(/only the first 20000 documents were indexed/)).toBeInTheDocument();
   });
 
+  it("shows what a running call asked for, before anything came back", async () => {
+    render(<AIToolCall view={view({ status: "running", result: undefined })} />);
+    toggle(/Backlinks/);
+    expect(await screen.findByText("Asked for")).toBeInTheDocument();
+    expect(screen.queryByText("Returned")).not.toBeInTheDocument();
+  });
+
+  it("warns of an incomplete index whose status names no limit", () => {
+    const status = { truncated: true, reason: "unresolvedLimit", limit: null };
+    render(<AIToolCall view={view({ result: JSON.stringify({ status }) })} />);
+    expect(screen.getByText(/links point to missing notes/)).toBeInTheDocument();
+  });
+
   it("says how much of a long result it shows", async () => {
     const long = JSON.stringify("x".repeat(MAX_SHOWN_CHARS + 10));
     render(<AIToolCall view={view({ result: long })} />);

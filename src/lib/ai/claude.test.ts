@@ -267,6 +267,7 @@ describe("ClaudeProvider tool calls", () => {
         { role: "user", content: "hi" },
         { role: "assistant", content: "  " },
         { role: "user", content: "again" },
+        { role: "assistant", content: "Hello." },
         {
           role: "assistant",
           content: "\n",
@@ -279,7 +280,18 @@ describe("ClaudeProvider tool calls", () => {
     expect(messages).toEqual([
       { role: "user", content: "hi" },
       { role: "user", content: "again" },
+      { role: "assistant", content: "Hello." },
       { role: "assistant", content: [{ type: "tool_use", id: "t", name: "list_tags", input: {} }] },
     ]);
+  });
+
+  it("still yields a call from a block that names nothing, for the tool to refuse", async () => {
+    mockFetch.mockResolvedValueOnce(
+      streamResponse(['data: {"type":"content_block_start","content_block":{"type":"tool_use"}}']),
+    );
+    const reply = await provider.chat([{ role: "user", content: "hi" }], {
+      tools: [READ_NOTE_TOOL],
+    });
+    expect(reply.toolCalls).toEqual([{ id: "", name: "", input: {} }]);
   });
 });

@@ -88,8 +88,15 @@ describe("tool call views", () => {
   });
 
   it("marks a call still running as stopped, and leaves a turn without one alone", () => {
-    const running = withToolCall(start, asked);
-    expect(withRunningStopped(running).toolCalls?.[0]?.status).toBe("stopped");
+    const done = withToolResult(withToolCall(start, asked), {
+      callId: "a",
+      name: "backlinks",
+      content: "{}",
+      isError: false,
+    });
+    const running = withToolCall(done, asked);
+    const stopped = withRunningStopped(running).toolCalls?.map((view) => view.status);
+    expect(stopped).toEqual(["done", "stopped"]);
     expect(withRunningStopped(start)).toBe(start);
   });
 
