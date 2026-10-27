@@ -258,10 +258,18 @@ struct Relinker<'a> {
 
 impl<'a> Relinker<'a> {
     fn new(vault: &'a Vault, moved: Move) -> Self {
+        let stays_indexed = |path: &str| {
+            vault
+                .inside_root(Path::new(path))
+                .is_some_and(|(_, relative)| vault.admits(&relative))
+        };
         let mut entries: Vec<(String, Vec<String>)> = vault
             .notes
             .iter()
             .map(|note| (moved.apply(&note.path), note.aliases.clone()))
+            // A note moved to a type or place the index skips drops out of it,
+            // and no wikilink reaches it there.
+            .filter(|(path, _)| stays_indexed(path))
             .collect();
         // Path order decides a same-directory tie, so it has to match the index's.
         entries.sort_by(|a, b| compare_paths(&a.0, &b.0));
@@ -855,6 +863,104 @@ mod tests {
             &[("Travel.md", ""), ("Index.md", "[[Travel]] [t](Travel.md)")],
         );
         assert!(planned(&root, "Travel.md", "C# notes.md").is_empty());
+    }
+
+    #[test]
+    fn a_note_renamed_to_a_type_the_index_skips_keeps_its_wikilinks() {
+        for renamed in ["flow.d2", "flow.ipynb"] {
+            let root = workspace(
+                "leaves_by_type",
+                &[
+                    ("Untitled.md", ""),
+                    ("Index.md", "[[Untitled]] [[Untitled.md]] [u](Untitled.md)"),
+                    ("Board.canvas", &board(&["Untitled.md"])),
+                ],
+            );
+            // Only wikilinks resolve through the index; a markdown link or a
+            // card reaches any file.
+            assert_eq!(
+                planned(&root, "Untitled.md", renamed),
+                BTreeMap::from([
+                    ("Board.canvas".to_string(), board(&[renamed])),
+                    (
+                        "Index.md".to_string(),
+                        format!("[[Untitled]] [[Untitled.md]] [u]({renamed})")
+                    ),
+                ]),
+                "{renamed}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_same_named_note_never_takes_a_link_to_a_note_leaving_the_index() {
+        let root = workspace(
+            "leaves_same_stem",
+            &[
+                ("Untitled.md", "[[drawing]]"),
+                ("Other/drawing.md", ""),
+                ("Index.md", "[[Untitled]] [[drawing]]"),
+            ],
+        );
+        // `[[drawing]]` reaches Other/drawing.md before the rename and after it.
+        assert!(planned(&root, "Untitled.md", "drawing.excalidraw").is_empty());
+    }
+
+    #[test]
+    fn a_folder_moved_out_of_the_index_keeps_the_wikilinks_into_it() {
+        for renamed in [".notes", "node_modules"] {
+            let root = workspace(
+                "leaves_by_place",
+                &[
+                    ("Notes/Travel.md", ""),
+                    ("Index.md", "[[Notes/Travel]] [t](Notes/Travel.md)"),
+                ],
+            );
+            assert_eq!(
+                planned(&root, "Notes", renamed),
+                one(
+                    "Index.md",
+                    &format!("[[Notes/Travel]] [t]({renamed}/Travel.md)")
+                ),
+                "{renamed}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_preview_of_a_rename_out_of_the_index_lists_only_what_it_rewrites() {
+        let root = workspace(
+            "leaves_preview",
+            &[
+                ("Untitled.md", ""),
+                ("Other/drawing.md", ""),
+                ("Index.md", "[[Untitled]] [[drawing]]"),
+                ("Plan.md", "[u](Untitled.md)"),
+            ],
+        );
+        let grants = GrantRegistry::default();
+        grants.grant_workspace(&root).unwrap();
+        let from = root.join("Untitled.md");
+
+        let preview = relocate(
+            &root.to_string_lossy(),
+            &from,
+            &root.join("drawing.excalidraw"),
+            true,
+            &grants,
+            &VaultStore::default(),
+        )
+        .unwrap();
+
+        let listed: Vec<String> = preview
+            .files
+            .iter()
+            .map(|file| relative(&root, &file.path))
+            .collect();
+        let untouched = from.exists() && !root.join("drawing.excalidraw").exists();
+        fs::remove_dir_all(&root).unwrap();
+        assert_eq!(listed, ["Plan.md"]);
+        assert!(untouched);
     }
 
     #[cfg(any(windows, target_os = "macos"))]

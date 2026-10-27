@@ -304,12 +304,12 @@ impl Vault {
         Some((self.root.join(&relative), relative))
     }
 
-    /// Whether the walk would have visited `path`. `apply_changes` reads files
-    /// the walk never offered it, so the same gates have to hold here: no
-    /// hidden or noisy directories, nothing reached through a link, and no
-    /// file past the size cap.
-    fn walkable(&self, path: &Path, relative: &Path) -> bool {
-        if !is_indexable(path) || relative.components().count() > self.max_depth {
+    /// Whether the walk would take a file at `relative` by its name and place
+    /// alone: an indexed type, within the depth cap, and under no hidden or
+    /// noisy directory. Nothing is looked up, so it holds for a path that
+    /// does not exist yet.
+    pub(super) fn admits(&self, relative: &Path) -> bool {
+        if !is_indexable(relative) || relative.components().count() > self.max_depth {
             return false;
         }
         for component in relative.components() {
@@ -317,6 +317,17 @@ impl Vault {
             if name.starts_with('.') || WALK_SKIP_DIRS.contains(&name.as_ref()) {
                 return false;
             }
+        }
+        true
+    }
+
+    /// Whether the walk would have visited `path`. `apply_changes` reads files
+    /// the walk never offered it, so the same gates have to hold here: the
+    /// name and place [`Vault::admits`], nothing reached through a link, and
+    /// no file past the size cap.
+    fn walkable(&self, path: &Path, relative: &Path) -> bool {
+        if !self.admits(relative) {
+            return false;
         }
         // `symlink_metadata` reports the link itself, so `is_file` already
         // refuses a symlinked note the way the walk does.
