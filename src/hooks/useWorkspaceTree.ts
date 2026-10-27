@@ -1,7 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useWorkspaceEntries } from "@/hooks/useWorkspaceEntries";
 import { isPathInside } from "@/lib/paths";
+import { fileTypes, readWithSettledFileTypes, registeredExtensions } from "@/lib/plugins/fileTypes";
 import type { DirEntry, Workspace } from "@/lib/tabs";
 
 // Safety bound on the "expand all" walk so a pathological tree can't spin forever.
@@ -22,9 +23,13 @@ export function useWorkspaceTree({ repointOpenFiles }: UseWorkspaceTreeOptions) 
   const workspaceRef = useRef(workspace);
   workspaceRef.current = workspace;
 
+  // A listing read while plugin file types changed is read again, so it never
+  // lands after the refresh the change starts (INV-3); so is any batch of them.
   const loadDirectory = useCallback(async (path: string): Promise<DirEntry[]> => {
     try {
-      return await invoke<DirEntry[]>("read_directory", { path });
+      return await readWithSettledFileTypes(() =>
+        invoke<DirEntry[]>("read_directory", { path, extensions: registeredExtensions() }),
+      );
     } catch (err) {
       console.error(`Failed to read directory ${path}:`, err);
       return [];
@@ -35,11 +40,14 @@ export function useWorkspaceTree({ repointOpenFiles }: UseWorkspaceTreeOptions) 
   const openTree = useCallback(
     async (root: string, expandedPaths: string[] = []) => {
       const expanded = new Set(expandedPaths);
-      const nodes = new Map<string, DirEntry[]>();
-      nodes.set(root, await loadDirectory(root));
-      for (const dir of expanded) {
-        nodes.set(dir, await loadDirectory(dir));
-      }
+      const nodes = await readWithSettledFileTypes(async () => {
+        const read = new Map<string, DirEntry[]>();
+        read.set(root, await loadDirectory(root));
+        for (const dir of expanded) {
+          read.set(dir, await loadDirectory(dir));
+        }
+        return read;
+      });
       const ws: Workspace = { root, expanded, nodes };
       workspaceRef.current = ws;
       setWorkspace(ws);
@@ -63,8 +71,8 @@ export function useWorkspaceTree({ repointOpenFiles }: UseWorkspaceTreeOptions) 
           dirsToRefresh.push(dir);
         }
       }
-      const fresh = await Promise.all(
-        dirsToRefresh.map(async (d) => [d, await loadDirectory(d)] as const),
+      const fresh = await readWithSettledFileTypes(() =>
+        Promise.all(dirsToRefresh.map(async (d) => [d, await loadDirectory(d)] as const)),
       );
       setWorkspace((prev) => {
         if (!prev || prev.root !== root) return prev;
@@ -91,14 +99,19 @@ export function useWorkspaceTree({ repointOpenFiles }: UseWorkspaceTreeOptions) 
         newExpanded.add(path);
       }
 
-      let newNodes = ws.nodes;
+      let entries: DirEntry[] | undefined;
       if (!wasExpanded && !ws.nodes.has(path)) {
-        const entries = await loadDirectory(path);
-        newNodes = new Map(ws.nodes);
-        newNodes.set(path, entries);
+        entries = await loadDirectory(path);
       }
 
-      setWorkspace((prev) => (prev ? { ...prev, expanded: newExpanded, nodes: newNodes } : prev));
+      // Merged into the latest listings: a refresh may have landed during the read.
+      setWorkspace((prev) => {
+        if (!prev) return prev;
+        if (!entries) return { ...prev, expanded: newExpanded };
+        const nodes = new Map(prev.nodes);
+        nodes.set(path, entries);
+        return { ...prev, expanded: newExpanded, nodes };
+      });
     },
     [loadDirectory],
   );
@@ -114,28 +127,45 @@ export function useWorkspaceTree({ repointOpenFiles }: UseWorkspaceTreeOptions) 
     async (limit: number = EXPAND_ALL_MAX_DIRS) => {
       const ws = workspaceRef.current;
       if (!ws) return;
-      const nodes = new Map(ws.nodes);
-      const expanded = new Set<string>();
-      const queue: string[] = [ws.root];
-      let visited = 0;
-      while (queue.length > 0 && visited < limit) {
-        const dir = queue.shift() as string;
-        visited += 1;
-        let entries = nodes.get(dir);
-        if (!entries) {
-          entries = await loadDirectory(dir);
-          nodes.set(dir, entries);
-        }
-        for (const entry of entries) {
-          if (entry.isDirectory) {
-            expanded.add(entry.path);
-            queue.push(entry.path);
+      const { loaded, expanded } = await readWithSettledFileTypes(async () => {
+        const loaded = new Map<string, DirEntry[]>();
+        const expanded = new Set<string>();
+        const queue: string[] = [ws.root];
+        let visited = 0;
+        while (queue.length > 0 && visited < limit) {
+          const dir = queue.shift() as string;
+          visited += 1;
+          let entries = loaded.get(dir) ?? ws.nodes.get(dir);
+          if (!entries) {
+            entries = await loadDirectory(dir);
+            loaded.set(dir, entries);
+          }
+          for (const entry of entries) {
+            if (entry.isDirectory) {
+              expanded.add(entry.path);
+              queue.push(entry.path);
+            }
           }
         }
-      }
-      setWorkspace((prev) => (prev ? { ...prev, nodes, expanded } : prev));
+        return { loaded, expanded };
+      });
+      // Only the listings read here are written: a refresh may have landed meanwhile.
+      setWorkspace((prev) =>
+        prev ? { ...prev, nodes: new Map([...prev.nodes, ...loaded]), expanded } : prev,
+      );
     },
     [loadDirectory],
+  );
+
+  // A plugin registering or dropping a file type changes which files the
+  // listings hold, including on a launch that opened the folder before plugins.
+  useEffect(
+    () =>
+      fileTypes.subscribe(() => {
+        const ws = workspaceRef.current;
+        if (ws) void refreshLoadedDirs(ws.root);
+      }),
+    [refreshLoadedDirs],
   );
 
   const entries = useWorkspaceEntries({

@@ -5,6 +5,7 @@ use std::time::UNIX_EPOCH;
 use tauri::State;
 
 use super::walk::{workspace_walker, ScanStatus, WALK_MAX_DEPTH, WALK_MAX_FILES};
+use crate::extensions::has_extension;
 use crate::grants::GrantRegistry;
 
 #[derive(Debug, Serialize)]
@@ -16,14 +17,39 @@ pub struct DirEntry {
     pub modified: u64,
 }
 
+/// The plugin file type extensions a window passes, checked the way
+/// `registerFileType` in `src/lib/plugins/fileTypes.ts` checks them, so every
+/// list the window's registry can hold passes and only a forged one fails.
+fn checked_extensions(extensions: &[String]) -> Result<Vec<&str>, String> {
+    extensions
+        .iter()
+        .map(|ext| {
+            let plain = !ext.is_empty()
+                && ext
+                    .bytes()
+                    .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit());
+            if plain {
+                Ok(ext.as_str())
+            } else {
+                Err("Invalid file type extension: expected lowercase letters or digits".to_string())
+            }
+        })
+        .collect()
+}
+
+/// One directory of the workspace tree. `extensions` are the window's plugin
+/// file types: they only pick which entries of this already-readable
+/// directory are listed, and change nothing about what can be read.
 #[tauri::command]
 pub fn read_directory(
     path: String,
+    extensions: Vec<String>,
     grants: State<'_, GrantRegistry>,
 ) -> Result<Vec<DirEntry>, String> {
     // Validate, then walk the path as given: a canonical `\\?\` prefix on
     // Windows would break workspace-containment string checks in the UI.
     grants.ensure_readable(&path)?;
+    let extensions = checked_extensions(&extensions)?;
     let dir = Path::new(&path);
     let read_dir = fs::read_dir(dir).map_err(|e| format!("Failed to read directory: {e}"))?;
 
@@ -39,12 +65,14 @@ pub fn read_directory(
             Err(_) => continue,
         };
         let is_directory = metadata.is_dir();
-        // The sidebar lists openable documents plus image/SVG assets. Images are
-        // not part of `is_supported_file` (the document index that feeds the
-        // graph / wikilinks), so they are admitted here on top of it.
+        // The sidebar lists openable documents plus image/SVG assets. Images and
+        // plugin file types are not part of `is_supported_file` (the document
+        // index that feeds the graph / wikilinks), so they are admitted here on
+        // top of it.
         if !is_directory
             && !crate::is_supported_file(&entry_path)
             && !crate::is_image_file(&entry_path)
+            && !has_extension(&entry_path, &extensions)
         {
             continue;
         }
@@ -169,6 +197,7 @@ mod tests {
         let app = app_with_workspace(&dir);
         let result = read_directory(
             dir.to_string_lossy().to_string(),
+            Vec::new(),
             app.state::<GrantRegistry>(),
         )
         .unwrap();
@@ -198,6 +227,7 @@ mod tests {
         let app = app_with_workspace(&dir);
         let result = read_directory(
             dir.to_string_lossy().to_string(),
+            Vec::new(),
             app.state::<GrantRegistry>(),
         )
         .unwrap();
@@ -219,6 +249,7 @@ mod tests {
         let app = app_with_workspace(&dir);
         let result = read_directory(
             dir.to_string_lossy().to_string(),
+            Vec::new(),
             app.state::<GrantRegistry>(),
         )
         .unwrap();
@@ -235,6 +266,7 @@ mod tests {
         let app = app_with_workspace(&dir);
         let result = read_directory(
             dir.to_string_lossy().to_string(),
+            Vec::new(),
             app.state::<GrantRegistry>(),
         )
         .unwrap();
@@ -250,6 +282,7 @@ mod tests {
         let missing = dir.join("gone");
         let result = read_directory(
             missing.to_string_lossy().to_string(),
+            Vec::new(),
             app.state::<GrantRegistry>(),
         );
         assert!(result.is_err());
@@ -266,6 +299,110 @@ mod tests {
         app.manage(GrantRegistry::default());
         let result = read_directory(
             dir.to_string_lossy().to_string(),
+            Vec::new(),
+            app.state::<GrantRegistry>(),
+        );
+        let err = result.expect_err("must be denied");
+        assert!(err.starts_with("path is outside the allowed workspaces and files:"));
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    fn names_listed(dir: &Path, extensions: &[&str]) -> Result<Vec<String>, String> {
+        let app = app_with_workspace(dir);
+        let entries = read_directory(
+            dir.to_string_lossy().to_string(),
+            extensions.iter().map(|ext| ext.to_string()).collect(),
+            app.state::<GrantRegistry>(),
+        )?;
+        Ok(entries.into_iter().map(|e| e.name).collect())
+    }
+
+    #[test]
+    fn read_directory_lists_plugin_file_types_it_is_passed() {
+        let dir = unique_tmp("read_dir_plugin_types");
+        fs::write(dir.join("readme.md"), "x").unwrap();
+        fs::write(dir.join("sketch.excalidraw"), "{}").unwrap();
+        fs::write(dir.join("Plan.EXCALIDRAW"), "{}").unwrap();
+        fs::write(dir.join("flow.puml"), "x").unwrap();
+        fs::write(dir.join("data.json"), "x").unwrap();
+
+        let names = names_listed(&dir, &["excalidraw"]).unwrap();
+
+        assert_eq!(
+            names,
+            vec!["Plan.EXCALIDRAW", "readme.md", "sketch.excalidraw"]
+        );
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn read_directory_without_plugin_types_lists_the_built_in_set() {
+        let dir = unique_tmp("read_dir_no_plugin_types");
+        fs::write(dir.join("readme.md"), "x").unwrap();
+        fs::write(dir.join("sketch.excalidraw"), "{}").unwrap();
+
+        assert_eq!(names_listed(&dir, &[]).unwrap(), vec!["readme.md"]);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn read_directory_keeps_hidden_entries_hidden_for_plugin_types() {
+        let dir = unique_tmp("read_dir_plugin_hidden");
+        fs::write(dir.join(".secret.excalidraw"), "{}").unwrap();
+        fs::write(dir.join("shown.excalidraw"), "{}").unwrap();
+
+        let names = names_listed(&dir, &["excalidraw"]).unwrap();
+
+        assert_eq!(names, vec!["shown.excalidraw"]);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn read_directory_refuses_a_malformed_extension() {
+        let dir = unique_tmp("read_dir_bad_extension");
+        fs::write(dir.join("readme.md"), "x").unwrap();
+        fs::write(dir.join("notes.txt"), "x").unwrap();
+
+        for bad in [
+            "", ".txt", "*", "t?t", "../txt", "a/b", "a\\b", "TXT", "tx t",
+        ] {
+            let err = names_listed(&dir, &["excalidraw", bad]).expect_err(bad);
+            assert!(
+                err.starts_with("Invalid file type extension"),
+                "{bad}: {err}"
+            );
+        }
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn read_directory_with_plugin_types_denied_without_a_grant() {
+        let dir = unique_tmp("read_dir_plugin_denied");
+        fs::write(dir.join("sketch.excalidraw"), "{}").unwrap();
+
+        let app = mock_app();
+        app.manage(GrantRegistry::default());
+        let result = read_directory(
+            dir.to_string_lossy().to_string(),
+            vec!["excalidraw".to_string()],
+            app.state::<GrantRegistry>(),
+        );
+        let err = result.expect_err("must be denied");
+        assert!(err.starts_with("path is outside the allowed workspaces and files:"));
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn read_directory_denies_before_judging_the_extensions() {
+        // The grant is judged before anything else the call carries.
+        let dir = unique_tmp("read_dir_denied_bad_extension");
+        let app = mock_app();
+        app.manage(GrantRegistry::default());
+        let result = read_directory(
+            dir.to_string_lossy().to_string(),
+            vec!["../x".to_string()],
             app.state::<GrantRegistry>(),
         );
         let err = result.expect_err("must be denied");
