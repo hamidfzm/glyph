@@ -21,7 +21,7 @@ function unquote(family: string): string {
 function embeddedFamilies(styles: Element[]): Map<string, string> {
   const families = new Map<string, string>();
   for (const style of styles) {
-    for (const [, face] of (style.textContent ?? "").matchAll(FONT_FACE)) {
+    for (const [, face] of style.textContent!.matchAll(FONT_FACE)) {
       const family = face.match(FACE_FAMILY)?.[1];
       const data = face.match(BASE64_SRC)?.[1];
       if (!family || !data) continue;
@@ -49,11 +49,11 @@ export function registerEmbeddedFonts(svg: Element): void {
   const renameDeclarations = (css: string) =>
     css.replace(FAMILY_DECLARATION, (_, property: string, list: string) => property + rename(list));
 
-  for (const style of styles) style.textContent = renameDeclarations(style.textContent ?? "");
+  for (const style of styles) style.textContent = renameDeclarations(style.textContent!);
   for (const el of svg.querySelectorAll("[font-family]")) {
-    el.setAttribute("font-family", rename(el.getAttribute("font-family") ?? ""));
+    el.setAttribute("font-family", rename(el.getAttribute("font-family")!));
   }
   for (const el of svg.querySelectorAll("[style]")) {
-    el.setAttribute("style", renameDeclarations(el.getAttribute("style") ?? ""));
+    el.setAttribute("style", renameDeclarations(el.getAttribute("style")!));
   }
 }
