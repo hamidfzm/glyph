@@ -81,14 +81,19 @@ async function openTree(expanded: string[] = []) {
   return tree;
 }
 
+/** Park the next read of `path` until the returned gate resolves. */
+function holdRead(path: string) {
+  held = { path, gate: deferred(), started: deferred() };
+  return held;
+}
+
 /**
  * Run `operation` with the read of `path` parked, register a file type, let
  * the refresh that starts land, then let the parked read finish. Each phase
  * renders before the next, as the app does between IPC reads.
  */
 async function registerWhileReading(path: string, operation: () => Promise<unknown>) {
-  const hold = { path, gate: deferred(), started: deferred() };
-  held = hold;
+  const hold = holdRead(path);
   let pending: Promise<unknown> = Promise.resolve();
   await act(async () => {
     pending = operation();
@@ -195,6 +200,20 @@ describe("useWorkspaceTree and plugin file types", () => {
     expect(names(tree, "/p/ws/sub")).toEqual(["deep", "plan.excalidraw"]);
   });
 
+  it("skips the refresh when the workspace closes before it runs", async () => {
+    const tree = await openTree();
+    const before = reads().length;
+
+    await act(async () => {
+      registerExcalidraw();
+      tree.current.clearTree();
+      await tick();
+    });
+
+    expect(tree.current.workspace).toBeNull();
+    expect(reads().length).toBe(before);
+  });
+
   it("reads both folders of a move again when a file type registers during it", async () => {
     const tree = await openTree(["/p/ws/sub"]);
 
@@ -204,5 +223,35 @@ describe("useWorkspaceTree and plugin file types", () => {
 
     expect(names(tree, "/p/ws")).toEqual(["sub", "a.md", "sketch.excalidraw"]);
     expect(names(tree, "/p/ws/sub")).toEqual(["deep", "plan.excalidraw"]);
+  });
+});
+
+describe("useWorkspaceTree refreshLoadedDirs", () => {
+  it("reads nothing for a folder that is not the open workspace", async () => {
+    const tree = await openTree();
+    const before = reads().length;
+
+    await act(() => tree.current.refreshLoadedDirs("/p/other"));
+
+    expect(reads().length).toBe(before);
+    expect(names(tree, "/p/ws")).toEqual(["sub", "a.md"]);
+  });
+
+  it("drops a refresh that finishes after the workspace closed", async () => {
+    const tree = await openTree();
+    const hold = holdRead("/p/ws");
+    let refreshing: Promise<void> = Promise.resolve();
+    await act(async () => {
+      refreshing = tree.current.refreshLoadedDirs("/p/ws");
+      await hold.started.promise;
+    });
+
+    act(() => tree.current.clearTree());
+    await act(async () => {
+      hold.gate.resolve();
+      await refreshing;
+    });
+
+    expect(tree.current.workspace).toBeNull();
   });
 });
