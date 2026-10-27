@@ -10,8 +10,15 @@ export interface OpenOverlay extends OverlayContribution {
 /** The open plugin overlay: at most one entry. */
 export const overlays = createRegistry<OpenOverlay>();
 
+/** Close any open overlay, whose plugin's cleanups run as it unmounts; true when one was open. */
+export function closeOverlays(): boolean {
+  const open = overlays.list();
+  for (const overlay of open) overlay.close();
+  return open.length > 0;
+}
+
 /** Show `overlay` in place of any open one; the disposer removes it. */
 export function showOverlay(overlay: OpenOverlay): Disposer {
-  for (const open of overlays.list()) open.close();
+  closeOverlays();
   return overlays.register(overlay);
 }

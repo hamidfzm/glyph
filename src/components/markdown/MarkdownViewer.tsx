@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { SearchBar } from "@/components/layout/SearchBar";
 import { useDocumentMarkdown } from "@/hooks/useDocumentMarkdown";
 import { useSearch } from "@/hooks/useSearch";
+import type { FencedBlock } from "@/lib/fencedBlockEdit";
 import { MarkdownContent } from "./MarkdownContent";
 
 interface MarkdownViewerProps {
@@ -16,6 +17,7 @@ interface MarkdownViewerProps {
   onOpenWikilink?: (path: string, heading?: string) => void;
   onOpenRelativeFile?: (path: string) => void;
   onTaskToggle?: (line: number) => void;
+  onFencedBlockEdit?: (block: FencedBlock, code: string) => Promise<boolean>;
   /** Stamp `data-line` on top-level blocks, for split view scroll sync. */
   sourceLines?: boolean;
 }
@@ -31,6 +33,7 @@ export function MarkdownViewer({
   onOpenWikilink,
   onOpenRelativeFile,
   onTaskToggle,
+  onFencedBlockEdit,
   sourceLines,
 }: MarkdownViewerProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -119,6 +122,7 @@ export function MarkdownViewer({
             onOpenWikilink={onOpenWikilink}
             onOpenRelativeFile={onOpenRelativeFile}
             onTaskToggle={onTaskToggle}
+            onFencedBlockEdit={onFencedBlockEdit}
             sourceLines={sourceLines}
           />
         </div>

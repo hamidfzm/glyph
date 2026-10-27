@@ -5,7 +5,11 @@ import { describe, expect, it, vi } from "vitest";
 import { PluginsContext, type PluginsContextValue } from "@/contexts/PluginsContext";
 import { CORE_PLUGINS, coreInstalledPlugin } from "@/lib/plugins/corePlugins";
 import { createPluginHost } from "@/lib/plugins/host";
+import { createRegistry } from "@/lib/plugins/registry";
+import type { FencedRendererContribution, FencedRendererProps } from "@/lib/plugins/types";
+import { pluginsContextValue } from "@/test/fixtures/pluginsContext";
 import { renderInWorkspace } from "@/test/renderInWorkspace";
+import { loadHighlight } from "./lazyHighlight";
 import { MarkdownContent } from "./MarkdownContent";
 
 // The math core plugin, loaded into a real host the way the app loads it.
@@ -26,6 +30,22 @@ async function mathHost() {
 
 async function withMathPlugin() {
   return (await mathHost()).wrapper;
+}
+
+// A plugin fenced renderer for ```demo that records the props it mounts with.
+function demoRenderer() {
+  const fencedRenderers = createRegistry<FencedRendererContribution>();
+  const seen: FencedRendererProps[] = [];
+  fencedRenderers.register({
+    language: "demo",
+    render: { mount: (_el, props) => seen.push(props) },
+  });
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <PluginsContext.Provider value={pluginsContextValue({ fencedRenderers })}>
+      {children}
+    </PluginsContext.Provider>
+  );
+  return { wrapper, seen };
 }
 
 // MarkdownContent is the shared rendering core (frontmatter + ReactMarkdown with
@@ -106,6 +126,32 @@ describe("MarkdownContent", () => {
     );
     await waitFor(() => expect(container.textContent).toContain("\u{1F604}"));
     expect(container.textContent).toContain("Note");
+  });
+
+  it("hands a plugin fenced renderer the block's source lines from the pipeline", async () => {
+    const { wrapper, seen } = demoRenderer();
+    const onFencedBlockEdit = vi.fn().mockResolvedValue(true);
+    render(
+      <MarkdownContent
+        content={"Intro\n\n- item\n\n  ```demo\n  body\n  ```\n"}
+        onFencedBlockEdit={onFencedBlockEdit}
+      />,
+      { wrapper },
+    );
+    await act(() => loadHighlight());
+
+    await seen[0].updateCode?.("next");
+    expect(onFencedBlockEdit).toHaveBeenCalledWith(
+      { startLine: 5, endLine: 7, code: "body" },
+      "next",
+    );
+  });
+
+  it("gives a fenced renderer no updateCode when nothing can save the block", async () => {
+    const { wrapper, seen } = demoRenderer();
+    render(<MarkdownContent content={"```demo\nbody\n```"} />, { wrapper });
+    await act(() => loadHighlight());
+    expect(seen[0].updateCode).toBeUndefined();
   });
 
   it("dispatches a standalone note embed to the embed renderer", async () => {

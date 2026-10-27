@@ -14,6 +14,7 @@ export function FencedMountSlot({
   renderer,
   code,
   openLightbox,
+  updateCode,
 }: FencedRendererProps & { renderer: FencedRendererMount }) {
   const ref = useRef<HTMLDivElement>(null);
   const mountedRenderer = useRef<FencedRendererMount | null>(null);
@@ -31,12 +32,12 @@ export function FencedMountSlot({
     mountedRenderer.current = renderer;
     const bag = new DisposerBag();
     try {
-      renderer.mount(el, { code, openLightbox }, (cleanup) => bag.add(cleanup));
+      renderer.mount(el, { code, openLightbox, updateCode }, (cleanup) => bag.add(cleanup));
     } catch (err) {
       console.error("A plugin fenced renderer threw in mount():", err);
     }
     return () => bag.dispose();
-  }, [renderer, code, openLightbox]);
+  }, [renderer, code, openLightbox, updateCode]);
 
   return <div ref={ref} />;
 }

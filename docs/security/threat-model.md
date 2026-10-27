@@ -746,9 +746,12 @@ the way a renderer-supplied path is.
   the registry entry it fetches itself, so a compromised renderer can install
   a reviewed package but never bytes of its own. The app-context API also lets a full-trust plugin
   read the active document, query the workspace index, open workspace files,
-  and list workspace files in the Files panel. None of that adds a command:
-  index queries go through the `vault_*` commands, which check the workspace
-  grant themselves, and an open is an ordinary `read_file`. The paths a plugin
+  list workspace files in the Files panel, and save a fenced block it renders
+  (`updateCode`) back into the document open in the app. None of that adds a
+  command: index queries go through the `vault_*` commands, which check the
+  workspace grant themselves, an open is an ordinary `read_file`, and a block
+  save is the tab's own save through `write_file` on the tab's path, refused
+  when the text no longer holds the block the plugin rendered. The paths a plugin
   opens or lists are confined to the workspace in the renderer first, as a
   consistency check rather than the boundary. One that declared
   `workspace:write` can also create a file in the workspace and keep a
