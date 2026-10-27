@@ -33,16 +33,18 @@ fn run(paths: &RepoPaths, machine: &Machine) -> SettingsSyncOutcome {
 }
 
 /// Commit `files` (path, text, mode) straight onto the remote's branch, the
-/// way another machine, or a hostile remote, would.
+/// way another machine, or a hostile remote, would; on an empty remote, as
+/// its first commit.
 fn push_raw(cloud: &Cloud, files: &[(&str, &str, u32)]) {
     let repo = Repository::open(&cloud.remote).unwrap();
     let parent = repo
         .find_reference("refs/heads/main")
-        .unwrap()
-        .peel_to_commit()
-        .unwrap();
+        .ok()
+        .map(|r| r.peel_to_commit().unwrap());
     let mut index = git2::Index::new().unwrap();
-    index.read_tree(&parent.tree().unwrap()).unwrap();
+    if let Some(parent) = &parent {
+        index.read_tree(&parent.tree().unwrap()).unwrap();
+    }
     for (path, text, mode) in files {
         index
             .add(&IndexEntry {
@@ -69,7 +71,7 @@ fn push_raw(cloud: &Cloud, files: &[(&str, &str, u32)]) {
         &sig,
         "elsewhere",
         &tree,
-        &[&parent],
+        &parent.iter().collect::<Vec<_>>(),
     )
     .unwrap();
 }
@@ -287,6 +289,112 @@ fn conflicted() -> (Cloud, Machine, RepoPaths) {
     (cloud, b, b_paths)
 }
 
+/// Make the remote refuse every push until the returned guard drops, the
+/// way a protected branch, a read-only token or a dropped connection does.
+fn refusing(cloud: &Cloud) -> impl Drop {
+    struct Unlock(std::path::PathBuf);
+    impl Drop for Unlock {
+        fn drop(&mut self) {
+            fs::remove_file(&self.0).unwrap();
+        }
+    }
+    let lock = cloud.remote.join("refs/heads/main.lock");
+    fs::write(&lock, "").unwrap();
+    Unlock(lock)
+}
+
+#[test]
+fn a_sync_that_fails_after_its_merge_keeps_the_remotes_changes_next_time() {
+    let cloud = Cloud::new();
+    let a = Machine::with_settings(json!({"appearance": {"theme": "dark"}}));
+    let (a_paths, _) = connect(&cloud, "a", &a);
+    let b = Machine::default();
+    let b_paths = join(&cloud, "b", &b);
+    b.set_group("editor", json!({"keymap": "vim"}));
+    run(&b_paths, &b);
+
+    a.set_group("appearance", json!({"theme": "light"}));
+    {
+        let _refused = refusing(&cloud);
+        let err = flow::run(&a_paths, &a, None).unwrap_err();
+        assert!(matches!(err, SyncError::PushRejected(_)), "{err:?}");
+    }
+    // The merge brought B's change in before the push failed; the next run
+    // lands it instead of exporting the older value over it.
+    run(&a_paths, &a);
+    assert_eq!(a.settings_now()["editor"], json!({"keymap": "vim"}));
+    assert!(cloud.file("settings/editor.json").unwrap().contains("vim"));
+    assert!(cloud
+        .file("settings/appearance.json")
+        .unwrap()
+        .contains("light"));
+    run(&b_paths, &b);
+    assert_eq!(b.settings_now()["editor"], json!({"keymap": "vim"}));
+    assert_eq!(b.settings_now()["appearance"]["theme"], json!("light"));
+}
+
+#[test]
+fn a_resolution_whose_push_failed_is_landed_on_the_next_sync() {
+    let (cloud, b, paths) = conflicted();
+    let picks = [ConflictPick {
+        path: "settings/appearance.json".into(),
+        side: ConflictSide::Remote,
+    }];
+    {
+        let _refused = refusing(&cloud);
+        assert!(flow::resolve(&paths, &b, None, &picks).is_err());
+    }
+    run(&paths, &b);
+    assert_eq!(b.settings_now()["appearance"], json!({"theme": "A"}));
+    assert!(cloud
+        .file("settings/appearance.json")
+        .unwrap()
+        .contains("\"A\""));
+}
+
+#[test]
+fn a_setting_changed_back_while_a_sync_runs_stays_changed_back() {
+    let cloud = Cloud::new();
+    let a = Machine::with_settings(json!({"appearance": {"fontSize": 14}}));
+    let (paths, _) = connect(&cloud, "a", &a);
+    a.set_group("appearance", json!({"fontSize": 20}));
+    // The export reads 20; by the time the sync lands the user is back at 14.
+    a.edit_on_read(2, "appearance", json!({"fontSize": 14}));
+    run(&paths, &a);
+    assert_eq!(a.settings_now()["appearance"], json!({"fontSize": 14}));
+}
+
+#[test]
+fn a_plugin_whose_folder_cannot_be_read_is_neither_written_nor_removed() {
+    let cloud = Cloud::new();
+    let a = Machine::default();
+    a.install("p.p", 1);
+    connect(&cloud, "a", &a);
+    let synced = cloud.file("plugins/p.p.json").unwrap();
+    let b = Machine::default();
+    b.install("p.p", 2);
+    let b_paths = join(&cloud, "b", &b);
+
+    b.install_unreadable("p.p", 2);
+    let outcome = run(&b_paths, &b);
+    assert_eq!(cloud.file("plugins/p.p.json"), Some(synced));
+    assert!(outcome.plugins.removals.is_empty());
+}
+
+#[test]
+fn a_remote_with_only_a_readme_gets_this_machines_setup() {
+    let cloud = Cloud::new();
+    push_raw(&cloud, &[("README.md", "# my setup\n", 0o100644)]);
+    let machine = Machine::with_settings(json!({"appearance": {"theme": "dark"}}));
+    let (_, outcome) = connect(&cloud, "a", &machine);
+    assert_eq!(outcome.phase, Phase::Active);
+    assert!(cloud
+        .file("settings/appearance.json")
+        .unwrap()
+        .contains("dark"));
+    assert_eq!(cloud.file("README.md").as_deref(), Some("# my setup\n"));
+}
+
 #[test]
 fn a_conflict_stops_the_sync_until_a_side_is_picked() {
     let (_cloud, b, paths) = conflicted();
@@ -332,7 +440,7 @@ fn keeping_this_machines_side_pushes_it() {
 }
 
 #[test]
-fn a_plugin_removed_elsewhere_is_offered_for_removal_and_never_written_back() {
+fn a_plugin_removed_elsewhere_is_removed_here_and_never_written_back() {
     let cloud = Cloud::new();
     let a = Machine::default();
     a.install("p.p", 1);
@@ -354,6 +462,45 @@ fn a_plugin_removed_elsewhere_is_offered_for_removal_and_never_written_back() {
     b.uninstall("p.p");
     assert!(run(&b_paths, &b).plugins.removals.is_empty());
     assert_eq!(cloud.file("plugins/p.p.json"), None);
+}
+
+#[test]
+fn installing_a_synced_plugin_here_keeps_its_synced_settings() {
+    let cloud = Cloud::new();
+    let a = Machine::default();
+    a.install("p.p", 1);
+    a.set_plugin_setting("p.p", json!({"color": "red"}));
+    let (a_paths, _) = connect(&cloud, "a", &a);
+    let b = Machine::default();
+    let b_paths = join(&cloud, "b", &b);
+
+    // Installed here from the synced setup, with no settings of its own yet.
+    b.install("p.p", 9);
+    run(&b_paths, &b);
+    assert!(cloud.file("plugins/p.p.json").unwrap().contains("red"));
+    assert_eq!(b.plugin_settings_now()["p.p"], json!({"color": "red"}));
+
+    a.set_plugin_setting("p.p", json!({"color": "blue"}));
+    run(&a_paths, &a);
+    run(&b_paths, &b);
+    assert_eq!(b.plugin_settings_now()["p.p"], json!({"color": "blue"}));
+}
+
+#[test]
+fn a_landed_commit_this_clone_no_longer_has_leaves_the_stores_alone() {
+    let cloud = Cloud::new();
+    let a = Machine::with_settings(json!({"appearance": {"theme": "dark"}}));
+    let (paths, _) = connect(&cloud, "a", &a);
+    let mut state = super::config::load_state(&paths).unwrap();
+    state.landed = Some("0".repeat(40));
+    super::config::save_state(&paths, &state).unwrap();
+    a.set_group("appearance", json!({"theme": "light"}));
+    run(&paths, &a);
+    assert_eq!(a.settings_now()["appearance"], json!({"theme": "light"}));
+    assert!(cloud
+        .file("settings/appearance.json")
+        .unwrap()
+        .contains("light"));
 }
 
 #[test]
@@ -598,7 +745,7 @@ mod ipc {
     use super::super::commands::*;
     use super::super::config::{save_config, Phase, RepoPaths};
     use super::super::flow;
-    use super::super::local::TauriLocal;
+    use super::super::local::{LocalSetup, TauriLocal};
     use super::super::state::{Locations, SettingsSyncState};
     use super::super::test_support::Cloud;
     use super::push_raw;
@@ -796,7 +943,14 @@ mod ipc {
         // A change from elsewhere lands in the store and every window hears.
         push_raw(
             &cloud,
-            &[("settings/appearance.json", r#"{"theme":"light"}"#, 0o100644)],
+            &[
+                ("settings/appearance.json", r#"{"theme":"light"}"#, 0o100644),
+                (
+                    "plugins/com.x.demo.json",
+                    r#"{"source":"unknown","version":"1.2.0","settings":{"size":3}}"#,
+                    0o100644,
+                ),
+            ],
         );
         let heard = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
         let sink = heard.clone();
@@ -810,7 +964,23 @@ mod ipc {
             json!({"theme": "light"})
         );
         assert_eq!(heard.lock().unwrap().len(), 1);
+        assert!(heard.lock().unwrap()[0].contains("com.x.demo"));
+        assert_eq!(
+            plugins.get("settings").unwrap()["com.x.demo"],
+            json!({"size": 3})
+        );
         assert!(!cloud.every_blob().contains("NS-"), "no grant, no key");
+
+        // A plugins folder that cannot be listed fails the sync rather than
+        // reading as every plugin uninstalled.
+        let unlistable = TauriLocal::new(
+            app.handle().clone(),
+            Locations {
+                plugins_root: base.join("plugins/com.x.demo/manifest.json"),
+                ..locations.clone()
+            },
+        );
+        assert!(unlistable.installed_plugins().is_err());
 
         call(&webview, "settings_sync_disconnect", json!({})).unwrap();
         assert_eq!(

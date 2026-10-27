@@ -1,5 +1,5 @@
 import { DEFAULT_SETTINGS } from "./settings";
-import { isSafePlainObject } from "./settingsObject";
+import { FORBIDDEN_OBJECT_KEYS, isSafePlainObject } from "./settingsObject";
 
 // Stored settings can arrive from another machine through settings sync, so a
 // value of the wrong type must not reach a component that assumes the schema.
@@ -9,9 +9,15 @@ import { isSafePlainObject } from "./settingsObject";
 
 type Check = (value: unknown) => boolean;
 
+function isBlockLayout(value: unknown): boolean {
+  if (!isSafePlainObject(value)) return false;
+  const height = value.height;
+  return (height === null || typeof height === "number") && typeof value.collapsed === "boolean";
+}
+
 /** Maps keyed by free-form ids, whose defaults list no keys to compare with. */
 const RECORD_VALUES: Record<string, Check> = {
-  "layout.blocks": isSafePlainObject,
+  "layout.blocks": isBlockLayout,
   "keybindings.overrides": (value) => typeof value === "string",
   "ai.apiKeys": (value) => typeof value === "string",
   "ai.agentWriteTools": (value) => typeof value === "boolean",
@@ -30,6 +36,8 @@ function conformObject(
 ): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(stored)) {
+    // Assigned to a plain object, these would replace its prototype.
+    if (FORBIDDEN_OBJECT_KEYS.has(key)) continue;
     if (!Object.hasOwn(defaults, key)) {
       out[key] = value;
       continue;
@@ -44,7 +52,9 @@ function conformValue(value: unknown, fallback: unknown, path: string): unknown 
   const recordCheck = RECORD_VALUES[path];
   if (recordCheck) {
     if (!isSafePlainObject(value)) return undefined;
-    return Object.fromEntries(Object.entries(value).filter(([, v]) => recordCheck(v)));
+    return Object.fromEntries(
+      Object.entries(value).filter(([k, v]) => !FORBIDDEN_OBJECT_KEYS.has(k) && recordCheck(v)),
+    );
   }
   if (isSafePlainObject(fallback)) {
     return isSafePlainObject(value) ? conformObject(value, fallback, `${path}.`) : undefined;

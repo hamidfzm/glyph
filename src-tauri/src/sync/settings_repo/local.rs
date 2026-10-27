@@ -11,7 +11,9 @@ use serde_json::{Map, Value};
 use tauri::{AppHandle, Emitter, Runtime};
 use tauri_plugin_store::{Store, StoreExt};
 
-use crate::commands::plugins::{inspect_dir, read_install_marker, InstallMarker};
+use crate::commands::plugins::{
+    inspect_dir, is_well_formed_id, read_install_marker, InstallMarker,
+};
 use crate::sync::SyncError;
 
 use super::state::Locations;
@@ -28,7 +30,9 @@ const DISABLED_KEY: &str = "disabled";
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct LocalPlugin {
     pub(super) id: String,
-    pub(super) version: String,
+    /// `None` for a folder whose manifest cannot be read right now: still
+    /// installed, so neither written to the repo nor taken out of it.
+    pub(super) version: Option<String>,
     /// `None` for a plugin installed before installs recorded their source.
     pub(super) marker: Option<InstallMarker>,
 }
@@ -47,7 +51,7 @@ pub(super) trait LocalSetup {
     fn plugin_settings(&self) -> Result<Object, SyncError>;
     fn set_plugin_settings(&self, settings: Object) -> Result<(), SyncError>;
     fn disabled_plugins(&self) -> Result<BTreeSet<String>, SyncError>;
-    fn installed_plugins(&self) -> Vec<LocalPlugin>;
+    fn installed_plugins(&self) -> Result<Vec<LocalPlugin>, SyncError>;
     /// Tell every window that an import rewrote settings on disk.
     fn announce(&self, plugin_ids: Vec<String>);
 }
@@ -120,25 +124,32 @@ impl<R: Runtime> LocalSetup for TauriLocal<R> {
     }
 
     /// Manifests only: a sync needs ids and versions, not the entry sources.
-    fn installed_plugins(&self) -> Vec<LocalPlugin> {
-        let Ok(entries) = std::fs::read_dir(&self.locations.plugins_root) else {
-            return Vec::new();
+    /// A folder that cannot be listed fails the sync: reading it as empty
+    /// would remove every plugin from the synced setup.
+    fn installed_plugins(&self) -> Result<Vec<LocalPlugin>, SyncError> {
+        let entries = match std::fs::read_dir(&self.locations.plugins_root) {
+            Ok(entries) => entries,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+            Err(e) => return Err(e.into()),
         };
-        let mut plugins: Vec<LocalPlugin> = entries
-            .flatten()
-            .map(|entry| entry.path())
-            .filter(|dir| dir.is_dir())
-            .filter_map(|dir| {
-                let manifest = inspect_dir(&dir).ok()?;
-                Some(LocalPlugin {
-                    id: manifest.id,
-                    version: manifest.version,
-                    marker: read_install_marker(&dir),
-                })
-            })
-            .collect();
+        let mut plugins = Vec::new();
+        for entry in entries {
+            let dir = entry?.path();
+            // Installs name the folder after the plugin's id.
+            let Some(id) = dir.file_name().and_then(|n| n.to_str()) else {
+                continue;
+            };
+            if !dir.is_dir() || !is_well_formed_id(id) {
+                continue;
+            }
+            plugins.push(LocalPlugin {
+                id: id.to_string(),
+                version: inspect_dir(&dir).ok().map(|manifest| manifest.version),
+                marker: read_install_marker(&dir),
+            });
+        }
         plugins.sort_by(|a, b| a.id.cmp(&b.id));
-        plugins
+        Ok(plugins)
     }
 
     fn announce(&self, plugin_ids: Vec<String>) {

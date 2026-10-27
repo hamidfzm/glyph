@@ -104,11 +104,13 @@ pub(super) fn read_folder(
             folder.skip(path, SkipReason::UnknownName);
             continue;
         };
+        // Every spelling counts as there, so a case variant beside a
+        // plugin's file never reads as that plugin removed.
+        folder.present.insert(stem.to_string());
         if !seen.insert(stem.to_ascii_lowercase()) {
             folder.skip(path, SkipReason::DuplicateName);
             continue;
         }
-        folder.present.insert(stem.to_string());
         if folder.files.len() >= limit {
             folder.skip(path, SkipReason::TooMany);
             continue;
@@ -133,12 +135,17 @@ fn read_object(repo: &Repository, item: &TreeEntry<'_>) -> Result<Object, SkipRe
     if item.kind() != Some(ObjectType::Blob) || !FILE_MODES.contains(&item.filemode()) {
         return Err(SkipReason::NotAFile);
     }
+    // The header gives the size without reading the blob into memory.
+    let (size, _) = repo
+        .odb()
+        .and_then(|odb| odb.read_header(item.id()))
+        .map_err(|_| SkipReason::NotAFile)?;
+    if size > MAX_FILE_BYTES {
+        return Err(SkipReason::TooLarge);
+    }
     let blob = repo
         .find_blob(item.id())
         .map_err(|_| SkipReason::NotAFile)?;
-    if blob.size() > MAX_FILE_BYTES {
-        return Err(SkipReason::TooLarge);
-    }
     match serde_json::from_slice::<Value>(blob.content()) {
         Ok(Value::Object(object)) => Ok(object),
         Ok(_) => Err(SkipReason::NotAnObject),
@@ -156,7 +163,8 @@ pub(super) fn write_object(
 ) -> Result<(), SyncError> {
     let target = plain_folder(repo_dir, dir)?.join(format!("{stem}.json"));
     match fs::symlink_metadata(&target) {
-        Ok(meta) if !meta.is_file() => return Err(not_plain(&target)),
+        Ok(meta) if meta.file_type().is_symlink() => return Err(not_plain(&target)),
+        Ok(meta) if meta.is_dir() => fs::remove_dir_all(&target)?,
         Ok(_) | Err(_) => {}
     }
     fs::write(&target, canonical_json(value))?;
@@ -167,31 +175,35 @@ pub(super) fn write_object(
 pub(super) fn remove_object(repo_dir: &Path, dir: &str, stem: &str) -> Result<(), SyncError> {
     let folder = repo_dir.join(dir);
     match fs::symlink_metadata(&folder) {
+        Ok(meta) if meta.file_type().is_symlink() => return Err(not_plain(&folder)),
         Ok(meta) if meta.is_dir() => {}
-        Ok(_) => return Err(not_plain(&folder)),
-        Err(_) => return Ok(()),
+        // Missing, or a file in the folder's place: no entry to remove.
+        _ => return Ok(()),
     }
     let target = folder.join(format!("{stem}.json"));
     match fs::symlink_metadata(&target) {
-        Ok(meta) if meta.is_file() => fs::remove_file(&target).map_err(SyncError::from),
-        Ok(_) => Err(not_plain(&target)),
+        Ok(meta) if meta.file_type().is_symlink() => Err(not_plain(&target)),
+        Ok(meta) if meta.is_dir() => fs::remove_dir_all(&target).map_err(SyncError::from),
+        Ok(_) => fs::remove_file(&target).map_err(SyncError::from),
         Err(_) => Ok(()),
     }
 }
 
-/// `repo_dir/dir`, created when missing. A link or a file there is refused:
-/// a write through it would land wherever it points.
+/// `repo_dir/dir`, created when missing. A link there is refused: a write
+/// through it would land wherever it points. The clone never checks out a
+/// link, so a plain file in the folder's place came from a remote and goes,
+/// as does a folder where an entry belongs: either would block every export.
 fn plain_folder(repo_dir: &Path, dir: &str) -> Result<PathBuf, SyncError> {
     let folder = repo_dir.join(dir);
     match fs::symlink_metadata(&folder) {
-        Ok(meta) if meta.is_dir() => Ok(folder),
-        Ok(_) => Err(not_plain(&folder)),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            fs::create_dir(&folder)?;
-            Ok(folder)
-        }
-        Err(e) => Err(e.into()),
+        Ok(meta) if meta.file_type().is_symlink() => return Err(not_plain(&folder)),
+        Ok(meta) if meta.is_dir() => return Ok(folder),
+        Ok(_) => fs::remove_file(&folder)?,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => return Err(e.into()),
     }
+    fs::create_dir(&folder)?;
+    Ok(folder)
 }
 
 fn not_plain(path: &Path) -> SyncError {
@@ -293,7 +305,14 @@ mod tests {
         );
         assert_eq!(
             folder.present.iter().collect::<Vec<_>>(),
-            ["APPEARANCE", "editor", "layout", "markdown", "print"],
+            [
+                "APPEARANCE",
+                "appearance",
+                "editor",
+                "layout",
+                "markdown",
+                "print"
+            ],
             "an unreadable file is still there"
         );
         let reasons: BTreeMap<String, SkipReason> = folder
@@ -340,6 +359,20 @@ mod tests {
     }
 
     #[test]
+    fn a_head_that_cannot_be_read_is_an_error() {
+        let tmp = TempDir::new().unwrap();
+        Repository::init(tmp.path()).unwrap();
+        fs::write(
+            tmp.path().join(".git/HEAD"),
+            "not a ref
+",
+        )
+        .unwrap();
+        let repo = Repository::open(tmp.path()).unwrap();
+        assert!(head_tree(&repo).is_err());
+    }
+
+    #[test]
     fn an_unborn_repo_and_a_missing_folder_read_as_empty() {
         let tmp = TempDir::new().unwrap();
         let repo = Repository::init(tmp.path()).unwrap();
@@ -374,25 +407,20 @@ mod tests {
     }
 
     #[test]
-    fn a_file_or_folder_in_the_wrong_shape_is_refused() {
+    fn a_file_or_folder_a_remote_left_in_the_way_gives_way() {
         let tmp = TempDir::new().unwrap();
         fs::write(tmp.path().join(SETTINGS_DIR), "a file").unwrap();
-        let err = write_object(tmp.path(), SETTINGS_DIR, "x", &Object::new()).unwrap_err();
-        assert!(matches!(err, SyncError::InvalidState(_)), "{err:?}");
-        assert!(matches!(
-            remove_object(tmp.path(), SETTINGS_DIR, "x"),
-            Err(SyncError::InvalidState(_))
-        ));
+        remove_object(tmp.path(), SETTINGS_DIR, "x").unwrap();
+        write_object(tmp.path(), SETTINGS_DIR, "x", &Object::new()).unwrap();
+        assert!(tmp.path().join("settings/x.json").is_file());
 
+        fs::create_dir_all(tmp.path().join("plugins/a.b.json/inner")).unwrap();
+        write_object(tmp.path(), PLUGINS_DIR, "a.b", &Object::new()).unwrap();
+        assert!(tmp.path().join("plugins/a.b.json").is_file());
+        fs::remove_file(tmp.path().join("plugins/a.b.json")).unwrap();
         fs::create_dir_all(tmp.path().join("plugins/a.b.json")).unwrap();
-        assert!(matches!(
-            write_object(tmp.path(), PLUGINS_DIR, "a.b", &Object::new()),
-            Err(SyncError::InvalidState(_))
-        ));
-        assert!(matches!(
-            remove_object(tmp.path(), PLUGINS_DIR, "a.b"),
-            Err(SyncError::InvalidState(_))
-        ));
+        remove_object(tmp.path(), PLUGINS_DIR, "a.b").unwrap();
+        assert!(!tmp.path().join("plugins/a.b.json").exists());
     }
 
     #[cfg(unix)]

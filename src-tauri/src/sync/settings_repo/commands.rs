@@ -245,7 +245,11 @@ pub async fn settings_sync_disconnect<R: Runtime>(
     app: AppHandle<R>,
     state: State<'_, SettingsSyncState>,
 ) -> Result<(), SyncError> {
-    on_repo(app, &state, true, |paths, _, _| flow::forget(paths)).await?;
-    state.clear_token();
-    Ok(())
+    let forgotten = on_repo(app, &state, true, |paths, _, _| flow::forget(paths)).await;
+    // A folder that would not go still means disconnected: the token goes
+    // either way. Only a refusal while another operation runs keeps it.
+    if !matches!(forgotten, Err(SyncError::Busy)) {
+        state.clear_token();
+    }
+    forgotten
 }

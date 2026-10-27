@@ -134,11 +134,22 @@ impl Machine {
         installed.retain(|p| p.id != id);
         installed.push(LocalPlugin {
             id: id.into(),
-            version: "1.0.0".into(),
+            version: Some("1.0.0".into()),
             marker: Some(InstallMarker {
                 source: InstallSource::Marketplace,
                 installed_at,
             }),
+        });
+    }
+
+    /// A plugin folder whose manifest cannot be read right now.
+    pub(super) fn install_unreadable(&self, id: &str, installed_at: u64) {
+        self.install(id, installed_at);
+        let mut installed = self.installed.lock().unwrap();
+        installed.iter_mut().for_each(|p| {
+            if p.id == id {
+                p.version = None;
+            }
         });
     }
 
@@ -191,10 +202,10 @@ impl LocalSetup for Machine {
         Ok(self.disabled.lock().unwrap().clone())
     }
 
-    fn installed_plugins(&self) -> Vec<LocalPlugin> {
+    fn installed_plugins(&self) -> Result<Vec<LocalPlugin>, SyncError> {
         let mut installed = self.installed.lock().unwrap().clone();
         installed.sort_by(|a, b| a.id.cmp(&b.id));
-        installed
+        Ok(installed)
     }
 
     fn announce(&self, plugin_ids: Vec<String>) {

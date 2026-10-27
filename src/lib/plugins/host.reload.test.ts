@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createPluginHost } from "@/lib/plugins/host";
 import type { PluginModule } from "@/lib/plugins/types";
 import { expectConsole } from "@/test/consoleGuard";
-import { importerFor, installed } from "@/test/fixtures/pluginHost";
+import { deferredImporterFor, importerFor, installed } from "@/test/fixtures/pluginHost";
 
 // A settings sync rewrites plugins.json under loaded plugins; reloading them
 // is how each one reads its new settings.
@@ -47,5 +47,22 @@ describe("PluginHost.reload", () => {
     await host.reload(["com.x.demo", "com.x.other"]);
 
     expect(other).toHaveBeenCalledTimes(2);
+  });
+
+  it("leaves a plugin alone while a newer load of it is in flight", async () => {
+    const host = createPluginHost(vi.fn());
+    const v1 = vi.fn();
+    await host.load(installed(), importerFor({ activate: v1 }));
+    const v2 = vi.fn();
+    const update = deferredImporterFor({ activate: v2 });
+    const landing = host.load(installed({ version: "2.0.0" }), update.importer);
+
+    await host.reload(["com.x.demo"]);
+    update.resolve();
+    expect(await landing).toBe(true);
+
+    expect(v1).toHaveBeenCalledTimes(1);
+    expect(v2).toHaveBeenCalledTimes(1);
+    expect(host.listLoaded()[0].version).toBe("2.0.0");
   });
 });

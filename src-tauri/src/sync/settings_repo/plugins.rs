@@ -20,7 +20,7 @@ use crate::commands::plugins::{is_well_formed_id, InstallSource};
 
 use super::files::{Folder, SkipReason, SkippedFile};
 use super::local::{LocalPlugin, Object};
-use super::settings::three_way;
+use super::settings::{three_way, without_prototype_keys};
 
 const CORE_PREFIX: &str = "glyph.core.";
 /// Most plugin files an import reads.
@@ -81,24 +81,30 @@ fn is_core(id: &str) -> bool {
 }
 
 /// The writes and removals that bring `plugins/` in line with this machine.
-/// `head` names the plugin files the repo held before the sync.
+/// `head` is what the repo held before the sync.
 pub(super) fn export(
     installed: &[LocalPlugin],
     disabled: &BTreeSet<String>,
     plugin_settings: &Object,
-    head: &BTreeSet<String>,
+    head: &Pulled,
     state: &SyncedInstalls,
     mode: Mode,
 ) -> Export {
     let mut out = Export::default();
     let installed_ids: BTreeSet<&str> = installed.iter().map(|p| p.id.as_str()).collect();
     for plugin in installed {
+        let Some(version) = &plugin.version else {
+            continue;
+        };
         let removed_elsewhere = mode == Mode::Merge
             && state.synced.get(&plugin.id) == Some(&plugin.installed_at())
-            && !head.contains(&plugin.id);
+            && !head.present.contains(&plugin.id);
         if !removed_elsewhere {
-            out.writes
-                .push((plugin.id.clone(), entry(plugin, disabled, plugin_settings)));
+            let synced_settings = head.settings.get(&plugin.id);
+            out.writes.push((
+                plugin.id.clone(),
+                entry(plugin, version, disabled, plugin_settings, synced_settings),
+            ));
         }
     }
     for (id, value) in plugin_settings {
@@ -113,7 +119,7 @@ pub(super) fn export(
         }
     }
     let written: BTreeSet<&str> = out.writes.iter().map(|(id, _)| id.as_str()).collect();
-    for id in head {
+    for id in &head.present {
         let uninstalled_here =
             !is_core(id) && !installed_ids.contains(id.as_str()) && state.synced.contains_key(id);
         let replaced = mode == Mode::Replace && !written.contains(id.as_str());
@@ -138,23 +144,39 @@ pub(super) fn restore(
         .iter()
         .filter(|p| previous.synced.get(&p.id) != Some(&p.installed_at()))
         .filter(|p| !present.contains(&p.id))
-        .map(|p| (p.id.clone(), entry(p, disabled, plugin_settings)))
+        .filter_map(|p| {
+            let version = p.version.as_deref()?;
+            Some((
+                p.id.clone(),
+                entry(p, version, disabled, plugin_settings, None),
+            ))
+        })
         .collect()
 }
 
-fn entry(plugin: &LocalPlugin, disabled: &BTreeSet<String>, plugin_settings: &Object) -> Object {
+/// A plugin's file. A plugin with no settings of its own here, one just
+/// installed from the synced setup, carries the repo's `synced_settings`
+/// rather than writing an empty map over them.
+fn entry(
+    plugin: &LocalPlugin,
+    version: &str,
+    disabled: &BTreeSet<String>,
+    plugin_settings: &Object,
+    synced_settings: Option<&Object>,
+) -> Object {
     let source = match plugin.marker.map(|m| m.source) {
         Some(InstallSource::Marketplace) => PluginSource::Marketplace,
         Some(InstallSource::Local) => PluginSource::Local,
         None => PluginSource::Unknown,
     };
-    let settings = match plugin_settings.get(&plugin.id) {
-        Some(Value::Object(settings)) => Value::Object(settings.clone()),
+    let settings = match (plugin_settings.get(&plugin.id), synced_settings) {
+        (Some(Value::Object(settings)), _) => Value::Object(settings.clone()),
+        (_, Some(synced)) => Value::Object(synced.clone()),
         _ => json!({}),
     };
     object(json!({
         "source": source,
-        "version": plugin.version,
+        "version": version,
         "enabled": !disabled.contains(&plugin.id),
         "settings": settings,
     }))
@@ -228,13 +250,16 @@ pub(super) fn parse(folder: Folder) -> Pulled {
                 enabled: entry.enabled,
             });
         }
-        pulled.settings.insert(id, entry.settings);
+        pulled
+            .settings
+            .insert(id, without_prototype_keys(&entry.settings));
     }
     pulled
 }
 
 /// Plugin settings after a pull, three-way per plugin like settings, and
-/// the ids whose settings changed.
+/// the ids whose settings changed. A plugin with no settings here exported
+/// the repo's, so it counts as holding those.
 pub(super) fn import_settings(
     store: &Object,
     base: &BTreeMap<String, Object>,
@@ -245,7 +270,8 @@ pub(super) fn import_settings(
     for (id, settings) in merged {
         let base_value = base.get(id).map(|b| Value::Object(b.clone()));
         let merged_value = Value::Object(settings.clone());
-        let value = three_way(base_value.as_ref(), store.get(id), Some(&merged_value));
+        let local = store.get(id).or(base_value.as_ref());
+        let value = three_way(base_value.as_ref(), local, Some(&merged_value));
         if value.as_ref() != store.get(id) {
             if let Some(value) = value {
                 next.insert(id.clone(), value);
@@ -320,7 +346,7 @@ mod tests {
     fn plugin(id: &str, installed_at: u64) -> LocalPlugin {
         LocalPlugin {
             id: id.into(),
-            version: "1.0.0".into(),
+            version: Some("1.0.0".into()),
             marker: Some(InstallMarker {
                 source: InstallSource::Marketplace,
                 installed_at,
@@ -354,7 +380,7 @@ mod tests {
             installed,
             &BTreeSet::new(),
             &Object::new(),
-            &head(head_ids),
+            &pulled(head_ids),
             state,
             Mode::Merge,
         )
@@ -429,7 +455,7 @@ mod tests {
             &[plugin("a.a", 1)],
             &BTreeSet::new(),
             &Object::new(),
-            &head(&["a.a", "b.b", "glyph.core.theme-presets"]),
+            &pulled(&["a.a", "b.b", "glyph.core.theme-presets"]),
             &synced(&[("a.a", 1)]),
             Mode::Replace,
         );
@@ -452,7 +478,7 @@ mod tests {
             &[plugin("a.a", 1), unmarked],
             &disabled,
             &settings,
-            &BTreeSet::new(),
+            &Pulled::default(),
             &SyncedInstalls::default(),
             Mode::Merge,
         );
@@ -476,6 +502,29 @@ mod tests {
     }
 
     #[test]
+    fn a_folder_install_and_a_non_object_setting_are_told_apart() {
+        let local = LocalPlugin {
+            marker: Some(InstallMarker {
+                source: InstallSource::Local,
+                installed_at: 1,
+            }),
+            ..plugin("l.l", 1)
+        };
+        let mut settings = Object::new();
+        settings.insert("glyph.core.x".into(), json!(5));
+        let out = export(
+            &[local],
+            &BTreeSet::new(),
+            &settings,
+            &Pulled::default(),
+            &SyncedInstalls::default(),
+            Mode::Merge,
+        );
+        assert_eq!(written(&out), ["l.l"]);
+        assert_eq!(out.writes[0].1["source"], json!("local"));
+    }
+
+    #[test]
     fn parsing_keeps_valid_entries_and_reports_the_rest() {
         let mut files = BTreeMap::new();
         files.insert(
@@ -494,7 +543,7 @@ mod tests {
         );
         files.insert(
             "glyph.core.theme-presets".to_string(),
-            object(json!({"source": "core", "settings": {"preset": "nord"}})),
+            object(json!({"source": "core", "settings": {"preset": "nord", "__proto__": {}}})),
         );
         let present = files.keys().cloned().collect();
         let pulled = parse(Folder {
@@ -514,6 +563,10 @@ mod tests {
         assert_eq!(
             pulled.settings.keys().collect::<Vec<_>>(),
             ["a.a", "glyph.core.theme-presets"]
+        );
+        assert_eq!(
+            Value::Object(pulled.settings["glyph.core.theme-presets"].clone()),
+            json!({"preset": "nord"})
         );
         let bad: Vec<&str> = pulled.skipped.iter().map(|s| s.path.as_str()).collect();
         assert_eq!(

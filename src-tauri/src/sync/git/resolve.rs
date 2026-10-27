@@ -1,5 +1,6 @@
 //! Finishing a merge that [`GitBackend::sync`] stopped on a conflict, from
-//! the user's pick per file, and the remote probe a first connect runs.
+//! the user's pick per file, a commit of the working tree on its own, and the
+//! remote probe a first connect runs.
 //!
 //! A resolution never writes a file itself: it picks a side's index entry,
 //! commits with both parents, and lets libgit2's checkout write the picked
@@ -15,7 +16,7 @@ use serde::Deserialize;
 use crate::sync::{BackendKind, SyncError, SyncResult};
 
 use super::backend::GitBackend;
-use super::{merge_commit_message, now_unix, ORIGIN};
+use super::{auto_commit_message, merge_commit_message, now_unix, ORIGIN};
 
 /// Which version of a conflicted file the user keeps.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
@@ -41,13 +42,33 @@ const GITLINK_MODE: u32 = 0o160000;
 const STAGE_MASK: u16 = 0x3000;
 
 impl GitBackend {
-    /// Fetch, then report whether the remote has the configured branch.
-    pub fn remote_branch_exists(&self) -> Result<bool, SyncError> {
+    /// Fetch, then report whether the remote's branch holds any of `paths`.
+    /// A missing branch, or one with only a README, holds none.
+    pub fn remote_holds_any(&self, paths: &[&str]) -> Result<bool, SyncError> {
         let repo = self.open_repo()?;
         self.fetch_remote(&repo)?;
         let upstream = format!("refs/remotes/{ORIGIN}/{}", self.config.remote_branch);
-        let exists = repo.find_reference(&upstream).is_ok();
-        Ok(exists)
+        let Ok(reference) = repo.find_reference(&upstream) else {
+            return Ok(false);
+        };
+        let tree = reference
+            .peel_to_tree()
+            .map_err(|e| SyncError::Backend(e.message().to_string()))?;
+        let holds = paths.iter().any(|p| tree.get_path(Path::new(p)).is_ok());
+        Ok(holds)
+    }
+
+    /// Stage and commit the working tree, with nothing fetched or pushed.
+    /// `false` when there was nothing to commit.
+    pub fn commit_all(&self) -> Result<bool, SyncError> {
+        let repo = self.open_repo()?;
+        if !Self::stage_all(&repo)? {
+            return Ok(false);
+        }
+        let parents = Self::head_commit(&repo)?.into_iter().collect();
+        let message = auto_commit_message(&repo)?;
+        Self::commit_index(&repo, &self.signature()?, &message, parents)?;
+        Ok(true)
     }
 
     /// Complete the merge in progress with one pick for every conflicted
@@ -340,6 +361,62 @@ mod tests {
     }
 
     #[test]
+    fn a_submodule_side_of_a_conflict_is_refused() {
+        let f = Fixture::new();
+        f.write_file(
+            "seed.md", "seed
+",
+        );
+        f.backend().sync(None).unwrap();
+        let repo = Repository::open(&f.workspace).unwrap();
+        let head = repo.head().unwrap().target().unwrap();
+        // A merge in progress whose one conflict has a submodule on this
+        // machine's side and a file on the other.
+        fs::write(
+            f.workspace.join(".git/MERGE_HEAD"),
+            format!(
+                "{head}
+"
+            ),
+        )
+        .unwrap();
+        let blob = repo
+            .blob(
+                b"a file
+",
+            )
+            .unwrap();
+        let mut index = repo.index().unwrap();
+        for (stage, mode, id) in [(2u16, GITLINK_MODE, head), (3, 0o100644, blob)] {
+            index
+                .add(&IndexEntry {
+                    ctime: git2::IndexTime::new(0, 0),
+                    mtime: git2::IndexTime::new(0, 0),
+                    dev: 0,
+                    ino: 0,
+                    mode,
+                    uid: 0,
+                    gid: 0,
+                    file_size: 0,
+                    id,
+                    flags: stage << 12,
+                    flags_extended: 0,
+                    path: b"sub".to_vec(),
+                })
+                .unwrap();
+        }
+        index.write().unwrap();
+        assert_eq!(f.backend().status().unwrap().conflicts, ["sub"]);
+
+        let err = f
+            .backend()
+            .resolve_conflicts(&[pick("sub", ConflictSide::Local)])
+            .unwrap_err();
+        assert!(matches!(err, SyncError::InvalidState(_)), "{err:?}");
+        assert_eq!(f.backend().status().unwrap().conflicts, ["sub"]);
+    }
+
+    #[test]
     fn resolving_without_a_merge_in_progress_is_refused() {
         let f = Fixture::new();
         f.write_file("a.md", "a\n");
@@ -349,12 +426,27 @@ mod tests {
     }
 
     #[test]
-    fn remote_branch_exists_tells_an_empty_remote_from_one_with_history() {
+    fn remote_holds_any_looks_for_the_paths_in_the_remote_branch() {
         let f = Fixture::new();
-        assert!(!f.backend().remote_branch_exists().unwrap());
-        f.write_file("a.md", "a\n");
+        assert!(!f.backend().remote_holds_any(&["settings"]).unwrap());
+        f.write_file("README.md", "hi\n");
         f.backend().sync(None).unwrap();
         let (_, other_backend) = f.other_clone("other");
-        assert!(other_backend.remote_branch_exists().unwrap());
+        assert!(!other_backend.remote_holds_any(&["settings"]).unwrap());
+        assert!(other_backend
+            .remote_holds_any(&["settings", "README.md"])
+            .unwrap());
+    }
+
+    #[test]
+    fn commit_all_commits_without_touching_the_remote() {
+        let f = Fixture::new();
+        assert!(!f.backend().commit_all().unwrap());
+        f.write_file("a.md", "a\n");
+        assert!(f.backend().commit_all().unwrap());
+        assert!(f.backend().status().unwrap().clean);
+        assert!(!f.backend().commit_all().unwrap());
+        let remote = Repository::open(&f.remote).unwrap();
+        assert!(remote.find_reference("refs/heads/main").is_err());
     }
 }

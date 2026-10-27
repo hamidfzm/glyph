@@ -14,9 +14,9 @@ use serde::{Deserialize, Serialize};
 use crate::sync::git::{self, BoundToken, ConflictPick, GitBackend};
 use crate::sync::{StatusReport, SyncBackend, SyncError, SyncResult};
 
-use super::config::{load_config, read_json, save_config, Phase, RepoPaths, SettingsRepoConfig};
-use super::exchange::{finish, snapshot, write_export, Landing};
-use super::files::{self, SkippedFile, PLUGINS_DIR};
+use super::config::{load_config, load_state, save_config, Phase, RepoPaths, SettingsRepoConfig};
+use super::exchange::{catch_up, finish, mark_landed, snapshot, write_export, Landing};
+use super::files::{self, SkippedFile, PLUGINS_DIR, SETTINGS_DIR};
 use super::local::{LocalPlugin, LocalSetup};
 use super::plugins::{self, Mode, PluginPlan, SyncedInstalls};
 
@@ -75,7 +75,7 @@ fn connect_fresh(
 ) -> Result<SettingsSyncOutcome, SyncError> {
     fresh_clone(paths, &config)?;
     let backend = backend(paths, &config, token);
-    if backend.remote_branch_exists()? {
+    if backend.remote_holds_any(&[SETTINGS_DIR, PLUGINS_DIR])? {
         save_config(paths, &with_phase(config, Phase::Choosing))?;
         return Ok(SettingsSyncOutcome {
             phase: Phase::Choosing,
@@ -111,7 +111,7 @@ pub(super) fn choose(
     let outcome = match choice {
         SetupChoice::UseSynced => {
             let repo = backend.open_repo()?;
-            let installed = local.installed_plugins();
+            let installed = local.installed_plugins()?;
             let fresh = SyncedInstalls::default();
             finish(
                 paths,
@@ -143,11 +143,18 @@ pub(super) fn run(
     if !pending.is_empty() {
         return Err(SyncError::Conflict(pending));
     }
+    let mut state = load_state(paths)?;
+    catch_up(paths, local, &repo, &mut state)?;
+    let head = snapshot(&repo)?;
+    let installed = local.installed_plugins()?;
+    let previous = state.installs.clone();
+    write_export(paths, local, &head, &installed, &previous, Mode::Merge)?;
+    let committed = backend.commit_all()?;
+    // The stores match the export from here on, whatever the network does.
+    mark_landed(paths, &repo, &mut state)?;
     let base = snapshot(&repo)?;
-    let previous = load_state(paths)?;
-    let installed = local.installed_plugins();
-    write_export(paths, local, &base, &installed, &previous, Mode::Merge)?;
     let mut result = backend.sync(None)?;
+    result.committed_count += u32::from(committed);
     if result.conflicts.is_empty() {
         result =
             restore_new_installs(paths, local, &repo, &backend, &installed, &previous, result)?;
@@ -204,8 +211,8 @@ pub(super) fn resolve(
     // HEAD is still this machine's side of the merge: the export the
     // conflict came from, so edits made since then are kept.
     let base = snapshot(&repo)?;
-    let previous = load_state(paths)?;
-    let installed = local.installed_plugins();
+    let previous = load_state(paths)?.installs;
+    let installed = local.installed_plugins()?;
     let result = backend.resolve_conflicts(picks)?;
     let landing = Landing::Merge(&base);
     finish(paths, local, &repo, &installed, &previous, result, landing)
@@ -232,8 +239,8 @@ pub(super) fn plugin_plan(
     let snapshot = snapshot(&repo)?;
     Ok(plugins::plan(
         &snapshot.plugins,
-        &local.installed_plugins(),
-        &load_state(paths)?,
+        &local.installed_plugins()?,
+        &load_state(paths)?.installs,
     ))
 }
 
@@ -251,7 +258,7 @@ fn upload(
 ) -> Result<SettingsSyncOutcome, SyncError> {
     let repo = backend.open_repo()?;
     let head = snapshot(&repo)?;
-    let installed = local.installed_plugins();
+    let installed = local.installed_plugins()?;
     let fresh = SyncedInstalls::default();
     write_export(paths, local, &head, &installed, &fresh, Mode::Replace)?;
     let result = backend.sync(None)?;
@@ -278,10 +285,6 @@ fn active_config(paths: &RepoPaths) -> Result<SettingsRepoConfig, SyncError> {
         ));
     }
     Ok(config)
-}
-
-fn load_state(paths: &RepoPaths) -> Result<SyncedInstalls, SyncError> {
-    Ok(read_json(&paths.state())?.unwrap_or_default())
 }
 
 fn backend(

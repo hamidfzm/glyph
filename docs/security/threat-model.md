@@ -523,11 +523,19 @@ backend decides both what leaves the machine and what lands, from one list in
   offered for install from the registry, checked against its hash, and asks
   for consent on this machine like any install; one installed from a folder
   elsewhere is only listed. An enable that would need consent waits for the
-  user. A plugin is offered for removal only when the repo lost the very
-  install this machine synced, which the install marker tells apart from a
-  reinstall.
+  user. A plugin is uninstalled here, without a prompt, only when the repo
+  lost the very install this machine synced, which the install marker tells
+  apart from a reinstall; a plugin folder that cannot be read counts as
+  installed, and a plugin folder that cannot be listed fails the sync. A
+  plugin the synced setup has turned off is turned off here the same way.
 - **A refused push is an error.** libgit2 reports a remote's refusal of a ref
   only through a callback; the push reads it there, for workspace sync too.
+- **A failed sync never reverts the remote.** `state.json` names the commit
+  the stores last matched, and it moves to the export as soon as the export
+  is committed, before anything reaches the network. When a push fails after
+  a merge, the next sync first lands the merged commit against it, so the
+  export that follows carries the other machines' changes instead of writing
+  the older values back over them.
 
 ## MCP server (`glyph mcp`)
 
@@ -823,8 +831,12 @@ the way a renderer-supplied path is.
   disabled list from that copy.
 - **Plugin settings sync as they are.** A plugin that keeps a secret in
   `ctx.settings` sends it to the settings repo with the rest of its settings.
+  A plugin save reads the store and writes it back, two IPC calls, so like
+  app settings it can straddle an import and push the older value next time.
 - **The remote shapes the portable settings.** Anyone who can write to the
   settings repo can change this machine's theme, hotkeys, editor and Markdown
-  options, AI provider and model, and which core plugins run. The never-sync
-  list keeps paths, secrets, the AI endpoint and capability switches out of
-  its reach.
+  options, AI provider and model, and which core plugins run. They can also
+  uninstall or turn off every synced plugin on every machine, and rewrite an
+  installed plugin's settings, an endpoint one keeps there included. The
+  never-sync list keeps paths, secrets, the AI endpoint and capability
+  switches out of its reach; plugin code and permissions never come from it.

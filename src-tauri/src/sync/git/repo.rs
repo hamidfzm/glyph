@@ -21,10 +21,10 @@ pub fn init_repo(path: &Path, default_branch: &str) -> Result<PathBuf, SyncError
     Ok(path.to_path_buf())
 }
 
-/// Make checkouts of `path` write every blob as a plain file with the bytes
-/// it holds: no symbolic links (a link from a remote would lead a later write
-/// anywhere on disk) and no line-ending conversion (an export must compare
-/// byte for byte with what it last wrote).
+/// Make checkouts of `path` write every blob as a plain file: no symbolic
+/// links (a link from a remote would lead a later write anywhere on disk),
+/// and no line-ending conversion from this machine's git config. A
+/// `.gitattributes` in the tree can still ask for one.
 pub fn pin_checkout_config(path: &Path) -> Result<(), SyncError> {
     let repo = Repository::open(path).map_err(|e| SyncError::Backend(e.message().to_string()))?;
     let mut config = repo

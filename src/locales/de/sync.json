@@ -87,7 +87,7 @@
     "busy": "Eine Synchronisierung läuft bereits. Versuche es erneut, wenn sie fertig ist."
   },
   "settingsRepo": {
-    "description": "Bewahre dein Glyph-Setup in einem eigenen Git-Repository auf und nutze es auf jedem Rechner, den du verbindest: Einstellungen, Tastenkürzel und die Plugins, die du installiert hast. API-Schlüssel, zuletzt geöffnete Dateien, Plugin-Berechtigungen und die Zustimmung zu Fehlerberichten bleiben auf jedem Rechner.",
+    "description": "Bewahre dein Glyph-Setup in einem eigenen Git-Repository auf und nutze es auf jedem Rechner, den du verbindest: Einstellungen, Tastenkürzel und die Plugins, die du installiert hast, samt ihren Einstellungen. Ein Plugin, das auf einem Rechner entfernt oder ausgeschaltet wird, wird es auch auf den anderen. API-Schlüssel, zuletzt geöffnete Dateien, Plugin-Berechtigungen und die Zustimmung zu Fehlerberichten bleiben auf jedem Rechner.",
     "remotePlaceholder": "https://github.com/du/glyph-setup.git",
     "tokenNote": "Im Schlüsselbund deines Betriebssystems gespeichert, nur für das Einstellungs-Repository.",
     "connect": "Verbinden",
@@ -100,7 +100,7 @@
       "useSynced": "Synchronisiertes Setup verwenden",
       "useSyncedHint": "Synchronisiertes Setup verwenden: ersetzt die Einstellungen dieses Rechners. Plugins, die nur hier installiert sind, bleiben und werden Teil des synchronisierten Setups.",
       "replaceSynced": "Durch das Setup dieses Rechners ersetzen",
-      "replaceSyncedHint": "Durch das Setup dieses Rechners ersetzen: Das Repository behält seinen Verlauf, und das synchronisierte Setup wird zu dem dieses Rechners."
+      "replaceSyncedHint": "Durch das Setup dieses Rechners ersetzen: Das Repository behält seinen Verlauf, und das synchronisierte Setup wird zu dem dieses Rechners. Plugins, die dieser Rechner nicht hat, verlassen das synchronisierte Setup und werden bei der nächsten Synchronisierung von den anderen Rechnern entfernt."
     },
     "conflicts": {
       "title": "Auf beiden Rechnern geändert",

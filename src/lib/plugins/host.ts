@@ -97,6 +97,8 @@ interface LoadedPlugin {
   /** What it was loaded from, for a reload. */
   source: InstalledPlugin;
   importer?: ModuleImporter;
+  /** The load generation that committed it. */
+  generation: number | undefined;
 }
 
 /**
@@ -263,6 +265,7 @@ export function createPluginHost(
           module: { activate: () => {} },
           bag,
           source: plugin,
+          generation,
         });
         return true;
       }
@@ -314,6 +317,7 @@ export function createPluginHost(
         bag,
         source: plugin,
         importer,
+        generation,
       });
       return true;
     },
@@ -329,7 +333,9 @@ export function createPluginHost(
     async reload(ids) {
       for (const id of ids) {
         const current = loaded.get(id);
-        if (!current) continue;
+        // A newer load in flight (an update, an enable) reads the settings
+        // itself; reloading the committed instance would cancel it.
+        if (!current || loadGeneration.get(id) !== current.generation) continue;
         try {
           await host.load(current.source, current.importer);
         } catch (err) {

@@ -9,6 +9,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::sync::{BackendKind, CommitIdentity, ConflictPolicy, SyncError, WorkspaceSyncConfig};
 
+use super::plugins::SyncedInstalls;
+
 /// The folders and files of the settings repo, all under one folder of the
 /// app data dir.
 #[derive(Debug, Clone)]
@@ -73,6 +75,25 @@ impl SettingsRepoConfig {
             author: self.author.clone(),
         }
     }
+}
+
+/// What this machine knows of the repo, kept beside the clone: the commit its
+/// stores last matched, and the plugin installs its last sync covered.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(super) struct LocalState {
+    #[serde(default)]
+    pub(super) landed: Option<String>,
+    #[serde(default)]
+    pub(super) installs: SyncedInstalls,
+}
+
+pub(super) fn load_state(paths: &RepoPaths) -> Result<LocalState, SyncError> {
+    Ok(read_json(&paths.state())?.unwrap_or_default())
+}
+
+pub(super) fn save_state(paths: &RepoPaths, state: &LocalState) -> Result<(), SyncError> {
+    write_json(&paths.state(), state)
 }
 
 pub(super) fn load_config(paths: &RepoPaths) -> Result<Option<SettingsRepoConfig>, SyncError> {

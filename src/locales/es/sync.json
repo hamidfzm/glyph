@@ -87,7 +87,7 @@
     "busy": "Ya hay una sincronización en curso. Vuelve a intentarlo cuando termine."
   },
   "settingsRepo": {
-    "description": "Guarda tu configuración de Glyph en un repositorio git propio y úsala en cada equipo que conectes: ajustes, atajos y los complementos que instalaste. Las claves de API, los archivos recientes, los permisos de complementos y el consentimiento de informes de errores se quedan en cada equipo.",
+    "description": "Guarda tu configuración de Glyph en un repositorio git propio y úsala en cada equipo que conectes: ajustes, atajos y los complementos que instalaste, con sus ajustes. Un complemento que se quita o se desactiva en un equipo se quita o se desactiva en los demás. Las claves de API, los archivos recientes, los permisos de complementos y el consentimiento de informes de errores se quedan en cada equipo.",
     "remotePlaceholder": "https://github.com/tu/glyph-setup.git",
     "tokenNote": "Guardado en el llavero de tu sistema, solo para el repositorio de ajustes.",
     "connect": "Conectar",
@@ -100,7 +100,7 @@
       "useSynced": "Usar la configuración sincronizada",
       "useSyncedHint": "Usar la configuración sincronizada: reemplaza los ajustes de este equipo. Los complementos que solo están aquí se quedan y se suman a la configuración sincronizada.",
       "replaceSynced": "Reemplazarla por la de este equipo",
-      "replaceSyncedHint": "Reemplazarla por la de este equipo: el repositorio conserva su historial y la configuración sincronizada pasa a ser la de este equipo."
+      "replaceSyncedHint": "Reemplazarla por la de este equipo: el repositorio conserva su historial y la configuración sincronizada pasa a ser la de este equipo. Los complementos que este equipo no tiene salen de la configuración sincronizada y se quitan de los demás equipos en su próxima sincronización."
     },
     "conflicts": {
       "title": "Cambiado en ambos equipos",

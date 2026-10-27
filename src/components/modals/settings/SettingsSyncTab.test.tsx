@@ -153,6 +153,13 @@ describe("SettingsSyncTab", () => {
     expect(calls("settings_sync_choose")[0][1]).toEqual({ choice: "use-synced" });
   });
 
+  it("drops a load that finishes after the tab closed", async () => {
+    backend(repo());
+    const { unmount } = renderTab();
+    unmount();
+    await waitFor(() => expect(calls("settings_sync_has_token")).toHaveLength(1));
+  });
+
   it("can still disconnect while the choice is open", async () => {
     const remote = backend(repo({ phase: "choosing" }), {
       settings_sync_disconnect: () => remote.connect(null),

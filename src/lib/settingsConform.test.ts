@@ -37,12 +37,37 @@ describe("conformToDefaults", () => {
       conformToDefaults({
         keybindings: { overrides: { save: "Mod+S", find: 7 } },
         ai: { agentWriteTools: { patch_note: true, rename_note: "yes" }, apiKeys: [] },
-        layout: { blocks: { files: { height: 100, collapsed: false }, bad: 3 } },
+        layout: {
+          blocks: {
+            files: { height: 100, collapsed: false },
+            outline: { height: null, collapsed: true },
+            bad: 3,
+            half: { height: "tall", collapsed: true },
+          },
+        },
       }),
     ).toEqual({
       keybindings: { overrides: { save: "Mod+S" } },
       ai: { agentWriteTools: { patch_note: true } },
-      layout: { blocks: { files: { height: 100, collapsed: false } } },
+      layout: {
+        blocks: {
+          files: { height: 100, collapsed: false },
+          outline: { height: null, collapsed: true },
+        },
+      },
+    });
+  });
+
+  it("drops keys that would replace an object's prototype", () => {
+    const stored = JSON.parse(
+      '{"__proto__":{"x":1},"appearance":{"__proto__":{"theme":"dark"},"theme":"light"},"keybindings":{"overrides":{"constructor":"a","save":"Mod+S"}}}',
+    );
+    const result = conformToDefaults(stored);
+    expect(Object.getPrototypeOf(result)).toBe(Object.prototype);
+    expect(Object.getPrototypeOf(result.appearance)).toBe(Object.prototype);
+    expect(result).toEqual({
+      appearance: { theme: "light" },
+      keybindings: { overrides: { save: "Mod+S" } },
     });
   });
 });

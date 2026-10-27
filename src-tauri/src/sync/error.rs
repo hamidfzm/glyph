@@ -4,7 +4,7 @@
 //! - `NotConfigured` → prompt the user to set up sync for this workspace.
 //! - `AuthFailed` → ask for credentials again.
 //! - `Network` → surface a retryable "couldn't reach the remote" notice.
-//! - `Conflict` → open the conflict-resolution UI (future PR).
+//! - `Conflict` → resolve the conflicted files before syncing again.
 //! - `PushRejected` → the remote refused the update; nothing reached it.
 //! - `Busy` → another operation holds the repository; try again after it.
 //! - `Io` and `Backend` → log and show a generic error.

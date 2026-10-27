@@ -87,7 +87,7 @@
     "busy": "A sync is already running. Try again when it finishes."
   },
   "settingsRepo": {
-    "description": "Keep your Glyph setup in a git repository of its own and use it on every machine you connect: settings, hotkeys, and the plugins you installed. API keys, recent files, plugin permissions, and error reporting consent stay on each machine.",
+    "description": "Keep your Glyph setup in a git repository of its own and use it on every machine you connect: settings, hotkeys, and the plugins you installed, with their settings. A plugin removed or turned off on one machine is removed or turned off on the others. API keys, recent files, plugin permissions, and error reporting consent stay on each machine.",
     "remotePlaceholder": "https://github.com/you/glyph-setup.git",
     "tokenNote": "Stored in your OS keychain, for the settings repository only.",
     "connect": "Connect",
@@ -100,7 +100,7 @@
       "useSynced": "Use the synced setup",
       "useSyncedHint": "Use the synced setup: replaces this machine's settings. Plugins only on this machine stay and join the synced setup.",
       "replaceSynced": "Replace it with this machine's",
-      "replaceSyncedHint": "Replace it with this machine's: the repository keeps its history, and the synced setup becomes this machine's."
+      "replaceSyncedHint": "Replace it with this machine's: the repository keeps its history, and the synced setup becomes this machine's. Plugins this machine does not have leave the synced setup and are removed from the other machines at their next sync."
     },
     "conflicts": {
       "title": "Changed on both machines",

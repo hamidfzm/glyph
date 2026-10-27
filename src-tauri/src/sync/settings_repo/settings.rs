@@ -51,11 +51,31 @@ fn never_syncs(group: &str, key: &str) -> bool {
 
 /// `value` without the keys of `group` that never sync.
 fn portable(group: &str, value: &Object) -> Object {
+    without_prototype_keys(value)
+        .into_iter()
+        .filter(|(key, _)| !never_syncs(group, key))
+        .collect()
+}
+
+/// Keys a JavaScript object assignment treats as its prototype, not as data.
+const PROTOTYPE_KEYS: [&str; 3] = ["__proto__", "constructor", "prototype"];
+
+/// `value` without those keys at any depth: written into a renderer object
+/// they would swap its prototype, and with it every default it falls back to.
+pub(super) fn without_prototype_keys(value: &Object) -> Object {
     value
         .iter()
-        .filter(|(key, _)| !never_syncs(group, key))
-        .map(|(key, v)| (key.clone(), v.clone()))
+        .filter(|(key, _)| !PROTOTYPE_KEYS.contains(&key.as_str()))
+        .map(|(key, v)| (key.clone(), clean(v)))
         .collect()
+}
+
+fn clean(value: &Value) -> Value {
+    match value {
+        Value::Object(map) => Value::Object(without_prototype_keys(map)),
+        Value::Array(items) => Value::Array(items.iter().map(clean).collect()),
+        other => other.clone(),
+    }
 }
 
 /// What the repo should hold for the store's settings: each synced group
@@ -339,6 +359,23 @@ mod tests {
             three_way(None, Some(&store), Some(&merged)),
             Some(json!({"a": 1, "b": 3, "c": 4}))
         );
+    }
+
+    #[test]
+    fn prototype_keys_never_land_at_any_depth() {
+        let hostile = files(json!({
+            "appearance": {"__proto__": {"theme": "x"}, "theme": "dark"},
+            "keybindings": {"overrides": {"constructor": "a", "save": "Mod+S"}},
+            "editor": {"spellCheckLanguages": [{"prototype": 1}]}
+        }));
+        for next in [
+            import(&Object::new(), &BTreeMap::new(), &hostile, &none()),
+            adopt(&Object::new(), &hostile, &none()),
+        ] {
+            assert_eq!(next["appearance"], json!({"theme": "dark"}));
+            assert_eq!(next["keybindings"], json!({"overrides": {"save": "Mod+S"}}));
+            assert_eq!(next["editor"], json!({"spellCheckLanguages": [{}]}));
+        }
     }
 
     #[test]
