@@ -46,6 +46,9 @@ impl Fixture {
         let mut cfg = git2::Config::open(&cfg_path).unwrap();
         cfg.set_str("user.name", "Test User").unwrap();
         cfg.set_str("user.email", "test@example.com").unwrap();
+        // Windows runners set `core.autocrlf=true` system-wide, which would
+        // check files out with CRLF and break the content assertions.
+        cfg.set_bool("core.autocrlf", false).unwrap();
         Self {
             _tmp: tmp,
             workspace,
