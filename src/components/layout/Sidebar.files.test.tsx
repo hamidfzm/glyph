@@ -93,7 +93,9 @@ describe("Sidebar files panel", () => {
     fireEvent.change(input, { target: { value: "renamed" } });
     fireEvent.keyDown(input, { key: "Enter" });
 
-    await waitFor(() => expect(renamePath).toHaveBeenCalledWith("/tmp/notes/readme.md", "renamed"));
+    await waitFor(() =>
+      expect(renamePath).toHaveBeenCalledWith("/tmp/notes/readme.md", "renamed", []),
+    );
   });
 
   it("deletes an entry from the file menu", async () => {

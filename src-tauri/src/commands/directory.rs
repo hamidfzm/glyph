@@ -5,7 +5,7 @@ use std::time::UNIX_EPOCH;
 use tauri::State;
 
 use super::walk::{workspace_walker, ScanStatus, WALK_MAX_DEPTH, WALK_MAX_FILES};
-use crate::extensions::has_extension;
+use crate::extensions::{checked_extensions, has_extension};
 use crate::grants::GrantRegistry;
 
 #[derive(Debug, Serialize)]
@@ -15,26 +15,6 @@ pub struct DirEntry {
     pub path: String,
     pub is_directory: bool,
     pub modified: u64,
-}
-
-/// The plugin file type extensions a window passes, checked the way
-/// `registerFileType` in `src/lib/plugins/fileTypes.ts` checks them, so every
-/// list the window's registry can hold passes and only a forged one fails.
-fn checked_extensions(extensions: &[String]) -> Result<Vec<&str>, String> {
-    extensions
-        .iter()
-        .map(|ext| {
-            let plain = !ext.is_empty()
-                && ext
-                    .bytes()
-                    .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit());
-            if plain {
-                Ok(ext.as_str())
-            } else {
-                Err("Invalid file type extension: expected lowercase letters or digits".to_string())
-            }
-        })
-        .collect()
 }
 
 /// One directory of the workspace tree. `extensions` are the window's plugin
@@ -385,26 +365,9 @@ mod tests {
         fs::write(dir.join("readme.md"), "x").unwrap();
         fs::write(dir.join("notes.txt"), "x").unwrap();
 
-        // Non-ASCII letters and digits too: the frontend's rule is ASCII only.
-        for bad in [
-            "",
-            ".txt",
-            "*",
-            "t?t",
-            "../txt",
-            "a/b",
-            "a\\b",
-            "TXT",
-            "tx t",
-            "caf\u{e9}",
-            "\u{663}",
-        ] {
-            let err = names_listed(&dir, &["excalidraw", bad]).expect_err(bad);
-            assert!(
-                err.starts_with("Invalid file type extension"),
-                "{bad}: {err}"
-            );
-        }
+        // Every malformed shape is in `checked_extensions`' own test.
+        let err = names_listed(&dir, &["excalidraw", "../txt"]).unwrap_err();
+        assert!(err.starts_with("Invalid file type extension"), "{err}");
         let _ = fs::remove_dir_all(&dir);
     }
 

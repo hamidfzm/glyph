@@ -121,7 +121,7 @@ describe("FileTree context menu", () => {
     fireEvent.change(input, { target: { value: "renamed" } });
     fireEvent.keyDown(input, { key: "Enter" });
 
-    await waitFor(() => expect(onRename).toHaveBeenCalledWith("/root/post.md", "renamed"));
+    await waitFor(() => expect(onRename).toHaveBeenCalledWith("/root/post.md", "renamed", []));
     expect(onOpenFile).not.toHaveBeenCalled();
   });
 
