@@ -866,13 +866,17 @@ mod tests {
     }
 
     #[test]
-    fn a_note_renamed_to_a_type_the_index_skips_keeps_its_wikilinks() {
-        for renamed in ["flow.d2", "flow.ipynb"] {
+    fn a_note_renamed_to_a_name_the_index_skips_keeps_its_wikilinks() {
+        for renamed in ["flow.d2", "flow.ipynb", ".Untitled.md"] {
             let root = workspace(
-                "leaves_by_type",
+                "leaves_by_name",
                 &[
                     ("Untitled.md", ""),
-                    ("Index.md", "[[Untitled]] [[Untitled.md]] [u](Untitled.md)"),
+                    ("Z.md", "---\naliases: [flow]\n---\n"),
+                    (
+                        "Index.md",
+                        "[[Untitled]] [[Untitled.md]] [u](Untitled.md) [[flow]]",
+                    ),
                     ("Board.canvas", &board(&["Untitled.md"])),
                 ],
             );
@@ -884,7 +888,7 @@ mod tests {
                     ("Board.canvas".to_string(), board(&[renamed])),
                     (
                         "Index.md".to_string(),
-                        format!("[[Untitled]] [[Untitled.md]] [u]({renamed})")
+                        format!("[[Untitled]] [[Untitled.md]] [u]({renamed}) [[flow]]")
                     ),
                 ]),
                 "{renamed}"

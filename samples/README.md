@@ -430,7 +430,7 @@ When you have the `samples/` folder open, the **Backlinks** section under the fi
 
 Backlinks is a core plugin: switch it off under **Settings → Plugins → Core plugins** and the section leaves the sidebar, without loading its code.
 
-Renaming or moving a note or folder in the file tree keeps those links working: Glyph lists the notes whose `[[wikilinks]]`, `![[embeds]]`, relative `[links](Notes/Cooking.md)` and canvas cards point at it, and rewrites them once you confirm. Aliases and `#heading` fragments are kept, links inside inline code or fenced code blocks stay as written, and a same-named note in another folder keeps its own links. Wikilinks reach only notes and canvases, so a note renamed to another file type (a `.d2` diagram, say) or moved into a hidden folder keeps the wikilinks to it as written, while relative links and canvas cards still follow it.
+Renaming or moving a note or folder in the file tree keeps those links working: Glyph lists the notes whose `[[wikilinks]]`, `![[embeds]]`, relative `[links](Notes/Cooking.md)` and canvas cards point at it, and rewrites them once you confirm. Aliases and `#heading` fragments are kept, links inside inline code or fenced code blocks stay as written, and a same-named note in another folder keeps its own links. Wikilinks only reach the notes and canvases the workspace indexes, which leaves out hidden folders, so after renaming a note to another file type (a `.d2` diagram, say) or a folder to a hidden name, the wikilinks to it stay as written, while relative links and canvas cards still follow it.
 
 ### Graph view
 

@@ -304,11 +304,9 @@ impl Vault {
         Some((self.root.join(&relative), relative))
     }
 
-    /// Whether the walk would take a file at `relative` by its name and place
-    /// alone: an indexed type, within the depth cap, and under no hidden or
-    /// noisy directory. Nothing is looked up, so it holds for a path that
-    /// does not exist yet.
-    pub(super) fn admits(&self, relative: &Path) -> bool {
+    /// The walk's gates on a file's name and place alone. Nothing is looked
+    /// up, so it answers for a path that does not exist yet.
+    pub(crate) fn admits(&self, relative: &Path) -> bool {
         if !is_indexable(relative) || relative.components().count() > self.max_depth {
             return false;
         }
@@ -322,9 +320,9 @@ impl Vault {
     }
 
     /// Whether the walk would have visited `path`. `apply_changes` reads files
-    /// the walk never offered it, so the same gates have to hold here: the
-    /// name and place [`Vault::admits`], nothing reached through a link, and
-    /// no file past the size cap.
+    /// the walk never offered it, so the same gates have to hold here: those
+    /// of [`Vault::admits`], nothing reached through a link, and no file past
+    /// the size cap.
     fn walkable(&self, path: &Path, relative: &Path) -> bool {
         if !self.admits(relative) {
             return false;
