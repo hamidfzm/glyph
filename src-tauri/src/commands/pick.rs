@@ -133,9 +133,8 @@ pub async fn pick_save<R: Runtime>(
     default_name: String,
     filter_name: String,
     extensions: Vec<String>,
-    default_dir: Option<String>,
 ) -> Result<Option<String>, String> {
-    let picked = pick_save_target(&app, default_name, filter_name, extensions, default_dir).await?;
+    let picked = pick_save_target(&app, default_name, filter_name, extensions, None).await?;
     let Some(path) = picked else {
         return Ok(None);
     };
@@ -289,21 +288,6 @@ mod tests {
         let fx = fixture();
         for (root, refusal) in &fx.refused {
             let picked = block_on(pick_export_dir(fx.app.handle().clone(), root.clone()));
-            assert_refused(picked, refusal);
-        }
-    }
-
-    #[test]
-    fn the_save_picker_refuses_a_starting_folder_that_is_not_a_granted_workspace() {
-        let fx = fixture();
-        for (dir, refusal) in &fx.refused {
-            let picked = block_on(pick_save(
-                fx.app.handle().clone(),
-                "note.pdf".to_string(),
-                "PDF".to_string(),
-                vec!["pdf".to_string()],
-                Some(dir.clone()),
-            ));
             assert_refused(picked, refusal);
         }
     }

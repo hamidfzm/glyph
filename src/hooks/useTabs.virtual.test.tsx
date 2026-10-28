@@ -433,16 +433,16 @@ describe("useTabs in-memory documents", () => {
     expect(fileOf(result).dirty).toBe(false);
   });
 
-  it("saveDocument adopts the path outside the workspace even when the watch is declined", async () => {
+  it("saveDocument adopts the path outside the workspace even when the watch fails", async () => {
     const setLastFile = vi.fn().mockResolvedValue(undefined);
     vi.mocked(invoke).mockImplementation(
       makeInvoker({
         write_file: async () => undefined,
         watch_file: async (_cmd, args) => {
           // The pre-existing note's open is watched fine; only the saved
-          // target's watch is declined (write-only grant).
+          // target's watcher fails to start.
           if ((args as { path: string }).path === "/save-out/note.md") {
-            throw new Error("no read grant");
+            throw new Error("watcher failed to start");
           }
         },
         workspace_set_last_file: setLastFile as unknown as Invoker,

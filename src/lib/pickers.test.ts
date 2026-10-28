@@ -53,22 +53,10 @@ describe("pickers", () => {
       defaultName: "note.pdf",
       filterName: "PDF",
       extensions: ["pdf"],
-      defaultDir: undefined,
     });
   });
 
-  it("pickSave forwards a default directory when given", async () => {
-    vi.mocked(invoke).mockResolvedValue("/ws/out.pdf");
-    await expect(pickSave("note.pdf", "PDF", ["pdf"], "/ws")).resolves.toBe("/ws/out.pdf");
-    expect(invoke).toHaveBeenCalledWith("pick_save", {
-      defaultName: "note.pdf",
-      filterName: "PDF",
-      extensions: ["pdf"],
-      defaultDir: "/ws",
-    });
-  });
-
-  it("pickSaveDocument goes to the document Save As picker, not the export one", async () => {
+  it("pickSaveDocument goes to the document Save As picker, with its starting folder", async () => {
     vi.mocked(invoke).mockResolvedValue("/ws/note.md");
     const picked = pickSaveDocument("Untitled-1.md", "Markdown", ["md"], "/ws");
     await expect(picked).resolves.toBe("/ws/note.md");

@@ -20,10 +20,11 @@ pub struct GrantRegistry {
 struct Grants {
     /// Open workspace roots: recursive read + write.
     workspaces: HashSet<PathBuf>,
-    /// Explicitly opened loose files: exact-path read, write (autosave), watch.
+    /// Loose files, opened or saved under a new name: exact-path read, write
+    /// (autosave), watch.
     files: HashSet<PathBuf>,
-    /// Folders holding an opened loose file: the image, audio, and video files
-    /// in them load as that document's assets, through the asset protocol only.
+    /// Folders holding a loose file: the image, audio, and video files in them
+    /// load as that document's assets, through the asset protocol only.
     document_dirs: HashSet<PathBuf>,
     /// Approved export destination folders: recursive write, plus the prune
     /// a repeat website export performs over its own previous output.
@@ -210,10 +211,14 @@ impl GrantRegistry {
     }
 
     /// Grant a document the user picked to save under a new name as
-    /// `grant_file` grants an opened one. It may not exist yet: the save writes it.
+    /// `grant_file` grants an opened one. It may not exist yet: the save writes
+    /// it, so a target `ensure_writable` would refuse is refused here too.
     #[cfg(desktop)]
     pub fn grant_document_target(&self, path: &Path) -> Result<PathBuf, String> {
         let canonical = canonicalize_lenient(path)?;
+        if names_git_dir(&canonical) {
+            return Err(denied(path));
+        }
         let document_dir = match canonical.parent() {
             Some(dir) if !canonical.is_dir() => dir.to_path_buf(),
             _ => return Err(denied(path)),
@@ -224,8 +229,8 @@ impl GrantRegistry {
         Ok(canonical)
     }
 
-    /// Allow an existing image, audio, or video file inside the folder of an
-    /// opened loose file, judged after symlinks resolve. Serves the asset
+    /// Allow an existing image, audio, or video file inside the folder of a
+    /// loose file, judged after symlinks resolve. Serves the asset
     /// protocol only: `ensure_readable` keeps the exact-path rule.
     pub fn ensure_document_asset(&self, path: &str) -> Result<PathBuf, String> {
         let requested = Path::new(path);
@@ -1026,7 +1031,7 @@ mod tests {
         fs::write(&sibling, "x").unwrap();
 
         let grants = GrantRegistry::default();
-        // What Save As used to leave a document with: its images stayed refused.
+        // An export grant on the same path records no folder.
         grants.grant_export_file(&saved).unwrap();
         assert!(grants.ensure_document_asset(&as_str(&image)).is_err());
 
@@ -1042,10 +1047,12 @@ mod tests {
     }
 
     #[test]
-    fn a_document_target_that_is_a_folder_or_a_dangling_link_is_refused() {
+    fn a_document_target_that_is_a_folder_a_dangling_link_or_in_git_is_refused() {
         let tmp = TempDir::new().unwrap();
         let notes = tmp.path().join("notes");
         fs::create_dir_all(&notes).unwrap();
+        let git = tmp.path().join(".Git");
+        fs::create_dir_all(&git).unwrap();
         let image = tmp.path().join("photo.png");
         fs::write(&image, "x").unwrap();
         // A save through it would create the missing target wherever it points.
@@ -1053,7 +1060,7 @@ mod tests {
         link_folder(&tmp.path().join("gone"), &dangling);
 
         let grants = GrantRegistry::default();
-        for refused in [notes.clone(), dangling] {
+        for refused in [notes.clone(), dangling, git.join("notes.md")] {
             assert!(
                 grants.grant_document_target(&refused).is_err(),
                 "{refused:?}"
