@@ -518,6 +518,13 @@ describe("worker bootstrap", () => {
     expect(w.typesPosted()).not.toContain("register-file-type");
   });
 
+  it("relays a missing color scheme for the host to drop instead of failing activation", async () => {
+    const w = bootWorker();
+    await w.send(init("export default { activate(ctx) { ctx.ui.addColorScheme(null); } }"));
+    await vi.waitFor(() => expect(w.typesPosted()).toContain("activated"));
+    expect(w.posted).toContainEqual({ type: "register-color-scheme" });
+  });
+
   // The regression: these three were simply absent from the worker's ctx.ui,
   // so a sandboxed plugin calling one died with "ctx.ui.addStatusBarItem is
   // not a function" and nothing said the sandbox was the reason.

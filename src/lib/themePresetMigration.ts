@@ -1,5 +1,5 @@
 import { loadPluginSettings, savePluginSettings } from "@/lib/plugins/settingsStore";
-import type { ColorSchemeSetting } from "@/lib/settings";
+import type { ColorSchemeChoice } from "@/lib/settings";
 import { getNestedValue } from "@/lib/settingsObject";
 
 // The theme presets plugin kept its pick in plugins.json until the choice
@@ -17,7 +17,7 @@ const PRESETS = [
 /** The scheme a stored preset carries over to; null for none or anything unknown. */
 export function legacyPresetScheme(
   pluginSettings: Record<string, unknown>,
-): ColorSchemeSetting | null {
+): ColorSchemeChoice | null {
   const match = PRESETS.find(([preset]) => preset === pluginSettings.preset);
   if (!match) return null;
   const [preset, label] = match;
@@ -30,14 +30,19 @@ export function legacyPresetScheme(
  */
 export async function carriedOverColorScheme(
   storedSettings: unknown,
-): Promise<ColorSchemeSetting | null> {
+): Promise<ColorSchemeChoice | null> {
   const stored = storedSettings as Record<string, unknown>;
   if (getNestedValue(stored, "appearance.colorScheme") !== undefined) return null;
   return legacyPresetScheme(await loadPluginSettings(PLUGIN_ID));
 }
 
-/** Drop the carried-over preset; call only once the new setting is on disk. */
-export async function removeLegacyPreset(): Promise<void> {
-  const { preset: _carriedOver, ...rest } = await loadPluginSettings(PLUGIN_ID);
-  await savePluginSettings(PLUGIN_ID, rest);
+/** Drop the carried-over preset once the write holding the new setting lands. */
+export async function removeLegacyPresetOnceWritten(write: Promise<boolean>): Promise<void> {
+  try {
+    if (!(await write)) return;
+    const { preset: _carriedOver, ...rest } = await loadPluginSettings(PLUGIN_ID);
+    await savePluginSettings(PLUGIN_ID, rest);
+  } catch (err) {
+    console.error("Failed to remove the carried-over theme preset:", err);
+  }
 }

@@ -7,7 +7,7 @@ import { setNestedValue } from "@/lib/settingsObject";
 import { loadSecrets } from "@/lib/settingsSecrets";
 import { mergeChangedPaths, settingsFromStored } from "@/lib/settingsWrite";
 import { openStore } from "@/lib/store";
-import { carriedOverColorScheme, removeLegacyPreset } from "@/lib/themePresetMigration";
+import { carriedOverColorScheme, removeLegacyPresetOnceWritten } from "@/lib/themePresetMigration";
 import { SettingsContext } from "./SettingsContext";
 
 const STORE_KEY = "settings";
@@ -133,11 +133,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
           // plugin's copy goes only once the new one is on disk.
           pendingRef.current = merged;
           changedPathsRef.current.add("appearance.colorScheme");
-          void writePending()
-            .then(async (written) => {
-              if (written) await removeLegacyPreset();
-            })
-            .catch((err) => console.error("Failed to remove the carried-over theme preset:", err));
+          void removeLegacyPresetOnceWritten(writePending());
         }
       } catch (err) {
         console.error("Failed to load settings:", err);

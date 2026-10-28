@@ -76,6 +76,21 @@ describe("ColorSchemeSetting", () => {
     expect(screen.queryByText(/comes from/)).toBeNull();
   });
 
+  it("shows the scheme as unavailable when its core plugin failed to load", () => {
+    const { wrapper } = colorSchemeHarness({
+      saved: SEPIA,
+      plugins: { failedCorePlugins: ["glyph.core.theme-presets"] },
+    });
+    render(<ColorSchemeSetting {...defaultProps} />, { wrapper });
+
+    expect(options()).toEqual([
+      ["Default", false],
+      ["Sepia (unavailable)", true],
+    ]);
+    expect(screen.getByText(/isn't offering Sepia right now/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Open Plugins" })).toBeTruthy();
+  });
+
   it("opens the Plugins tab from Manage", () => {
     const onOpenPlugins = vi.fn();
     const { wrapper } = colorSchemeHarness();

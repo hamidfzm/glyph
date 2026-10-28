@@ -1,10 +1,8 @@
 import { useTranslation } from "react-i18next";
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { useSettings } from "@/hooks/useSettings";
-import { DEFAULT_SETTINGS } from "@/lib/settings";
+import { DEFAULT_COLOR_SCHEME } from "@/lib/colorSchemeStatus";
 import { ColorSchemeNote } from "./ColorSchemeNote";
-
-const DEFAULT_SCHEME = DEFAULT_SETTINGS.appearance.colorScheme;
 
 interface ColorSchemeSettingProps {
   onOpenPlugins: () => void;
@@ -18,7 +16,7 @@ export function ColorSchemeSetting({ onOpenPlugins }: ColorSchemeSettingProps) {
 
   const handleChange = (key: string) => {
     const scheme = schemes.find((entry) => entry.key === key);
-    const next = scheme ? { id: scheme.key, label: scheme.label } : DEFAULT_SCHEME;
+    const next = scheme ? { id: scheme.key, label: scheme.label } : DEFAULT_COLOR_SCHEME;
     updateSettings("appearance.colorScheme", next);
   };
 
@@ -32,7 +30,7 @@ export function ColorSchemeSetting({ onOpenPlugins }: ColorSchemeSettingProps) {
           value={saved.id}
           onChange={(e) => handleChange(e.target.value)}
         >
-          <option value={DEFAULT_SCHEME.id}>{t("appearance.colorScheme.default")}</option>
+          <option value={DEFAULT_COLOR_SCHEME.id}>{t("appearance.colorScheme.default")}</option>
           {schemes.map((scheme) => (
             <option key={scheme.key} value={scheme.key}>
               {scheme.label}

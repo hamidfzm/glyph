@@ -24,6 +24,8 @@ export interface PluginsContextValue {
   disabled: string[];
   /** Plugins currently active in the host. */
   loaded: LoadedPluginInfo[];
+  /** Ids of core plugins that are on but failed their last load. */
+  failedCorePlugins: readonly string[];
   /** Marketplace entries from the glyph-md registry (empty if unreachable). */
   registry: RegistryEntry[];
   /** Installed plugins with a newer version available in the registry. */

@@ -116,8 +116,9 @@ export interface PluginManifest {
   /**
    * Run in a dedicated worker instead of the app context. Sandboxed plugins
    * get no DOM and network fenced to their `network:` permissions, but only
-   * the non-UI API subset: commands, styles, exporters, file types, workspace,
-   * assets, spellcheck, settings, notify, and registering translations. No
+   * the non-UI API subset: commands, styles, color schemes, exporters, file
+   * types, workspace, assets, spellcheck, settings, notify, and registering
+   * translations. No
    * markdown pipeline, panel or overlay mounts, reading the rendered
    * document, app state (the active document, the vault, navigation), or
    * reading translations.

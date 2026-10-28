@@ -767,12 +767,12 @@ the way a renderer-supplied path is.
   with full trust and no consent prompt, take the permissions they need
   (`workspace:read` for tags and backlinks, and `workspace:write` as well for
   daily notes) from that same list rather than from disk, and only their on/off
-  state lives in `settings.json`. A core plugin's own preferences sit in
-  `plugins.json` like any plugin's `ctx.settings`, and the plugin checks them
-  against its own allowlist when it reads them. The picked color scheme (theme
-  presets offers three) is an app setting in `settings.json`: the stored id is
-  only looked up among the schemes loaded plugins registered, anything
-  malformed reads as the default palette, and the stored label renders as
-  text. The backend
+  state lives in `settings.json`. The picked color scheme (theme presets
+  offers three) is an app setting there too: the stored id is only looked up
+  among the schemes loaded plugins registered, anything malformed reads as the
+  default palette, and the stored label renders as text. A preset picked before
+  the choice moved to Appearance sits in `plugins.json`: the app reads it once,
+  accepts only the three preset ids by strict equality, and removes it after
+  `settings.json` holds the carried-over choice. The backend
   reserves the `glyph.core.` id prefix, so an installed plugin cannot take a
   core plugin's settings, grants, or host slot.

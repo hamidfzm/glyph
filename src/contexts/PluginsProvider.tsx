@@ -41,7 +41,7 @@ export function PluginsProvider({ children }: { children: ReactNode }) {
     }),
   );
 
-  const coreReady = useCorePlugins(host, pushToast);
+  const core = useCorePlugins(host, pushToast);
   const {
     installed,
     disabled,
@@ -53,7 +53,7 @@ export function PluginsProvider({ children }: { children: ReactNode }) {
     installFromRegistry,
     setEnabled,
     uninstall,
-  } = usePluginLibrary({ host, pushToast, coreReady });
+  } = usePluginLibrary({ host, pushToast, coreReady: core.ready });
 
   return (
     <PluginsContext.Provider
@@ -74,6 +74,7 @@ export function PluginsProvider({ children }: { children: ReactNode }) {
         installed,
         disabled,
         loaded,
+        failedCorePlugins: core.failed,
         registry,
         updates,
         installFromFolder,

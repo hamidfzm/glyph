@@ -161,12 +161,13 @@ function buildContext(init) {
         return () => {};
       },
       addColorScheme(scheme) {
-        // Pure data, like site themes: the host registry owns it.
+        // Pure data, like site themes: the host registry owns it, and the host
+        // drops a malformed one, so a missing scheme is relayed rather than thrown.
         postMessage({
           type: "register-color-scheme",
-          id: scheme.id,
-          label: scheme.label,
-          css: scheme.css,
+          id: scheme?.id,
+          label: scheme?.label,
+          css: scheme?.css,
         });
         return () => {};
       },

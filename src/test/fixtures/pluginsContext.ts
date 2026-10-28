@@ -23,6 +23,7 @@ export function pluginsContextValue(
     installed: [],
     disabled: [],
     loaded: [],
+    failedCorePlugins: [],
     registry: [],
     updates: [],
     installFromFolder: vi.fn(async () => {}),

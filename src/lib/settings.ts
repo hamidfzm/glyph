@@ -10,13 +10,13 @@ export interface AppearanceSettings {
   contentWidth: "narrow" | "medium" | "wide" | "full";
   codeFont: string;
   codeTheme: "glyph" | "github" | "monokai" | "nord" | "solarized-light" | "solarized-dark";
-  colorScheme: ColorSchemeSetting;
+  colorScheme: ColorSchemeChoice;
 }
 
 // A plugin's color scheme, or the app's own palette ("default"). The label is
 // kept so the picker can name the scheme while its plugin is off. Read it
-// through readColorSchemeSetting: the stored value is not type-checked.
-export interface ColorSchemeSetting {
+// through readColorSchemeChoice: the stored value is not type-checked.
+export interface ColorSchemeChoice {
   /** "default", or `<pluginId>:<schemeId>`. */
   id: string;
   label: string;

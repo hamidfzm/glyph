@@ -1,16 +1,16 @@
 import { colorSchemePluginId } from "@/lib/plugins/colorSchemes";
 import { CORE_PLUGINS } from "@/lib/plugins/corePlugins";
 import type { ColorSchemeEntry, InstalledPlugin } from "@/lib/plugins/types";
-import { type ColorSchemeSetting, type CorePluginSettings, DEFAULT_SETTINGS } from "@/lib/settings";
+import { type ColorSchemeChoice, type CorePluginSettings, DEFAULT_SETTINGS } from "@/lib/settings";
 import { isSafePlainObject } from "@/lib/settingsObject";
 
-const DEFAULT_SCHEME = DEFAULT_SETTINGS.appearance.colorScheme;
+export const DEFAULT_COLOR_SCHEME = DEFAULT_SETTINGS.appearance.colorScheme;
 
 /** The stored choice, or Default for anything malformed: settings.json is renderer-writable. */
-export function readColorSchemeSetting(value: unknown): ColorSchemeSetting {
-  if (!isSafePlainObject(value)) return DEFAULT_SCHEME;
+export function readColorSchemeChoice(value: unknown): ColorSchemeChoice {
+  if (!isSafePlainObject(value)) return DEFAULT_COLOR_SCHEME;
   const { id, label } = value;
-  if (typeof id !== "string" || !colorSchemePluginId(id)) return DEFAULT_SCHEME;
+  if (typeof id !== "string" || !colorSchemePluginId(id)) return DEFAULT_COLOR_SCHEME;
   return { id, label: typeof label === "string" && label !== "" ? label : id };
 }
 
@@ -33,11 +33,13 @@ export type ColorSchemeStatus =
   | { kind: "missing"; reason: MissingReason; provider: ColorSchemeProvider };
 
 interface ColorSchemeInputs {
-  saved: ColorSchemeSetting;
+  saved: ColorSchemeChoice;
   /** One entry per key (see uniqueColorSchemes). */
   schemes: readonly ColorSchemeEntry[];
   initialLoadDone: boolean;
   corePlugins: CorePluginSettings;
+  /** Core plugins that are on but failed their last load. */
+  failedCorePlugins: readonly string[];
   installed: readonly InstalledPlugin[];
   disabled: readonly string[];
 }
@@ -48,7 +50,7 @@ interface ColorSchemeInputs {
  */
 export function resolveColorScheme(inputs: ColorSchemeInputs): ColorSchemeStatus {
   const { saved, schemes, initialLoadDone } = inputs;
-  if (saved.id === DEFAULT_SCHEME.id) return { kind: "default" };
+  if (saved.id === DEFAULT_COLOR_SCHEME.id) return { kind: "default" };
   const scheme = schemes.find((entry) => entry.key === saved.id);
   if (scheme) return { kind: "active", scheme };
   if (!initialLoadDone) return { kind: "pending" };
@@ -59,14 +61,14 @@ export function resolveColorScheme(inputs: ColorSchemeInputs): ColorSchemeStatus
 
 function whyMissing(
   pluginId: string,
-  { schemes, corePlugins, installed, disabled }: ColorSchemeInputs,
+  { schemes, corePlugins, failedCorePlugins, installed, disabled }: ColorSchemeInputs,
 ): { reason: MissingReason; provider: ColorSchemeProvider } | null {
   const core = CORE_PLUGINS.find((plugin) => plugin.id === pluginId);
   if (core) {
     const provider = { id: pluginId, coreKey: core.settingsKey };
     if (!corePlugins[core.settingsKey]) return { reason: "off", provider };
-    // On with nothing registered yet: still loading since Turn on. A failed
-    // load has its own toast.
+    if (failedCorePlugins.includes(pluginId)) return { reason: "unavailable", provider };
+    // On with nothing registered yet: still loading since Turn on.
     if (!schemes.some((entry) => entry.pluginId === pluginId)) return null;
     return { reason: "unavailable", provider };
   }

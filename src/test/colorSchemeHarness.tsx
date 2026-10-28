@@ -5,7 +5,7 @@ import { SettingsContext } from "@/contexts/SettingsContext";
 import { colorSchemeEntry } from "@/lib/plugins/colorSchemes";
 import { createRegistry } from "@/lib/plugins/registry";
 import type { ColorSchemeEntry } from "@/lib/plugins/types";
-import { type ColorSchemeSetting, type CorePluginSettings, DEFAULT_SETTINGS } from "@/lib/settings";
+import { type ColorSchemeChoice, type CorePluginSettings, DEFAULT_SETTINGS } from "@/lib/settings";
 import { pluginsContextValue } from "@/test/fixtures/pluginsContext";
 
 interface ColorSchemeHarnessOptions {
@@ -35,7 +35,7 @@ export function colorSchemeHarness({
       ...DEFAULT_SETTINGS,
       appearance: {
         ...DEFAULT_SETTINGS.appearance,
-        colorScheme: colorScheme as ColorSchemeSetting,
+        colorScheme: colorScheme as ColorSchemeChoice,
       },
       corePlugins: { ...DEFAULT_SETTINGS.corePlugins, ...corePlugins },
     };

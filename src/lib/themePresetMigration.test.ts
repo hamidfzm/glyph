@@ -3,7 +3,7 @@ import { loadPluginSettings, savePluginSettings } from "@/lib/plugins/settingsSt
 import {
   carriedOverColorScheme,
   legacyPresetScheme,
-  removeLegacyPreset,
+  removeLegacyPresetOnceWritten,
 } from "@/lib/themePresetMigration";
 
 vi.mock("@/lib/plugins/settingsStore", () => ({
@@ -56,12 +56,19 @@ describe("carriedOverColorScheme", () => {
   });
 });
 
-describe("removeLegacyPreset", () => {
-  it("drops only the preset from the plugin's stored settings", async () => {
+describe("removeLegacyPresetOnceWritten", () => {
+  it("drops only the preset once the settings write lands", async () => {
     vi.mocked(loadPluginSettings).mockResolvedValue({ preset: "sepia", other: 1 });
 
-    await removeLegacyPreset();
+    await removeLegacyPresetOnceWritten(Promise.resolve(true));
 
     expect(savePluginSettings).toHaveBeenCalledWith(PLUGIN, { other: 1 });
+  });
+
+  it("keeps the preset when the settings write failed", async () => {
+    await removeLegacyPresetOnceWritten(Promise.resolve(false));
+
+    expect(loadPluginSettings).not.toHaveBeenCalled();
+    expect(savePluginSettings).not.toHaveBeenCalled();
   });
 });

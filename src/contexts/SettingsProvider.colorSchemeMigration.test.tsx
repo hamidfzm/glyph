@@ -13,15 +13,22 @@ import { mockedGetStore, resetSettingsDom } from "@/test/settingsHarness";
 // settings store.
 
 const PLUGIN = "glyph.core.theme-presets";
+const SOLARIZED = { id: `${PLUGIN}:solarized`, label: "Solarized" };
 
 function ColorSchemeConsumer() {
-  const { settings, resetSettings, loaded } = useContext(SettingsContext);
+  const { settings, updateSettings, resetSettings, loaded } = useContext(SettingsContext);
   return (
     <div>
       <span data-testid="loaded">{String(loaded)}</span>
       <span data-testid="scheme">{settings.appearance.colorScheme.id}</span>
       <button type="button" onClick={resetSettings}>
         Reset
+      </button>
+      <button type="button" onClick={() => updateSettings("appearance.colorScheme", SOLARIZED)}>
+        Pick Solarized
+      </button>
+      <button type="button" onClick={() => updateSettings("appearance.theme", "light")}>
+        Light
       </button>
     </div>
   );
@@ -30,15 +37,27 @@ function ColorSchemeConsumer() {
 function mockStores(
   storedSettings: Partial<Settings> | null,
   pluginSettings: Record<string, unknown>,
-  { settingsWriteFails = false } = {},
+  { failingWrites = 0, holdFirstWrite = false } = {},
 ) {
   let settingsFile = storedSettings;
+  let failuresLeft = failingWrites;
+  let hold = holdFirstWrite;
+  let release = () => {};
   let pluginsFile = { [PLUGIN]: pluginSettings };
   const events: string[] = [];
   const settingsStore = {
     get: vi.fn(async () => settingsFile),
     set: vi.fn(async (_key: string, value: Partial<Settings>) => {
-      if (settingsWriteFails) throw new Error("disk full");
+      if (failuresLeft > 0) {
+        failuresLeft--;
+        throw new Error("disk full");
+      }
+      if (hold) {
+        hold = false;
+        await new Promise<void>((resolve) => {
+          release = resolve;
+        });
+      }
       settingsFile = value;
     }),
     save: vi.fn(async () => {
@@ -65,6 +84,7 @@ function mockStores(
     pluginsStore,
     settingsFile: () => settingsFile,
     pluginsFile: () => pluginsFile,
+    release: () => release(),
   };
 }
 
@@ -106,7 +126,7 @@ describe("SettingsProvider color scheme migration", () => {
 
   it("keeps the preset in plugins.json when the settings write fails", async () => {
     expectConsole(/Failed to save settings/);
-    const stores = mockStores(null, { preset: "solarized" }, { settingsWriteFails: true });
+    const stores = mockStores(null, { preset: "solarized" }, { failingWrites: 1 });
 
     await renderLoaded();
     await waitFor(() => expect(stores.settingsStore.set).toHaveBeenCalled());
@@ -168,6 +188,41 @@ describe("SettingsProvider color scheme migration", () => {
     await renderLoaded();
 
     expect(screen.getByTestId("scheme").textContent).toBe("default");
+  });
+
+  it.each([
+    ["a scheme the user picks", "Pick Solarized", SOLARIZED],
+    ["a reset", "Reset", { id: "default", label: "" }],
+  ])("keeps %s while the carried-over scheme is being written", async (_, button, expected) => {
+    const stores = mockStores(null, { preset: "sepia" }, { holdFirstWrite: true });
+    await renderLoaded();
+    await waitFor(() => expect(stores.settingsStore.set).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(screen.getByRole("button", { name: button }));
+    stores.release();
+
+    await waitFor(() => expect(stores.settingsFile()?.appearance?.colorScheme).toEqual(expected), {
+      timeout: 2000,
+    });
+    expect(screen.getByTestId("scheme").textContent).toBe(expected.id);
+    expect(stores.pluginsFile()).toEqual({ [PLUGIN]: {} });
+  });
+
+  it("writes the carried-over scheme with the next change after a failed write", async () => {
+    expectConsole(/Failed to save settings/);
+    const stores = mockStores(null, { preset: "sepia" }, { failingWrites: 1 });
+    await renderLoaded();
+    await waitFor(() => expect(stores.settingsStore.set).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(screen.getByRole("button", { name: "Light" }));
+
+    await waitFor(() => expect(stores.settingsFile()?.appearance?.theme).toBe("light"), {
+      timeout: 2000,
+    });
+    expect(stores.settingsFile()?.appearance?.colorScheme).toEqual({
+      id: `${PLUGIN}:sepia`,
+      label: "Sepia",
+    });
   });
 
   it("resets a carried-over scheme to Default", async () => {

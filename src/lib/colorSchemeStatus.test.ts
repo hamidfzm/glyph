@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { readColorSchemeSetting, resolveColorScheme } from "@/lib/colorSchemeStatus";
+import { readColorSchemeChoice, resolveColorScheme } from "@/lib/colorSchemeStatus";
 import { colorSchemeEntry } from "@/lib/plugins/colorSchemes";
 import { DEFAULT_SETTINGS } from "@/lib/settings";
 import { installed } from "@/test/fixtures/pluginHost";
@@ -13,21 +13,22 @@ const inputs = {
   schemes: [sepia],
   initialLoadDone: true,
   corePlugins: DEFAULT_SETTINGS.corePlugins,
+  failedCorePlugins: [],
   installed: [installed()],
   disabled: [],
 };
 const savedOcean = { id: "com.x.demo:ocean", label: "Ocean" };
 
-describe("readColorSchemeSetting", () => {
+describe("readColorSchemeChoice", () => {
   it("reads a stored plugin scheme", () => {
-    expect(readColorSchemeSetting({ id: `${CORE}:sepia`, label: "Sepia" })).toEqual({
+    expect(readColorSchemeChoice({ id: `${CORE}:sepia`, label: "Sepia" })).toEqual({
       id: `${CORE}:sepia`,
       label: "Sepia",
     });
   });
 
   it("names a scheme stored without a label by its id", () => {
-    expect(readColorSchemeSetting({ id: "com.x.demo:ocean", label: 3 })).toEqual({
+    expect(readColorSchemeChoice({ id: "com.x.demo:ocean", label: 3 })).toEqual({
       id: "com.x.demo:ocean",
       label: "com.x.demo:ocean",
     });
@@ -43,7 +44,7 @@ describe("readColorSchemeSetting", () => {
     ["an id with no plugin part", { id: "sepia", label: "Sepia" }],
     ["a polluted object", JSON.parse('{"__proto__": {"id": "a:b"}}')],
   ])("reads %s as Default", (_, stored) => {
-    expect(readColorSchemeSetting(stored)).toEqual(DEFAULT_SETTINGS.appearance.colorScheme);
+    expect(readColorSchemeChoice(stored)).toEqual(DEFAULT_SETTINGS.appearance.colorScheme);
   });
 });
 
@@ -78,6 +79,15 @@ describe("resolveColorScheme", () => {
 
   it("waits for a core plugin that is on but has registered nothing yet", () => {
     expect(resolveColorScheme({ ...inputs, schemes: [] })).toEqual({ kind: "pending" });
+  });
+
+  it("is unavailable when its core plugin is on but failed to load", () => {
+    const status = resolveColorScheme({ ...inputs, schemes: [], failedCorePlugins: [CORE] });
+    expect(status).toEqual({
+      kind: "missing",
+      reason: "unavailable",
+      provider: { id: CORE, coreKey: "themePresets" },
+    });
   });
 
   it("is unavailable when its core plugin loaded without that scheme", () => {

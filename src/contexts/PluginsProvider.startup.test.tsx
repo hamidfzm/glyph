@@ -21,7 +21,9 @@ vi.mock("@/lib/pickers", () => ({
 // Core plugins follow app settings, covered by useCorePlugins.test; here only
 // their readiness matters, and it is steerable per case.
 const coreReady = vi.hoisted(() => ({ value: true }));
-vi.mock("@/hooks/useCorePlugins", () => ({ useCorePlugins: () => coreReady.value }));
+vi.mock("@/hooks/useCorePlugins", () => ({
+  useCorePlugins: () => ({ ready: coreReady.value, failed: [] }),
+}));
 
 vi.mock("@/lib/plugins/settingsStore", () => ({
   loadPluginSettings: vi.fn(() => Promise.resolve({})),

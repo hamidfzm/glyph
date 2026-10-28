@@ -56,7 +56,7 @@ describe("theme presets core plugin lifecycle", () => {
     const load = vi.spyOn(presets, "load");
     const { result, schemeKeys } = renderCore(settingsValue(false));
 
-    await waitFor(() => expect(result.current).toBe(true));
+    await waitFor(() => expect(result.current.ready).toBe(true));
     expect(load).not.toHaveBeenCalled();
     expect(schemeKeys()).toEqual([]);
   });
