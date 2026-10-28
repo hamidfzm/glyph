@@ -8,6 +8,7 @@ import {
   pickNewWorkspace,
   pickPluginDir,
   pickSave,
+  pickSaveDocument,
 } from "./pickers";
 
 describe("pickers", () => {
@@ -57,9 +58,21 @@ describe("pickers", () => {
   });
 
   it("pickSave forwards a default directory when given", async () => {
-    vi.mocked(invoke).mockResolvedValue("/ws/note.md");
-    await expect(pickSave("Untitled-1.md", "Markdown", ["md"], "/ws")).resolves.toBe("/ws/note.md");
+    vi.mocked(invoke).mockResolvedValue("/ws/out.pdf");
+    await expect(pickSave("note.pdf", "PDF", ["pdf"], "/ws")).resolves.toBe("/ws/out.pdf");
     expect(invoke).toHaveBeenCalledWith("pick_save", {
+      defaultName: "note.pdf",
+      filterName: "PDF",
+      extensions: ["pdf"],
+      defaultDir: "/ws",
+    });
+  });
+
+  it("pickSaveDocument goes to the document Save As picker, not the export one", async () => {
+    vi.mocked(invoke).mockResolvedValue("/ws/note.md");
+    const picked = pickSaveDocument("Untitled-1.md", "Markdown", ["md"], "/ws");
+    await expect(picked).resolves.toBe("/ws/note.md");
+    expect(invoke).toHaveBeenCalledWith("pick_save_document", {
       defaultName: "Untitled-1.md",
       filterName: "Markdown",
       extensions: ["md"],

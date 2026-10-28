@@ -8,7 +8,7 @@ use crate::grants::GrantRegistry;
 
 /// Show a path the session holds a grant on in the system file manager. Any
 /// grant will do, as nothing is handed back: `ensure_writable` admits all that
-/// `ensure_readable` does, and a document just saved under a new name besides.
+/// `ensure_readable` does, and a file just exported besides.
 /// The file manager answers off the main thread, which it can keep waiting.
 #[tauri::command]
 pub fn reveal_path(path: String, grants: State<'_, GrantRegistry>) -> Result<(), String> {
@@ -51,13 +51,13 @@ mod tests {
         let workspace = TempDir::new().unwrap();
         let elsewhere = TempDir::new().unwrap();
         let app = app_with_workspace(workspace.path());
-        // What Save As leaves a new document with: a grant to write, not to read.
-        let saved_as = elsewhere.path().join("new.md");
+        // What an export leaves its file with: a grant to write, not to read.
+        let exported = elsewhere.path().join("new.pdf");
         app.state::<GrantRegistry>()
-            .grant_export_file(&saved_as)
+            .grant_export_file(&exported)
             .unwrap();
 
-        for path in [workspace.path().join("gone.md"), saved_as] {
+        for path in [workspace.path().join("gone.md"), exported] {
             assert_eq!(reveal(&app, &path), Ok(()), "{path:?}");
         }
     }

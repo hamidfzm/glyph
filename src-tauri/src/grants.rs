@@ -209,6 +209,21 @@ impl GrantRegistry {
         Ok(canonical)
     }
 
+    /// Grant a document the user picked to save under a new name as
+    /// `grant_file` grants an opened one. It may not exist yet: the save writes it.
+    #[cfg(desktop)]
+    pub fn grant_document_target(&self, path: &Path) -> Result<PathBuf, String> {
+        let canonical = canonicalize_lenient(path)?;
+        let document_dir = match canonical.parent() {
+            Some(dir) if !canonical.is_dir() => dir.to_path_buf(),
+            _ => return Err(denied(path)),
+        };
+        let mut grants = self.lock()?;
+        grants.files.insert(canonical.clone());
+        grants.document_dirs.insert(document_dir);
+        Ok(canonical)
+    }
+
     /// Allow an existing image, audio, or video file inside the folder of an
     /// opened loose file, judged after symlinks resolve. Serves the asset
     /// protocol only: `ensure_readable` keeps the exact-path rule.
@@ -999,6 +1014,54 @@ mod tests {
         grants.grant_file(&folder).unwrap();
 
         assert!(grants.ensure_document_asset(&as_str(&beside)).is_err());
+    }
+
+    #[test]
+    fn a_document_saved_under_a_new_name_is_granted_as_an_opened_one() {
+        let tmp = TempDir::new().unwrap();
+        let saved = tmp.path().join("test.md");
+        let image = tmp.path().join("image.jpg");
+        let sibling = tmp.path().join("sibling.md");
+        fs::write(&image, "x").unwrap();
+        fs::write(&sibling, "x").unwrap();
+
+        let grants = GrantRegistry::default();
+        // What Save As used to leave a document with: its images stayed refused.
+        grants.grant_export_file(&saved).unwrap();
+        assert!(grants.ensure_document_asset(&as_str(&image)).is_err());
+
+        grants.grant_document_target(&saved).unwrap();
+        fs::write(&saved, "![desc](image.jpg)").unwrap();
+
+        assert!(grants.ensure_readable(&as_str(&saved)).is_ok());
+        assert!(grants.ensure_writable(&as_str(&saved)).is_ok());
+        assert!(grants.ensure_watchable(&as_str(&saved)).is_ok());
+        assert!(grants.ensure_document_asset(&as_str(&image)).is_ok());
+        assert!(grants.ensure_readable(&as_str(&image)).is_err());
+        assert!(grants.ensure_readable(&as_str(&sibling)).is_err());
+    }
+
+    #[test]
+    fn a_document_target_that_is_a_folder_or_a_dangling_link_is_refused() {
+        let tmp = TempDir::new().unwrap();
+        let notes = tmp.path().join("notes");
+        fs::create_dir_all(&notes).unwrap();
+        let image = tmp.path().join("photo.png");
+        fs::write(&image, "x").unwrap();
+        // A save through it would create the missing target wherever it points.
+        let dangling = tmp.path().join("dangling");
+        link_folder(&tmp.path().join("gone"), &dangling);
+
+        let grants = GrantRegistry::default();
+        for refused in [notes.clone(), dangling] {
+            assert!(
+                grants.grant_document_target(&refused).is_err(),
+                "{refused:?}"
+            );
+        }
+        // Nothing was recorded for any of them.
+        assert!(grants.ensure_document_asset(&as_str(&image)).is_err());
+        assert!(grants.ensure_readable(&as_str(&notes)).is_err());
     }
 
     #[test]

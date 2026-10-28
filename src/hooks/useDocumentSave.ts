@@ -6,7 +6,7 @@ import type { WorkspaceNotice } from "@/hooks/useWorkspaceNotice";
 import type { EnqueueWrite } from "@/hooks/useWriteQueue";
 import { MARKDOWN_EXTENSIONS } from "@/lib/markdownExtensions";
 import { basename, isPathInside } from "@/lib/paths";
-import { pickSave } from "@/lib/pickers";
+import { pickSaveDocument } from "@/lib/pickers";
 import type { FileState, FileTab, TabsState } from "@/lib/tabs";
 import { setWorkspaceLastFile } from "@/lib/workspace";
 
@@ -45,7 +45,7 @@ export function useDocumentSave({
   const saveVirtualAs = useCallback(
     async (id: string, title: string): Promise<boolean> => {
       const pick = (dir?: string) =>
-        pickSave(
+        pickSaveDocument(
           `${title}.md`,
           t("common:fileDialog.markdown"),
           MARKDOWN_EXTENSIONS as string[],
@@ -116,8 +116,7 @@ export function useDocumentSave({
         return false;
       }
       markSelfSave(target);
-      // pickSave grants write-only, so the watch may be declined; it is
-      // best-effort and never blocks the save.
+      // Best-effort: a failed watch never blocks the save.
       invoke("watch_file", { path: target }).catch(() => {});
       setState((prev) => ({
         ...prev,

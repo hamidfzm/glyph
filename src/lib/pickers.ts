@@ -36,8 +36,8 @@ export async function pickFiles(filters: PickFilter[]): Promise<string[] | null>
 }
 
 /** Save dialog for exports; grants the target write-only. `defaultDir` picks the
- *  folder it opens in (the workspace root when saving a new note); the backend
- *  rejects one that is not a granted workspace, before any dialog opens. */
+ *  folder it opens in; the backend rejects one that is not a granted workspace,
+ *  before any dialog opens. */
 export function pickSave(
   defaultName: string,
   filterName: string,
@@ -45,6 +45,22 @@ export function pickSave(
   defaultDir?: string,
 ): Promise<string | null> {
   return invoke<string | null>("pick_save", { defaultName, filterName, extensions, defaultDir });
+}
+
+/** Save As for a new document; grants the target as Open File grants a file,
+ *  so its relative images load. `defaultDir` is checked the way `pickSave`'s is. */
+export function pickSaveDocument(
+  defaultName: string,
+  filterName: string,
+  extensions: string[],
+  defaultDir?: string,
+): Promise<string | null> {
+  return invoke<string | null>("pick_save_document", {
+    defaultName,
+    filterName,
+    extensions,
+    defaultDir,
+  });
 }
 
 export type ExportDirPick = { kind: "granted"; path: string } | { kind: "insideWorkspace" };
