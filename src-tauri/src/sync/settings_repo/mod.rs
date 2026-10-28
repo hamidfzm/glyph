@@ -12,8 +12,8 @@
 //! machine and how a pull lands, [`plugins`] does the same for plugin files,
 //! [`files`] reads a commit's files and writes the working tree, [`exchange`]
 //! moves a setup between the stores and the clone, [`flow`] runs connect,
-//! sync, the first-connect choice and conflict resolution, and [`commands`]
-//! is the IPC surface.
+//! sync, the first-connect choice and conflict resolution, [`ops`] is what
+//! each command does, and [`commands`] wraps it for IPC.
 
 pub mod commands;
 mod config;
@@ -21,6 +21,7 @@ mod exchange;
 mod files;
 mod flow;
 mod local;
+mod ops;
 mod plugins;
 mod settings;
 mod state;

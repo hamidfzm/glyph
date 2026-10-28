@@ -98,6 +98,8 @@ pub(super) struct Machine {
     /// An edit to apply when settings are read for the given time: the
     /// user changing a setting while a sync runs.
     edit_on_read: Mutex<Option<(usize, String, Value)>>,
+    /// A settings store that fails every write.
+    refuse_writes: Mutex<bool>,
 }
 
 impl Machine {
@@ -167,6 +169,10 @@ impl Machine {
         *self.reads.lock().unwrap() = 0;
         *self.edit_on_read.lock().unwrap() = Some((nth, group.into(), value));
     }
+
+    pub(super) fn refuse_writes(&self, refuse: bool) {
+        *self.refuse_writes.lock().unwrap() = refuse;
+    }
 }
 
 impl LocalSetup for Machine {
@@ -182,6 +188,9 @@ impl LocalSetup for Machine {
     }
 
     fn set_settings(&self, settings: Object) -> Result<(), SyncError> {
+        if *self.refuse_writes.lock().unwrap() {
+            return Err(SyncError::Backend("the store refused the write".into()));
+        }
         *self.settings.lock().unwrap() = settings;
         Ok(())
     }

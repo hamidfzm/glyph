@@ -208,13 +208,20 @@ fn a_choice_that_fails_to_land_can_be_made_again() {
     connect(&cloud, "a", &a);
     let b = Machine::with_settings(json!({}));
     let (paths, _) = connect(&cloud, "b", &b);
-    // A folder where the state file goes fails the landing.
+    // A folder where the state file goes fails the fresh clone.
     let _ = fs::remove_file(paths.state());
     fs::create_dir_all(paths.state().join("blocker")).unwrap();
     assert!(flow::choose(&paths, &b, None, SetupChoice::UseSynced).is_err());
     assert_eq!(load_config(&paths).unwrap().unwrap().phase, Phase::Choosing);
-
     fs::remove_dir_all(paths.state()).unwrap();
+
+    // A store that refuses the write fails the landing.
+    b.refuse_writes(true);
+    assert!(flow::choose(&paths, &b, None, SetupChoice::UseSynced).is_err());
+    assert_eq!(load_config(&paths).unwrap().unwrap().phase, Phase::Choosing);
+    assert!(b.settings_now().is_empty());
+
+    b.refuse_writes(false);
     flow::choose(&paths, &b, None, SetupChoice::UseSynced).unwrap();
     assert_eq!(load_config(&paths).unwrap().unwrap().phase, Phase::Active);
     assert_eq!(b.settings_now()["appearance"], json!({"theme": "dark"}));
@@ -765,10 +772,12 @@ mod ipc {
     use super::super::config::{save_config, Phase, RepoPaths};
     use super::super::flow;
     use super::super::local::{LocalSetup, TauriLocal};
+    use super::super::ops::connect_checked;
     use super::super::state::{Locations, SettingsSyncState};
     use super::super::test_support::Cloud;
     use super::push_raw;
     use crate::grants::GrantRegistry;
+    use crate::sync::git::BoundToken;
 
     type App = tauri::App<tauri::test::MockRuntime>;
     type Webview = tauri::WebviewWindow<tauri::test::MockRuntime>;
@@ -798,6 +807,16 @@ mod ipc {
             .build()
             .expect("webview builds");
         (app, webview)
+    }
+
+    /// A machine's data folder and stores, all under `base`.
+    fn locations_under(base: &Path) -> Locations {
+        Locations {
+            app_data: base.join("data"),
+            settings_store: base.join("settings.json"),
+            plugins_store: base.join("plugins.json"),
+            plugins_root: base.join("plugins"),
+        }
     }
 
     fn call(webview: &Webview, cmd: &str, args: Value) -> Result<Value, Value> {
@@ -852,12 +871,7 @@ mod ipc {
         let _guard = crate::secrets::test_store::install();
         let cloud = Cloud::new();
         let base = cloud.tmp.path().join("machine");
-        let locations = Locations {
-            app_data: base.join("data"),
-            settings_store: base.join("settings.json"),
-            plugins_store: base.join("plugins.json"),
-            plugins_root: base.join("plugins"),
-        };
+        let locations = locations_under(&base);
         let (app, webview) = build(locations.clone());
         app.state::<SettingsSyncState>().clear_token();
 
@@ -1039,14 +1053,39 @@ mod ipc {
     }
 
     #[test]
+    fn a_connect_keeps_only_the_token_it_was_given() {
+        let _guard = crate::secrets::test_store::install();
+        let cloud = Cloud::new();
+        let (app, webview) = build(locations_under(&cloud.tmp.path().join("machine")));
+        let state = app.state::<SettingsSyncState>();
+        // Below the URL check, so the local fixture remote stands in for a
+        // user's https one.
+        let connect = |token| {
+            tauri::async_runtime::block_on(connect_checked(
+                app.handle().clone(),
+                &state,
+                cloud.config(),
+                token,
+            ))
+        };
+
+        let token = BoundToken {
+            token: "tok".into(),
+            host: "example.com".into(),
+        };
+        connect(Some(token.clone())).unwrap();
+        assert_eq!(state.token(), Some(token));
+
+        call(&webview, "settings_sync_disconnect", json!({})).unwrap();
+        state.set_token("old".into(), "old.example".into());
+        connect(None).unwrap();
+        assert_eq!(state.token(), None, "the old remote's token goes");
+    }
+
+    #[test]
     fn a_disabled_list_that_is_not_a_list_disables_nothing() {
         let tmp = tempfile::TempDir::new().unwrap();
-        let locations = Locations {
-            app_data: tmp.path().join("data"),
-            settings_store: tmp.path().join("settings.json"),
-            plugins_store: tmp.path().join("plugins.json"),
-            plugins_root: tmp.path().join("plugins"),
-        };
+        let locations = locations_under(tmp.path());
         let (app, _webview) = build(locations.clone());
         app.store(&locations.plugins_store)
             .unwrap()
