@@ -7,6 +7,7 @@ import { setNestedValue } from "@/lib/settingsObject";
 import { loadSecrets } from "@/lib/settingsSecrets";
 import { mergeChangedPaths, settingsFromStored } from "@/lib/settingsWrite";
 import { openStore } from "@/lib/store";
+import { carriedOverColorScheme, removeLegacyPreset } from "@/lib/themePresetMigration";
 import { SettingsContext } from "./SettingsContext";
 
 const STORE_KEY = "settings";
@@ -27,38 +28,6 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const changedPathsRef = useRef<Set<string>>(new Set());
   // A reset replaces every key on purpose, so it skips the merge.
   const replaceAllRef = useRef(false);
-
-  // Load settings from store on mount
-  useEffect(() => {
-    let cancelled = false;
-
-    async function init() {
-      try {
-        const store = await openStore("settings.json");
-        storeRef.current = store;
-        const saved = await store.get<Partial<Settings>>(STORE_KEY);
-        const base = settingsFromStored(saved);
-        // API keys live in the OS keychain, not the store: migrate any legacy
-        // plaintext keys out of settings.json and load the stored ones.
-        const merged = await loadSecrets(store, STORE_KEY, base);
-        if (!cancelled) {
-          setSettings(merged);
-          applyTheme(merged.appearance.theme);
-          applyCSSVariables(merged);
-        }
-      } catch (err) {
-        console.error("Failed to load settings:", err);
-        applyTheme(DEFAULT_SETTINGS.appearance.theme);
-        applyCSSVariables(DEFAULT_SETTINGS);
-      }
-      if (!cancelled) setLoaded(true);
-    }
-
-    init();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   // Listen for system theme changes when theme is "system"
   useEffect(() => {
@@ -135,6 +104,54 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     },
     [writePending],
   );
+
+  // Load settings from store on mount. Declared after writePending, which
+  // persists a color scheme carried over from the theme presets plugin.
+  useEffect(() => {
+    let cancelled = false;
+
+    async function init() {
+      try {
+        const store = await openStore("settings.json");
+        storeRef.current = store;
+        const saved = await store.get<Partial<Settings>>(STORE_KEY);
+        const base = settingsFromStored(saved);
+        const carried = await carriedOverColorScheme(saved);
+        const migrated = carried
+          ? { ...base, appearance: { ...base.appearance, colorScheme: carried } }
+          : base;
+        // API keys live in the OS keychain, not the store: migrate any legacy
+        // plaintext keys out of settings.json and load the stored ones.
+        const merged = await loadSecrets(store, STORE_KEY, migrated);
+        if (!cancelled) {
+          setSettings(merged);
+          applyTheme(merged.appearance.theme);
+          applyCSSVariables(merged);
+        }
+        if (!cancelled && carried) {
+          // Merged like any write, so another window's edits survive, and the
+          // plugin's copy goes only once the new one is on disk.
+          pendingRef.current = merged;
+          changedPathsRef.current.add("appearance.colorScheme");
+          void writePending()
+            .then(async (written) => {
+              if (written) await removeLegacyPreset();
+            })
+            .catch((err) => console.error("Failed to remove the carried-over theme preset:", err));
+        }
+      } catch (err) {
+        console.error("Failed to load settings:", err);
+        applyTheme(DEFAULT_SETTINGS.appearance.theme);
+        applyCSSVariables(DEFAULT_SETTINGS);
+      }
+      if (!cancelled) setLoaded(true);
+    }
+
+    init();
+    return () => {
+      cancelled = true;
+    };
+  }, [writePending]);
 
   // Persist any update still inside the debounce window; called before the
   // window is allowed to close so a just-changed setting is not lost.

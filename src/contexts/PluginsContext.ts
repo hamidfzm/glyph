@@ -15,6 +15,7 @@ export interface PluginsContextValue {
   settingsPanels: PluginHost["settingsPanels"];
   workspaceSettingsPanels: PluginHost["workspaceSettingsPanels"];
   styles: PluginHost["styles"];
+  colorSchemes: PluginHost["colorSchemes"];
   exporters: PluginHost["exporters"];
   siteThemes: PluginHost["siteThemes"];
   /** Every plugin on disk, enabled or not. */

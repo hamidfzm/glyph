@@ -732,10 +732,10 @@ the way a renderer-supplied path is.
   and `ipc.localhost` is the command bridge; a plugin that declares
   `network:localhost` for a local server reaches that server alone. The
   manifest parser refuses a `network:` host that is empty, not a plain
-  lowercase name, or under `.localhost`. A stylesheet a sandboxed plugin
-  adds is dropped when it would make requests (`url()`, `image-set()`,
-  `@import`: with a selector on an attribute, each one reports what the
-  page holds), and a plugin of either kind may not register translations
+  lowercase name, or under `.localhost`. A stylesheet or color scheme a
+  sandboxed plugin adds is dropped when it would make requests (`url()`,
+  `image-set()`, `@import`: with a selector on an attribute, each one reports
+  what the page holds), and a plugin of either kind may not register translations
   under one of the app's own namespaces, which the consent dialog and the
   external-link prompt read; any other namespace is its to fill. A plugin
   that declares
@@ -767,8 +767,12 @@ the way a renderer-supplied path is.
   with full trust and no consent prompt, take the permissions they need
   (`workspace:read` for tags and backlinks, and `workspace:write` as well for
   daily notes) from that same list rather than from disk, and only their on/off
-  state lives in `settings.json`. A core plugin's own preferences (the chosen
-  theme preset) sit in `plugins.json` like any plugin's `ctx.settings`, and the
-  plugin checks them against its own allowlist when it reads them. The backend
+  state lives in `settings.json`. A core plugin's own preferences sit in
+  `plugins.json` like any plugin's `ctx.settings`, and the plugin checks them
+  against its own allowlist when it reads them. The picked color scheme (theme
+  presets offers three) is an app setting in `settings.json`: the stored id is
+  only looked up among the schemes loaded plugins registered, anything
+  malformed reads as the default palette, and the stored label renders as
+  text. The backend
   reserves the `glyph.core.` id prefix, so an installed plugin cannot take a
   core plugin's settings, grants, or host slot.

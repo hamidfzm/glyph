@@ -1,4 +1,5 @@
 import { type ReactNode, useCallback, useRef, useState } from "react";
+import { ColorSchemeStyle } from "@/components/plugins/ColorSchemeStyle";
 import { PluginOverlay } from "@/components/plugins/PluginOverlay";
 import { PluginStyles } from "@/components/plugins/PluginStyles";
 import { type PluginToast, PluginToasts } from "@/components/plugins/PluginToasts";
@@ -67,6 +68,7 @@ export function PluginsProvider({ children }: { children: ReactNode }) {
         settingsPanels: host.settingsPanels,
         workspaceSettingsPanels: host.workspaceSettingsPanels,
         styles: host.styles,
+        colorSchemes: host.colorSchemes,
         exporters: host.exporters,
         siteThemes: host.siteThemes,
         installed,
@@ -82,6 +84,7 @@ export function PluginsProvider({ children }: { children: ReactNode }) {
       }}
     >
       {children}
+      <ColorSchemeStyle />
       <PluginStyles />
       <PluginToasts toasts={toasts} />
       <PluginOverlay />

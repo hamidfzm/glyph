@@ -17,6 +17,7 @@ export function pluginsContextValue(
     settingsPanels: createRegistry(),
     workspaceSettingsPanels: createRegistry(),
     styles: createRegistry(),
+    colorSchemes: createRegistry(),
     exporters: createRegistry(),
     siteThemes: createRegistry(),
     installed: [],

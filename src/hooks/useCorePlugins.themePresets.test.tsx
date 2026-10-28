@@ -1,19 +1,22 @@
-import { act, fireEvent, renderHook, waitFor, within } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SettingsContext, type SettingsContextValue } from "@/contexts/SettingsContext";
+import { i18n, registerTranslations } from "@/lib/i18n";
 import { CORE_PLUGINS } from "@/lib/plugins/corePlugins";
-import { createPluginHost, type PluginSettingsBackend } from "@/lib/plugins/host";
+import { createPluginHost } from "@/lib/plugins/host";
 import { type CorePluginSettings, DEFAULT_SETTINGS } from "@/lib/settings";
+import { legacyPresetScheme } from "@/lib/themePresetMigration";
 import { preloadCorePlugins } from "@/test/preloadCorePlugins";
 import { useCorePlugins } from "./useCorePlugins";
 
-// The real theme presets plugin against the real host: a picker under its
-// Settings row and the picked preset's stylesheet, there only while it is on.
+// The real theme presets plugin against the real host: its color schemes,
+// offered only while it is on.
 
 preloadCorePlugins("themePresets");
 
 const ID = "glyph.core.theme-presets";
+const KEYS = [`${ID}:sepia`, `${ID}:solarized`, `${ID}:high-contrast`];
 
 const ALL_OFF = Object.fromEntries(
   Object.keys(DEFAULT_SETTINGS.corePlugins).map((key) => [key, false]),
@@ -29,20 +32,8 @@ function settingsValue(themePresets: boolean): SettingsContextValue {
   };
 }
 
-/** Plugin settings kept in memory, the way plugins.json keeps them across restarts. */
-function memoryBackend(
-  stored: Record<string, Record<string, unknown>> = {},
-): PluginSettingsBackend {
-  return {
-    load: async (pluginId) => ({ ...stored[pluginId] }),
-    save: (pluginId, settings) => {
-      stored[pluginId] = { ...settings };
-    },
-  };
-}
-
-function renderCore(initial: SettingsContextValue, backend = memoryBackend()) {
-  const host = createPluginHost(vi.fn(), undefined, undefined, backend);
+function renderCore(initial: SettingsContextValue) {
+  const host = createPluginHost(vi.fn(), registerTranslations);
   let value = initial;
   const wrapper = ({ children }: { children: ReactNode }) => (
     <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>
@@ -52,16 +43,8 @@ function renderCore(initial: SettingsContextValue, backend = memoryBackend()) {
     value = next;
     view.rerender();
   };
-  const contributions = () => ({
-    panels: host.settingsPanels.list().map((panel) => `${panel.pluginId}/${panel.id}`),
-    sheets: host.styles.list().length,
-  });
-  const openPicker = () => {
-    const el = document.createElement("div");
-    host.settingsPanels.list()[0].mount(el, () => {});
-    return within(el).getByRole<HTMLSelectElement>("combobox");
-  };
-  return { ...view, host, setSettings, contributions, openPicker };
+  const schemeKeys = () => host.colorSchemes.list().map((scheme) => scheme.key);
+  return { ...view, host, setSettings, schemeKeys };
 }
 
 afterEach(() => vi.restoreAllMocks());
@@ -71,40 +54,61 @@ describe("theme presets core plugin lifecycle", () => {
     const presets = CORE_PLUGINS.find((core) => core.settingsKey === "themePresets");
     if (!presets) throw new Error("theme presets core plugin missing");
     const load = vi.spyOn(presets, "load");
-    const { result, contributions } = renderCore(settingsValue(false));
+    const { result, schemeKeys } = renderCore(settingsValue(false));
 
     await waitFor(() => expect(result.current).toBe(true));
     expect(load).not.toHaveBeenCalled();
-    expect(contributions()).toEqual({ panels: [], sheets: 0 });
+    expect(schemeKeys()).toEqual([]);
   });
 
-  it("adds its picker when on, and no stylesheet until a preset is picked", async () => {
-    const { contributions } = renderCore(settingsValue(true));
+  it("offers its schemes under the keys a carried-over preset is stored as", async () => {
+    const { host, schemeKeys } = renderCore(settingsValue(true));
 
-    await waitFor(() => expect(contributions()).toEqual({ panels: [`${ID}/preset`], sheets: 0 }));
+    await waitFor(() => expect(schemeKeys()).toEqual(KEYS));
+    expect(host.colorSchemes.list().map((scheme) => scheme.label)).toEqual([
+      "Sepia",
+      "Solarized",
+      "High contrast",
+    ]);
+    for (const preset of ["sepia", "solarized", "high-contrast"]) {
+      expect(schemeKeys()).toContain(legacyPresetScheme({ preset })?.id);
+    }
+    // Nothing applies until the user picks a scheme in Appearance.
+    expect(host.styles.list()).toEqual([]);
+    expect(host.settingsPanels.list()).toEqual([]);
   });
 
-  it("applies the preset picked in an earlier run", async () => {
-    const backend = memoryBackend({ [ID]: { preset: "sepia" } });
-    const { contributions, openPicker } = renderCore(settingsValue(true), backend);
-
-    await waitFor(() => expect(contributions()).toEqual({ panels: [`${ID}/preset`], sheets: 1 }));
-    expect(openPicker().value).toBe("sepia");
-  });
-
-  it("follows its toggle at runtime, with no restart, and keeps the picked preset", async () => {
-    const { host, setSettings, contributions, openPicker } = renderCore(settingsValue(true));
-    await waitFor(() => expect(contributions().panels).toHaveLength(1));
-
-    fireEvent.change(openPicker(), { target: { value: "high-contrast" } });
-    expect(contributions().sheets).toBe(1);
+  it("follows its toggle at runtime, with no restart", async () => {
+    const { host, setSettings, schemeKeys } = renderCore(settingsValue(true));
+    await waitFor(() => expect(schemeKeys()).toEqual(KEYS));
 
     act(() => setSettings(settingsValue(false)));
-    expect(contributions()).toEqual({ panels: [], sheets: 0 });
+    expect(schemeKeys()).toEqual([]);
     expect(host.listLoaded()).toEqual([]);
 
     act(() => setSettings(settingsValue(true)));
-    await waitFor(() => expect(contributions()).toEqual({ panels: [`${ID}/preset`], sheets: 1 }));
-    expect(openPicker().value).toBe("high-contrast");
+    await waitFor(() => expect(schemeKeys()).toEqual(KEYS));
+  });
+
+  it("renames its schemes on a language switch without ever dropping one", async () => {
+    const { host, schemeKeys } = renderCore(settingsValue(true));
+    await waitFor(() => expect(schemeKeys()).toEqual(KEYS));
+    const gaps: string[][] = [];
+    const unsubscribe = host.colorSchemes.subscribe(() => {
+      const missing = KEYS.filter((key) => !schemeKeys().includes(key));
+      if (missing.length > 0) gaps.push(missing);
+    });
+
+    const language = i18n.language;
+    try {
+      await act(() => i18n.changeLanguage("de"));
+      const labels = host.colorSchemes.list().map((scheme) => scheme.label);
+      expect(labels).toEqual(["Sepia", "Solarized", "Hoher Kontrast"]);
+    } finally {
+      await act(() => i18n.changeLanguage(language));
+      unsubscribe();
+    }
+    expect(gaps).toEqual([]);
+    expect(schemeKeys()).toEqual(KEYS);
   });
 });

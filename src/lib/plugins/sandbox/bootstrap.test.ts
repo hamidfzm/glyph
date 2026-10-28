@@ -58,6 +58,7 @@ const fullPlugin = `export default {
   activate(ctx) {
     ctx.commands.register({ id: "c1", title: "Cmd", run: () => ctx.notify("ran " + ctx.settings.get("who")) });
     ctx.ui.addStyles("body{}");
+    ctx.ui.addColorScheme({ id: "ocean", label: "Ocean", css: ":root{}" });
     ctx.registerTranslations("en", "ns", { k: "v" });
     ctx.settings.set("who", "world");
     ctx.exporters.register({ id: "e1", label: "Upper", extension: "txt", build: async (html) => html.toUpperCase() });
@@ -73,6 +74,12 @@ describe("worker bootstrap", () => {
     await vi.waitFor(() => expect(w.typesPosted()).toContain("activated"));
     expect(w.posted).toContainEqual({ type: "register-command", id: "c1", title: "Cmd" });
     expect(w.posted).toContainEqual({ type: "add-styles", css: "body{}" });
+    expect(w.posted).toContainEqual({
+      type: "register-color-scheme",
+      id: "ocean",
+      label: "Ocean",
+      css: ":root{}",
+    });
     expect(w.posted).toContainEqual({
       type: "register-translations",
       locale: "en",

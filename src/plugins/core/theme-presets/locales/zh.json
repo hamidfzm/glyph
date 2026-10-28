@@ -1,7 +1,5 @@
 {
-  "label": "配色方案",
   "presets": {
-    "none": "无",
     "sepia": "复古棕",
     "solarized": "Solarized",
     "high-contrast": "高对比度"
