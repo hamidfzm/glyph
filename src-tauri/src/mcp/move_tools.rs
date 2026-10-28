@@ -10,7 +10,7 @@ use super::edits::{refuse_open, refuse_unsaved};
 use super::refs::{capped, read_vault, ref_property, resolve_note, vault_property};
 use super::registry::{arguments, Effect, Session, ToolDef};
 use crate::commands::create::UNSAFE_NAME_CHARS;
-use crate::commands::walk::WALK_SKIP_DIRS;
+use crate::commands::walk::{WALK_MAX_DEPTH, WALK_SKIP_DIRS};
 use crate::vault::{relocate, respelled};
 
 /// What both tools promise, closing each one's description.
@@ -155,13 +155,9 @@ fn relocate_note(
         if resolved == source_file && !in_place {
             return Ok(Planned::AlreadyThere(found.path));
         }
-        let skipped = relative.components().any(|part| {
-            let name = part.as_os_str().to_string_lossy();
-            name.starts_with('.') || WALK_SKIP_DIRS.contains(&name.as_ref())
-        });
-        if skipped {
+        if !vault.admits(&relative) {
             return Err(format!(
-                "{} is somewhere Glyph does not index (a hidden name, or one of {WALK_SKIP_DIRS:?}), so the note would drop out of the vault",
+                "{} is somewhere Glyph does not index (a hidden name, one of {WALK_SKIP_DIRS:?}, or more than {WALK_MAX_DEPTH} levels deep), so the note would drop out of the vault",
                 target.display()
             ));
         }
@@ -415,8 +411,11 @@ mod tests {
         let up = h.ok("move_note", json!({ "ref": "Archive/Cooking", "to": "." }));
         assert_eq!(h.relative(&up["path"]), "Cooking.md");
 
-        fs::create_dir_all(h.root.join(".obsidian")).unwrap();
-        fs::create_dir_all(h.root.join("node_modules")).unwrap();
+        // The note would sit one level below the deepest the walk reaches.
+        let too_deep = vec!["d"; WALK_MAX_DEPTH].join("/");
+        for folder in [".obsidian", "node_modules", too_deep.as_str()] {
+            fs::create_dir_all(h.root.join(folder)).unwrap();
+        }
         for (to, why) in [
             ("", "is empty"),
             ("  ", "is empty"),
@@ -424,6 +423,7 @@ mod tests {
             ("Index.md", "not a folder"),
             (".obsidian", "does not index"),
             ("node_modules", "does not index"),
+            (too_deep.as_str(), "does not index"),
         ] {
             let refusal = h.refused("move_note", json!({ "ref": "Cooking", "to": to }));
             assert!(refusal.contains(why), "{to}: {refusal}");
