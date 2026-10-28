@@ -1,4 +1,5 @@
 import type { TDocumentDefinitions } from "pdfmake/interfaces";
+import { embeddedFontsReady } from "./embeddedFonts";
 import { convertHtmlToPdf } from "./htmlToPdf";
 import { pdfEngine } from "./pdfEngine";
 import { rasterizeSvgsInHtml } from "./rasterize";
@@ -31,6 +32,9 @@ async function renderPdf(bodyHtml: string, meta: PdfMetadata): Promise<Uint8Arra
   };
 
   try {
+    // The walk named the fonts the SVGs embed; pdfmake reads its font list when
+    // the build starts.
+    await embeddedFontsReady();
     const buffer = await pdfEngine().createPdf(docDefinition).getBuffer();
     return new Uint8Array(buffer);
   } finally {
