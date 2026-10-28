@@ -17,6 +17,13 @@ describe("decodeUtf8", () => {
 });
 
 describe("readDocumentFile", () => {
+  // preview.json is checked by the Windows and Quick Look builds too, but only
+  // on their own platform jobs; this fails the frontend gate everywhere.
+  it("caps at a positive whole number of bytes from preview.json", () => {
+    expect(Number.isInteger(MAX_DOCUMENT_BYTES)).toBe(true);
+    expect(MAX_DOCUMENT_BYTES).toBeGreaterThan(0);
+  });
+
   it("reads a markdown file as a document with no folder", async () => {
     const file = new File(["# Hi"], "notes.md");
     expect(await readDocumentFile(file)).toEqual({

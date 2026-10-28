@@ -32,8 +32,8 @@
           "options": {
             "patterns": [
               {
-                "group": ["../../**"],
-                "message": "Use the @/ alias for non-sibling imports, e.g. @/hooks/useTabs instead of ../../hooks/useTabs."
+                "group": ["../../**", "!../../src-tauri/*.json"],
+                "message": "Use the @/ alias for non-sibling imports, e.g. @/hooks/useTabs instead of ../../hooks/useTabs. Only the canonical config files in src-tauri/*.json are imported by path, since they live outside src/."
               },
               {
                 "group": ["@/plugins/core/**"],
@@ -62,8 +62,8 @@
               "options": {
                 "patterns": [
                   {
-                    "group": ["../../**"],
-                    "message": "Use the @/ alias for non-sibling imports, e.g. @/hooks/useTabs instead of ../../hooks/useTabs."
+                    "group": ["../../**", "!../../src-tauri/*.json"],
+                    "message": "Use the @/ alias for non-sibling imports, e.g. @/hooks/useTabs instead of ../../hooks/useTabs. Only the canonical config files in src-tauri/*.json are imported by path, since they live outside src/."
                   }
                 ]
               }

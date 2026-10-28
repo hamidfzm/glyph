@@ -398,8 +398,9 @@ jobs:
             workflow: deploy.yml
             input: ref
           # Smoke-tests the export action against this tag, pins it as the
-          # action's default and publishes the matching action release, which
-          # the Marketplace lists.
+          # action's default and publishes the matching action release. The
+          # Marketplace lists that release only once the publisher ticks the
+          # box on its edit page, which the run's summary links.
           - repo: glyph-md/export-website-action
             workflow: release.yml
             input: version
