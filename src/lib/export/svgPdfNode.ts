@@ -4,6 +4,7 @@
 
 import type { Content } from "pdfmake/interfaces";
 import { toXmlSvg } from "@/lib/svgDataUrl";
+import { registerEmbeddedFonts } from "./svgFonts";
 
 // Page content box for an A4 page with default pdfmake margins (~40pt each).
 export const CONTENT_WIDTH = 515;
@@ -69,6 +70,7 @@ function intrinsicSize(el: Element): Size | null {
 // no computed style to read and goes as markup; `toXmlSvg` restores the
 // namespace the sanitizer strips and hands the renderer well-formed XML.
 export function svgNode(el: Element): Content {
+  registerEmbeddedFonts(el);
   const size = intrinsicSize(el);
   const scale = size ? Math.min(1, CONTENT_WIDTH / size.width, CONTENT_HEIGHT / size.height) : 1;
   const svg = document.contains(el) ? (el as SVGElement) : toXmlSvg(el.outerHTML);
