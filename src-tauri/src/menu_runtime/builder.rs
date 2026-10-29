@@ -49,6 +49,9 @@ pub fn build_menu<R: Runtime>(
     let print = MenuItemBuilder::with_id(mid("print"), "Print\u{2026}")
         .accelerator("CmdOrCtrl+P")
         .build(handle)?;
+    // A web viewer link carrying the active document; gated on can_share_link.
+    let copy_share_link =
+        MenuItemBuilder::with_id(mid("copy-share-link"), "Copy Share Link").build(handle)?;
 
     // Export submenu items — all convert in the frontend and write a file
     // directly. PDF is a vector export here (the File > Print item, Cmd/Ctrl+P,
@@ -246,6 +249,7 @@ pub fn build_menu<R: Runtime>(
             .separator()
             .item(&print)
             .item(&export_menu)
+            .item(&copy_share_link)
             .separator()
             .item(&workspace_settings)
             .separator()
@@ -294,6 +298,7 @@ pub fn build_menu<R: Runtime>(
             .separator()
             .item(&print)
             .item(&export_menu)
+            .item(&copy_share_link)
             .separator()
             .item(&settings)
             .item(&workspace_settings)
@@ -331,6 +336,7 @@ pub fn build_menu<R: Runtime>(
         export_epub,
         export_pdf,
         export_website,
+        copy_share_link,
         workspace_settings,
         find,
         search_workspace,

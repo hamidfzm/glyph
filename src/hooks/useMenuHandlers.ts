@@ -44,7 +44,8 @@ export function useMenuHandlers({
     setTabMode,
     saveDocument,
   } = useTabsContext();
-  const { aiController, readAloud, printDoc, exporters, siteExporter, zoomActions } = controllers;
+  const { aiController, readAloud, printDoc, exporters, siteExporter, copyShareLink, zoomActions } =
+    controllers;
   const autoSave = settings.behavior.autoSave;
 
   const closeActiveTab = useCallback(() => {
@@ -94,6 +95,7 @@ export function useMenuHandlers({
       exportEpub: exporters.exportEpub,
       exportPdf: exporters.exportPdf,
       exportWebsite: siteExporter.exportWebsite,
+      copyShareLink,
       workspaceSettings: modals.openWorkspaceSettings,
       zoomIn: () => zoomActions?.zoomIn(),
       zoomOut: () => zoomActions?.zoomOut(),
@@ -131,6 +133,7 @@ export function useMenuHandlers({
       exporters.exportEpub,
       exporters.exportPdf,
       siteExporter.exportWebsite,
+      copyShareLink,
       zoomActions,
       aiController.runAction,
       aiController.togglePanel,

@@ -14,6 +14,7 @@
     "dialog:allow-message",
     "os:default",
     "clipboard-manager:allow-read-text",
+    "clipboard-manager:allow-write-text",
     "store:allow-get-store",
     "store:allow-get",
     "store:allow-set",

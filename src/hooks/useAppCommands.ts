@@ -16,6 +16,8 @@ import { useRegistryEntries } from "./usePluginRegistry";
 export interface AppCommandSources {
   /** True when the window has a folder workspace open. */
   workspaceOpen: boolean;
+  /** True when the active tab can open in the web viewer (see `canShareLink`). */
+  canShareLink: boolean;
   /** Markdown files in the workspace, if any. */
   workspaceFiles: readonly string[];
   /** Table-of-contents entries of the active document. */
@@ -49,6 +51,7 @@ export interface AppActions extends MenuEventHandlers {
  */
 export function useAppCommands({
   workspaceOpen,
+  canShareLink,
   workspaceFiles,
   tocEntries,
   actions,
@@ -88,7 +91,7 @@ export function useAppCommands({
       });
     }
 
-    out.push(...appPaletteCommands(t, actions, workspaceOpen));
+    out.push(...appPaletteCommands(t, actions, { workspaceOpen, canShareLink }));
 
     // Commands contributed by loaded plugins (the marketplace, install, enable,
     // and remove actions all live in the Settings Plugins tab instead).
@@ -117,5 +120,14 @@ export function useAppCommands({
     }
 
     return out;
-  }, [workspaceOpen, workspaceFiles, tocEntries, actions, t, pluginCommands, pluginExporters]);
+  }, [
+    workspaceOpen,
+    canShareLink,
+    workspaceFiles,
+    tocEntries,
+    actions,
+    t,
+    pluginCommands,
+    pluginExporters,
+  ]);
 }

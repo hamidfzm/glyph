@@ -14,6 +14,7 @@ const baseFlags: NativeMenuFlags = {
   ttsAvailable: false,
   hasDirty: false,
   autoSave: true,
+  canShareLink: false,
 };
 
 beforeEach(() => {
@@ -54,6 +55,7 @@ describe("useNativeMenuState", () => {
         ttsAvailable: true,
         hasDirty: true,
         autoSave: false,
+        canShareLink: true,
       }),
     );
     expect(invoke).toHaveBeenCalledWith("set_menu_state", {
@@ -66,6 +68,7 @@ describe("useNativeMenuState", () => {
         ttsAvailable: true,
         hasDirty: true,
         autoSave: false,
+        canShareLink: true,
       },
     });
   });
