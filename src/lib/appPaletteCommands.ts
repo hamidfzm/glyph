@@ -7,6 +7,7 @@ import { FitIcon } from "@/components/icons/FitIcon";
 import { FolderIcon } from "@/components/icons/FolderIcon";
 import { FolderOpenIcon } from "@/components/icons/FolderOpenIcon";
 import { GraphIcon } from "@/components/icons/GraphIcon";
+import { LinkIcon } from "@/components/icons/LinkIcon";
 import { NewFolderIcon } from "@/components/icons/NewFolderIcon";
 import { NewNoteIcon } from "@/components/icons/NewNoteIcon";
 import { OpenIcon } from "@/components/icons/OpenIcon";
@@ -27,7 +28,7 @@ import type { Command } from "@/lib/commands";
 export function appPaletteCommands(
   t: TFunction<"commands">,
   actions: AppActions,
-  workspaceOpen: boolean,
+  { workspaceOpen, canShareLink }: { workspaceOpen: boolean; canShareLink: boolean },
 ): Command[] {
   const out: Command[] = [];
   out.push(
@@ -179,6 +180,17 @@ export function appPaletteCommands(
       run: actions.exportPdf,
     },
   );
+
+  // Only a markdown document can open in the web viewer (menu-disabled otherwise).
+  if (canShareLink) {
+    out.push({
+      id: "cmd:copyShareLink",
+      title: t("copyShareLink"),
+      section: "Commands",
+      icon: LinkIcon,
+      run: actions.copyShareLink,
+    });
+  }
 
   // Workspace-wide export; pointless (and menu-disabled) without a folder.
   if (workspaceOpen) {

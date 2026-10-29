@@ -900,6 +900,28 @@ mod tests {
         }
     }
 
+    // Paste reads and Copy Share Link writes plain text; the threat model's
+    // Clipboard entry accepts those two, and no image or HTML access.
+    #[test]
+    fn clipboard_grants_stay_plain_text() {
+        let conf: serde_json::Value =
+            serde_json::from_str(include_str!("../capabilities/default.json")).unwrap();
+        let clipboard: Vec<&str> = conf["permissions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|p| p.as_str())
+            .filter(|p| p.starts_with("clipboard-manager:"))
+            .collect();
+        assert_eq!(
+            clipboard,
+            [
+                "clipboard-manager:allow-read-text",
+                "clipboard-manager:allow-write-text"
+            ]
+        );
+    }
+
     /// The fs plugin's `scope-app-recursive` scope, which `fs:default` pulls
     /// in, is unioned across every fs command, reads and writes alike. Granting
     /// any fs permission to the default capability therefore hands the webview
