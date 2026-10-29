@@ -1,4 +1,9 @@
+import vfs from "pdfmake/build/vfs_fonts";
 import { describe, expect, it } from "vitest";
+import { base64ToBytes, bytesToBase64 } from "@/lib/base64";
+import { buildWoff, type WoffTable } from "@/test/woff";
+import { embeddedFontsReady } from "./embeddedFonts";
+import { pdfEngine } from "./pdfEngine";
 import { CONTENT_HEIGHT, CONTENT_WIDTH, svgNode } from "./svgPdfNode";
 
 function svgEl(markup: string): Element {
@@ -93,5 +98,62 @@ describe("svgNode", () => {
       svgEl('<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><g/></svg>'),
     ) as { svg: string };
     expect(node.svg.match(/xmlns="http:\/\/www\.w3\.org\/2000\/svg"/g)).toHaveLength(1);
+  });
+});
+
+/** A TrueType font rewrapped as WOFF with every table deflated, as D2 embeds its fonts. */
+function ttfToWoff(ttf: Uint8Array): Uint8Array {
+  const view = new DataView(ttf.buffer, ttf.byteOffset, ttf.byteLength);
+  const tables = Array.from({ length: view.getUint16(4) }, (_, i): WoffTable => {
+    const record = 12 + 16 * i;
+    const offset = view.getUint32(record + 8);
+    return {
+      tag: String.fromCharCode(...ttf.subarray(record, record + 4)),
+      data: ttf.subarray(offset, offset + view.getUint32(record + 12)),
+      compress: true,
+      checksum: view.getUint32(record + 4),
+    };
+  });
+  return buildWoff(tables, "wOFF", view.getUint32(0));
+}
+
+// The fonts a PDF of a drawing embeds, by PostScript name: one SVG whose text
+// asks for a font it embeds with this data.
+async function drawingFonts(mime: string, font: Uint8Array): Promise<string[]> {
+  const markup =
+    '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="40">' +
+    `<style>@font-face { font-family: Hand; src: url(data:${mime};base64,${bytesToBase64(font)}); }</style>` +
+    '<text x="4" y="30" style="font-family: Hand, sans-serif">label</text></svg>';
+  // Parsed as XML (happy-dom's HTML parser drops a <style> inside <svg>) and
+  // mounted, as the export mounts its diagrams. The family is an inline style:
+  // happy-dom's computed style ignores the presentation attribute.
+  const svg = new DOMParser().parseFromString(markup, "image/svg+xml").documentElement;
+  document.body.append(svg);
+  try {
+    const node = svgNode(svg);
+    await embeddedFontsReady();
+    const buffer = await pdfEngine()
+      .createPdf({ content: [node] })
+      .getBuffer();
+    const pdf = new TextDecoder("latin1").decode(buffer);
+    return [
+      ...new Set(Array.from(pdf.matchAll(/\/BaseFont \/[A-Z]{6}\+([\w-]+)/g), (match) => match[1])),
+    ];
+  } finally {
+    svg.remove();
+  }
+}
+
+describe("svgNode embedded fonts", () => {
+  const robotoItalic = base64ToBytes(vfs["Roboto-Italic.ttf"]);
+
+  it("draws SVG text in a WOFF font the SVG embeds", async () => {
+    expect(await drawingFonts("font/woff", ttfToWoff(robotoItalic))).toEqual(["Roboto-Italic"]);
+  });
+
+  it("keeps the default font for a WOFF2 font, whose glyphs would draw empty", async () => {
+    const woff2 = robotoItalic.slice(0, 64);
+    woff2.set(new TextEncoder().encode("wOF2"));
+    expect(await drawingFonts("font/woff2", woff2)).toEqual(["Roboto-Regular"]);
   });
 });

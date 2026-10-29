@@ -110,6 +110,9 @@ pub fn apply_menu_state<R: Runtime>(
     refs.export_website
         .set_enabled(flags.has_workspace)
         .map_err(stringify)?;
+    refs.copy_share_link
+        .set_enabled(flags.can_share_link)
+        .map_err(stringify)?;
     refs.workspace_settings
         .set_enabled(flags.has_workspace)
         .map_err(stringify)?;
@@ -317,6 +320,9 @@ pub fn apply_menu_labels<R: Runtime>(refs: &MenuItemRefs<R>, l: &MenuLabels) -> 
     refs.export_epub.set_text(&l.export_epub).map_err(s)?;
     refs.export_pdf.set_text(&l.export_pdf).map_err(s)?;
     refs.export_website.set_text(&l.export_website).map_err(s)?;
+    refs.copy_share_link
+        .set_text(&l.copy_share_link)
+        .map_err(s)?;
     refs.workspace_settings
         .set_text(&l.workspace_settings)
         .map_err(s)?;

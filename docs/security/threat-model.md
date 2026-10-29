@@ -299,7 +299,8 @@ keys over it. What holds it in:
   keys are off.
 - **A size cap.** Files over 2 MiB get a notice instead of a render, so a
   large file cannot stall Explorer's pane. Quick Look and the web viewer
-  apply the same cap, all three reading it from `src-tauri/preview.json`.
+  apply the same cap, as does the app's Copy Share Link, all reading it
+  from `src-tauri/preview.json`.
 - **Process isolation.** The handler runs in Explorer's `prevhost.exe`
   surrogate, not in Explorer, and the WebView2 renderer keeps its own sandbox.
   A crash or a hang takes down the surrogate only.
@@ -376,16 +377,24 @@ permission: the marketplace download runs in Rust
 registry index from its fixed URL and follows the entry to a package on the
 marketplace hosts alone, so the renderer never names a URL.
 
-- **Clipboard.** `clipboard-manager:allow-read-text` alone, for the editor's
+- **Clipboard.** `clipboard-manager:allow-read-text`, for the editor's
   context-menu Paste (`src/lib/editorContextMenu.ts`): `execCommand("paste")`
   is blocked in the webview, and WebKit gates `navigator.clipboard.readText()`
   behind a second native confirmation, so the item reads the native clipboard
-  through the plugin. Copying uses the browser clipboard API, which needs no
-  grant, so there is no `allow-write-text`. The command takes no argument and
-  no path, but nothing ties it to the menu item: a compromised renderer can
-  read whatever the user last copied, at any time, a password manager's
-  entry included. Accepted, since paste has to read the clipboard and this
-  is the only read that works without the extra prompt.
+  through the plugin. The command takes no argument and no path, but nothing
+  ties it to the menu item: a compromised renderer can read whatever the user
+  last copied, at any time, a password manager's entry included. Accepted,
+  since paste has to read the clipboard and this is the only read that works
+  without the extra prompt.
+  `clipboard-manager:allow-write-text` backs Copy Share Link
+  (`src/hooks/useShareLink.ts`): it runs from a native menu item, a click that
+  carries no user activation, and WebKit refuses
+  `navigator.clipboard.writeText()` without one. Every other copy still uses
+  the browser clipboard API. Nothing ties the write to the command either, so
+  a compromised renderer can replace what the user copied, say an address
+  they are about to paste. Accepted: such a renderer already reads the
+  clipboard through the grant above, and WebView2 lets page script write it
+  without a gesture while the window has focus.
 - **Dialog.** Desktop holds `dialog:allow-message` alone (it backs `ask`).
   The plugin's `open` command adds whatever the user picks to the fs and asset
   scopes, so `dialog:allow-open` lives in `capabilities/mobile.json`

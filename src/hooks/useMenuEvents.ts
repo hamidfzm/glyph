@@ -25,6 +25,7 @@ export interface MenuEventHandlers {
   exportEpub: () => void;
   exportPdf: () => void;
   exportWebsite: () => void;
+  copyShareLink: () => void;
   workspaceSettings: () => void;
   zoomIn: () => void;
   zoomOut: () => void;
@@ -65,6 +66,7 @@ export function menuEventActions(handlers: MenuEventHandlers): Record<string, ()
     "menu-export-epub": handlers.exportEpub,
     "menu-export-pdf": handlers.exportPdf,
     "menu-export-website": handlers.exportWebsite,
+    "menu-copy-share-link": handlers.copyShareLink,
     "menu-workspace-settings": handlers.workspaceSettings,
     "menu-zoom-in": handlers.zoomIn,
     "menu-zoom-out": handlers.zoomOut,

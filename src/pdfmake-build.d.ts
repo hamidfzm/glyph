@@ -2,12 +2,14 @@
 // (@types/pdfmake only describes the package root, not the build/ subpaths we
 // must import for a browser build). Declare the small surface we use.
 declare module "pdfmake/build/pdfmake" {
-  import type { TDocumentDefinitions } from "pdfmake/interfaces";
+  import type { TDocumentDefinitions, TFontDictionary } from "pdfmake/interfaces";
 
   interface CreatedPdf {
     getBuffer(): Promise<Uint8Array>;
   }
   interface PdfMake {
+    fonts: TFontDictionary;
+    addFonts(fonts: TFontDictionary): void;
     addVirtualFileSystem(vfs: Record<string, string>): void;
     createPdf(documentDefinitions: TDocumentDefinitions): CreatedPdf;
   }
