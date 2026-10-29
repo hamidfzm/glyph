@@ -52,6 +52,8 @@ export async function startWebViewer({ root, darkQuery, language }: WebViewerOpt
     link = null;
     imageOffer = null;
     chrome.copyButton.disabled = true;
+    // Hiding the focused button would drop focus to the body.
+    if (document.activeElement === chrome.imagesButton) root.focus({ preventScroll: true });
     chrome.imagesButton.hidden = true;
     chrome.status.textContent = "";
     const message = await request();
@@ -82,7 +84,8 @@ export async function startWebViewer({ root, darkQuery, language }: WebViewerOpt
     folder = pickFolderImages(files);
     chrome.status.textContent = "";
     const dropped = await preview.show(offer.message, folder.url);
-    if (offer !== imageOffer) return;
+    // A later pick or another document replaced this one.
+    if (dropped === null || offer !== imageOffer) return;
     const noneFound = dropped === offer.dropped;
     if (noneFound) chrome.status.textContent = i18n.t("preview.noFolderImages");
   }

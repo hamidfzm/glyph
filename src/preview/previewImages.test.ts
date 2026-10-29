@@ -57,9 +57,11 @@ describe("rehypePreviewImages", () => {
   });
 
   it("replaces even a relative image with its alt text when no folder is served", async () => {
-    const html = await render("![shot](screenshot.png)", null);
-    expect(html).not.toContain("<img");
-    expect(html).toContain("shot");
+    for (const images of [null, ""]) {
+      const html = await render("![shot](screenshot.png)", images);
+      expect(html).not.toContain("<img");
+      expect(html).toContain("shot");
+    }
   });
 
   it("loads a relative image from the folder the reader picked", async () => {

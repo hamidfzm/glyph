@@ -37,7 +37,7 @@ Closing or replacing an owner (tab, workspace, window) flushes or transfers ever
 Renderer input, Markdown content, plugins, filenames, URLs, and IPC arguments are untrusted until validated. Bundled core plugins are trusted code, though the documents they render are not; which plugins are core comes only from the compiled-in list. See the [threat model](security/threat-model.md).
 
 - Owners: `src-tauri/src/grants.rs`, every Tauri command, Markdown/link/image rendering components, the web viewer's link codec (`src/lib/linkCodec.ts`), link handling and page CSP (`src/web/`)
-- Evidence: negative tests in `src-tauri/src/grants.rs` and command test modules, `src/lib/linkCodec.test.ts`, `src/web/linkClicks.test.ts`, `src/test/e2e/webViewer.spec.ts`
+- Evidence: negative tests in `src-tauri/src/grants.rs` and command test modules, `src/lib/linkCodec.test.ts`, `src/web/linkClicks.test.ts`, `src/web/folderImages.test.ts` and `src/preview/previewImages.test.ts` (an image source never reaches a file outside the picked folder), `src/test/e2e/webViewer.spec.ts`
 
 ### INV-6: The backend is the boundary
 

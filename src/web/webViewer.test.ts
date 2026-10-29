@@ -435,6 +435,26 @@ describe("images from a picked folder", () => {
     expect(imagesButton.hidden).toBe(false);
   });
 
+  it("ignores a folder the button did not ask for", async () => {
+    const { root, folderInput, imagesButton } = await start(await link("![shot](shot.png)"));
+    await vi.waitFor(() => expect(imagesButton.hidden).toBe(false));
+    pick(folderInput, pickedFile("docs/shot.png"));
+    Object.defineProperty(folderInput, "files", { value: null, configurable: true });
+    folderInput.dispatchEvent(new Event("change"));
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(URL.createObjectURL).not.toHaveBeenCalled();
+    expect(root.querySelector("img")).toBeNull();
+  });
+
+  it("hands focus to the document when the next one hides the focused button", async () => {
+    const { root, folderInput, imagesButton } = await startOffering("![shot](shot.png)");
+    pick(folderInput, pickedFile("docs/shot.png"));
+    imagesButton.focus();
+    navigateTo(await link("# Next"));
+    expect(imagesButton.hidden).toBe(true);
+    expect(document.activeElement).toBe(root);
+  });
+
   it("says so when the picked folder holds none of the document's images", async () => {
     const { root, folderInput, status } = await startOffering("![shot](shot.png)");
     pick(folderInput, pickedFile("docs/other.png"));

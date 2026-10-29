@@ -304,7 +304,8 @@
     "copyFailed": "Couldn't copy the link",
     "linkTooLong": "This document is too large to share as a link",
     "chooseImageFolder": "Choose Folder for Images",
-    "noFolderImages": "None of this document's images are in that folder",
+    "chooseImageFolderHint": "Show this document's images from the folder it is in",
+    "noFolderImages": "None of this document's images are in that folder. Choose the folder the document is in.",
     "invalidLink": "This link doesn't hold a document Glyph can open. It may have been cut short when it was shared."
   }
 }

@@ -303,8 +303,9 @@
     "linkCopied": "链接已复制",
     "copyFailed": "无法复制链接",
     "linkTooLong": "此文档过大，无法以链接形式分享",
-    "chooseImageFolder": "选择图片所在文件夹",
-    "noFolderImages": "该文件夹中没有此文档的图片",
+    "chooseImageFolder": "为图片选择文件夹",
+    "chooseImageFolderHint": "从此文档所在的文件夹显示其中的图片",
+    "noFolderImages": "该文件夹中没有此文档的图片。请选择此文档所在的文件夹。",
     "invalidLink": "此链接不包含 Glyph 能打开的文档。它可能在分享时被截断了。"
   }
 }

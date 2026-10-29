@@ -167,6 +167,16 @@ describe("startPreview without a host", () => {
     expect(renderPreview).toHaveBeenCalledWith("# Web", { dark: false, images: picked });
   });
 
+  it("keeps the picked folder when a theme switch re-renders", async () => {
+    const { preview, switchTheme } = startDirect();
+    const picked = vi.fn(() => null);
+    await preview.show(webDocument, picked);
+    switchTheme(true);
+    await vi.waitFor(() =>
+      expect(renderPreview).toHaveBeenLastCalledWith("# Web", { dark: true, images: picked }),
+    );
+  });
+
   it("settles with how many relative images became alt text", async () => {
     vi.mocked(renderPreview).mockResolvedValueOnce(rendered("<p>web</p>", 2));
     const { root, preview } = startDirect();

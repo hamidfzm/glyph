@@ -56,7 +56,7 @@ export function rehypePreviewImages(images: ImageSource, onDrop: () => void) {
 }
 
 function resolveInFolder(images: ImageSource, src: string): string | null {
-  if (images === null) return null;
+  if (!images) return null;
   if (typeof images === "string") return new URL(src, images).href;
   return images(src);
 }
