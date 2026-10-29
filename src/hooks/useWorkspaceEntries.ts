@@ -3,6 +3,7 @@ import { ask } from "@tauri-apps/plugin-dialog";
 import { type Dispatch, type RefObject, type SetStateAction, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { lastSegment, parentDir, pruneInside } from "@/lib/paths";
+import { readWithSettledFileTypes } from "@/lib/plugins/fileTypes";
 import type { DirEntry, Workspace } from "@/lib/tabs";
 
 interface UseWorkspaceEntriesOptions {
@@ -100,10 +101,9 @@ export function useWorkspaceEntries({
   const refreshAfterMove = useCallback(
     async (from: string, toDir: string, newPath: string, root: string) => {
       const sourceParent = parentDir(from, root);
-      const [sourceEntries, destEntries] = await Promise.all([
-        loadDirectory(sourceParent),
-        loadDirectory(toDir),
-      ]);
+      const [sourceEntries, destEntries] = await readWithSettledFileTypes(() =>
+        Promise.all([loadDirectory(sourceParent), loadDirectory(toDir)]),
+      );
       repointOpenFiles(from, newPath);
       setWorkspace((prev) => {
         if (prev?.root !== root) return prev;

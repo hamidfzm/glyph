@@ -41,6 +41,25 @@ export function registerFileType({ extensions, language }: FileTypeContribution)
   return fileTypes.register({ extensions: normalized, language });
 }
 
+/** Every registered extension once, as the open dialog and the file tree ask for them. */
+export function registeredExtensions(): string[] {
+  return [...new Set(fileTypes.list().flatMap((type) => type.extensions))];
+}
+
+/**
+ * Run `read` again until no file type registered or went away while it ran,
+ * so what it returns reflects the types registered when it settles.
+ */
+export async function readWithSettledFileTypes<T>(read: () => Promise<T>): Promise<T> {
+  let registered: readonly FileTypeContribution[];
+  let result: T;
+  do {
+    registered = fileTypes.list();
+    result = await read();
+  } while (fileTypes.list() !== registered);
+  return result;
+}
+
 /** The file type registered for `path`; the earliest registration wins. */
 export function fileTypeFor(
   path: string,
