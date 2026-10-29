@@ -16,7 +16,7 @@ import { RESTORE_PLUGIN_WAIT_MS } from "./useTabsSession";
 vi.mock("@/lib/pickers", () => ({
   pickFolder: vi.fn(),
   pickFiles: vi.fn(),
-  pickSave: vi.fn(),
+  pickSaveDocument: vi.fn(),
   pickNewWorkspace: vi.fn(),
 }));
 

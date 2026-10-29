@@ -314,6 +314,8 @@ pub fn run() {
             #[cfg(desktop)]
             commands::pick::pick_save,
             #[cfg(desktop)]
+            commands::pick::pick_save_document,
+            #[cfg(desktop)]
             commands::pick::pick_export_dir,
             #[cfg(desktop)]
             commands::pick::pick_plugin_dir,

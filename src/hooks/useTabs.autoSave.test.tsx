@@ -2,7 +2,7 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useAutoSave } from "@/hooks/useAutoSave";
 import { autoSaveDocuments } from "@/lib/autoSaveDocuments";
-import { pickSave } from "@/lib/pickers";
+import { pickSaveDocument } from "@/lib/pickers";
 import { deferred } from "@/test/deferred";
 import {
   defaultOptions,
@@ -17,7 +17,7 @@ import { useTabs } from "./useTabs";
 vi.mock("@/lib/pickers", () => ({
   pickFolder: vi.fn(),
   pickFiles: vi.fn(),
-  pickSave: vi.fn(),
+  pickSaveDocument: vi.fn(),
   pickNewWorkspace: vi.fn(),
 }));
 
@@ -66,14 +66,14 @@ describe("Auto Save and untitled documents", () => {
     });
     await wait(DEBOUNCE * 5);
 
-    expect(pickSave).not.toHaveBeenCalled();
+    expect(pickSaveDocument).not.toHaveBeenCalled();
     expect(fileOf(result).virtual).toBe(true);
     expect(fileOf(result).dirty).toBe(true);
   });
 
   it("Save inside the debounce opens one Save As, and Auto Save adds none", async () => {
     const dialog = deferred<string | null>();
-    vi.mocked(pickSave).mockReturnValue(dialog.promise);
+    vi.mocked(pickSaveDocument).mockReturnValue(dialog.promise);
     const { result } = renderHook(useTabsWithAutoSave);
     const tabId = await typeIntoNewDocument(result, "draft");
 
@@ -82,7 +82,7 @@ describe("Auto Save and untitled documents", () => {
       saving = result.current.saveDocument(tabId);
     });
     await wait(DEBOUNCE * 2);
-    expect(pickSave).toHaveBeenCalledTimes(1);
+    expect(pickSaveDocument).toHaveBeenCalledTimes(1);
 
     await act(async () => {
       dialog.resolve(null);
@@ -94,7 +94,7 @@ describe("Auto Save and untitled documents", () => {
     await wait(DEBOUNCE * 2);
 
     // The cancelled dialog does not come back on its own after the next edit.
-    expect(pickSave).toHaveBeenCalledTimes(1);
+    expect(pickSaveDocument).toHaveBeenCalledTimes(1);
     expect(fileOf(result).dirty).toBe(true);
   });
 
@@ -109,7 +109,7 @@ describe("Auto Save and untitled documents", () => {
       })
       .mockResolvedValue(undefined);
     mockWriteFile(writeFile);
-    vi.mocked(pickSave).mockResolvedValue("/p/saved.md");
+    vi.mocked(pickSaveDocument).mockResolvedValue("/p/saved.md");
     const { result } = renderHook(useTabsWithAutoSave);
     const tabId = await typeIntoNewDocument(result, "first");
 
@@ -143,7 +143,7 @@ describe("Auto Save and untitled documents", () => {
       content: "first second third",
     });
     expect(writeFile).toHaveBeenCalledTimes(3);
-    expect(pickSave).toHaveBeenCalledTimes(1);
+    expect(pickSaveDocument).toHaveBeenCalledTimes(1);
   });
 
   it("still saves a document with a path once per pause in typing", async () => {
