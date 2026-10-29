@@ -1,6 +1,12 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Disposer } from "./disposer";
-import { fileTypeFor, fileTypes, registerFileType } from "./fileTypes";
+import {
+  fileTypeFor,
+  fileTypes,
+  readWithSettledFileTypes,
+  registeredExtensions,
+  registerFileType,
+} from "./fileTypes";
 
 const disposers: Disposer[] = [];
 afterEach(() => {
@@ -59,5 +65,41 @@ describe("fileTypes", () => {
     for (const dispose of disposers.splice(0)) dispose();
     expect(fileTypeFor("a.puml")).toBeUndefined();
     expect(fileTypes.list()).toHaveLength(0);
+  });
+
+  it("lists each registered extension once", () => {
+    expect(registeredExtensions()).toEqual([]);
+    register(["puml", "plantuml"], "plantuml");
+    register(["puml", "wsd"], "other");
+    expect(registeredExtensions()).toEqual(["puml", "plantuml", "wsd"]);
+  });
+});
+
+describe("readWithSettledFileTypes", () => {
+  it("reads once while the file types stay put", async () => {
+    const read = vi.fn(async () => registeredExtensions());
+    await expect(readWithSettledFileTypes(read)).resolves.toEqual([]);
+    expect(read).toHaveBeenCalledTimes(1);
+  });
+
+  it("reads again when a file type registers or goes away mid-read", async () => {
+    let changes = [
+      () => register(["puml"], "plantuml"),
+      () => {
+        for (const dispose of disposers.splice(0)) dispose();
+      },
+    ];
+    const read = vi.fn(async () => {
+      const seen = registeredExtensions();
+      changes.shift()?.();
+      return seen;
+    });
+
+    await expect(readWithSettledFileTypes(read)).resolves.toEqual([]);
+    expect(read).toHaveBeenCalledTimes(3);
+
+    changes = [() => register(["wsd"], "other")];
+    await expect(readWithSettledFileTypes(read)).resolves.toEqual(["wsd"]);
+    expect(read).toHaveBeenCalledTimes(5);
   });
 });
