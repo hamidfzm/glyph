@@ -12,7 +12,7 @@ import { isNotebookFile, isSupportedFile, NOTEBOOK_EXTENSIONS } from "@/lib/note
 import { isPathInside } from "@/lib/paths";
 import { pickFiles } from "@/lib/pickers";
 import { isMobilePlatform } from "@/lib/platform";
-import { fileTypes } from "@/lib/plugins/fileTypes";
+import { registeredExtensions } from "@/lib/plugins/fileTypes";
 import { EDITOR_MODE, type EditorMode } from "@/lib/settings";
 import { isSourceDocument } from "@/lib/sourceDocuments";
 import { generateTabId, nextUntitledTitle } from "@/lib/tabIds";
@@ -233,7 +233,7 @@ export function useOpenDocument({
   const openFileDialog = useCallback(async () => {
     // Plugin file types have no picker entry of their own; the all-documents
     // filter is where they become reachable.
-    const pluginExtensions = fileTypes.list().flatMap((type) => type.extensions);
+    const pluginExtensions = registeredExtensions();
     const selected = await pickFiles([
       {
         name: t("common:fileDialog.documents"),
