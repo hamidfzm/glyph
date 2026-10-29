@@ -155,6 +155,31 @@ describe("useCorePlugins", () => {
     expect(commandIds()).toEqual(["d2.cmd"]);
   });
 
+  it("lists a core plugin once when its retry fails too", async () => {
+    expectConsole(/Failed to load core plugin glyph\.core\.d2/);
+    load.mockRejectedValue(new Error("chunk failed"));
+    const { result, setSettings, pushToast } = renderCore(settingsValue(true));
+    await waitFor(() => expect(result.current.failed).toEqual(["glyph.core.d2"]));
+
+    setSettings(settingsValue(true));
+    await waitFor(() => expect(pushToast).toHaveBeenCalledTimes(2));
+    expect(result.current.failed).toEqual(["glyph.core.d2"]);
+  });
+
+  it("does not list a core plugin turned off while its load was failing", async () => {
+    expectConsole(/Failed to load core plugin glyph\.core\.d2/);
+    let failImport: (err: Error) => void = () => {};
+    load.mockImplementationOnce(() => new Promise((_resolve, reject) => (failImport = reject)));
+    const { result, setSettings, pushToast } = renderCore(settingsValue(true));
+    await waitFor(() => expect(load).toHaveBeenCalledTimes(1));
+
+    setSettings(settingsValue(false));
+    await act(async () => failImport(new Error("chunk failed")));
+
+    expect(pushToast).toHaveBeenCalled();
+    expect(result.current.failed).toEqual([]);
+  });
+
   it("stops listing a failed core plugin once it is turned off", async () => {
     expectConsole(/Failed to load core plugin glyph\.core\.d2/);
     load.mockRejectedValueOnce(new Error("chunk failed"));
