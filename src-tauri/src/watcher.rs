@@ -1,26 +1,104 @@
+use notify::event::{ModifyKind, RemoveKind};
 use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
+use serde::Serialize;
 use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard};
 use tauri::{AppHandle, Emitter, Manager, Runtime, State};
 
+use crate::commands::walk::WALK_SKIP_DIRS;
 use crate::grants::GrantRegistry;
 use crate::vault::VaultStore;
 
 pub struct FileWatcherState(pub Arc<Mutex<HashMap<String, RecommendedWatcher>>>);
 
-/// A directory watch should fire when an indexed file or a sub-directory is
-/// added, removed, renamed, or modified. Everything else (e.g. attribute-only
-/// changes, sibling attachments) is filtered out so the frontend isn't flooded
-/// with refreshes. Extracted as a pure helper so we can test the filter
-/// without booting a Tauri app.
-pub fn is_relevant_directory_change(event: &Event) -> bool {
-    matches!(
-        event.kind,
-        EventKind::Create(_) | EventKind::Remove(_) | EventKind::Modify(_)
-    ) && event
+/// What a change inside a watched workspace leaves out of date, weakest first.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+enum DirectoryChange {
+    /// Only the file tree: an entry holding no documents came, went, or was
+    /// renamed (an image, a plugin's file type, anything under `node_modules`).
+    Listing,
+    /// The documents too, so the index and the document list are read again.
+    Documents,
+}
+
+/// The `directory-changed` payload, with the root as the window spelled it.
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DirectoryChangedPayload<'a> {
+    root: &'a str,
+    documents_changed: bool,
+}
+
+/// What `event` leaves out of date for the workspace at `root`, or `None`
+/// when nothing the window shows changed. The tree lists every visible entry
+/// whatever its type, so any of them coming, going, or being renamed counts;
+/// only the index reads content, so an edit counts for indexed notes alone.
+fn directory_change(event: &Event, root: &Path) -> Option<DirectoryChange> {
+    let came_or_went = match event.kind {
+        EventKind::Create(_) | EventKind::Remove(_) => true,
+        EventKind::Modify(ModifyKind::Name(_)) => true,
+        EventKind::Modify(_) => false,
+        _ => return None,
+    };
+    event
         .paths
         .iter()
-        .any(|p| crate::is_markdown_file(p) || crate::is_canvas_file(p) || p.is_dir())
+        .filter_map(|path| {
+            let relative = visible_below(path, root)?;
+            let documents_here = !is_skipped(relative);
+            if came_or_went && documents_here {
+                Some(entry_change(path, event.kind))
+            } else if came_or_went {
+                Some(DirectoryChange::Listing)
+            } else if documents_here
+                && (crate::is_markdown_file(path) || crate::is_canvas_file(path))
+            {
+                Some(DirectoryChange::Documents)
+            } else {
+                None
+            }
+        })
+        .max()
+}
+
+/// `path` below `root`, or `None` for the root itself and for an entry the
+/// tree hides: a name below the root starting with `.`, the rule
+/// `read_directory` applies at each level. Only the part below the root is
+/// judged, since a workspace may live in a hidden folder (`~/.config/notes`).
+fn visible_below<'a>(path: &'a Path, root: &Path) -> Option<&'a Path> {
+    let relative = path.strip_prefix(root).unwrap_or(path);
+    let hidden = relative
+        .components()
+        .any(|part| part.as_os_str().to_string_lossy().starts_with('.'));
+    let is_root = relative.as_os_str().is_empty();
+    (!hidden && !is_root).then_some(relative)
+}
+
+/// Whether `relative` lies in a folder the document list and the index never
+/// walk into, though the tree lists it.
+fn is_skipped(relative: &Path) -> bool {
+    relative.components().any(|part| {
+        let name = part.as_os_str().to_string_lossy();
+        WALK_SKIP_DIRS.contains(&name.as_ref())
+    })
+}
+
+/// What an entry that came, went, or was renamed leaves out of date. A folder
+/// may hold documents, and one that is gone may have. `symlink_metadata` keeps
+/// the lookup off any link.
+fn entry_change(path: &Path, kind: EventKind) -> DirectoryChange {
+    if crate::is_supported_file(path) {
+        return DirectoryChange::Documents;
+    }
+    // Where the backend says what went (inotify, FSEvents), a file held none.
+    if kind == EventKind::Remove(RemoveKind::File) {
+        return DirectoryChange::Listing;
+    }
+    match std::fs::symlink_metadata(path) {
+        Ok(meta) if !meta.is_dir() => DirectoryChange::Listing,
+        _ => DirectoryChange::Documents,
+    }
 }
 
 /// A file watch should fire when the watched file's content changes. Editors
@@ -30,20 +108,34 @@ pub fn is_relevant_file_change(event: &Event) -> bool {
     matches!(event.kind, EventKind::Modify(_) | EventKind::Create(_))
 }
 
-/// Shared body of the `notify` callbacks: drop watcher errors, filter the
-/// event through `is_relevant`, and emit when it passes. Extracted so the
-/// error and filtered-out arms are testable — a live watcher only delivers
-/// them on hard-to-reproduce filesystem conditions.
-fn forward_watch_event(
-    res: Result<Event, notify::Error>,
-    is_relevant: fn(&Event) -> bool,
-    emit: impl FnOnce(&Event),
-) {
-    if let Ok(event) = res {
-        if is_relevant(&event) {
-            emit(&event);
-        }
+/// Body of the file watch's callback: drop watcher errors, and emit for a
+/// relevant change. Extracted so the error and filtered-out arms are testable:
+/// a live watcher only delivers them on hard-to-reproduce filesystem conditions.
+fn forward_file_event(res: Result<Event, notify::Error>, emit: impl FnOnce()) {
+    if res.is_ok_and(|event| is_relevant_file_change(&event)) {
+        emit();
     }
+}
+
+/// Body of the directory watch's callback. Only a document change re-indexes,
+/// and before the window hears of it, so the snapshot it asks for next is
+/// already current.
+fn forward_directory_event(
+    res: Result<Event, notify::Error>,
+    root: &Path,
+    reindex: impl FnOnce(&[PathBuf]),
+    emit: impl FnOnce(DirectoryChange),
+) {
+    let Ok(event) = res else {
+        return;
+    };
+    let Some(change) = directory_change(&event, root) else {
+        return;
+    };
+    if change == DirectoryChange::Documents {
+        reindex(&event.paths);
+    }
+    emit(change);
 }
 
 /// A watcher that stays inside the folder it is given. By default `notify`
@@ -110,7 +202,7 @@ pub fn watch_file<R: Runtime>(
     let app_handle = app.clone();
     let watched_path = path.clone();
     let mut watcher = new_watcher(move |res| {
-        forward_watch_event(res, is_relevant_file_change, |_| {
+        forward_file_event(res, || {
             let _ = app_handle.emit("file-changed", &watched_path);
         });
     })?;
@@ -142,15 +234,25 @@ pub fn watch_directory<R: Runtime>(
 
     let app_handle = app.clone();
     let watched_path = path.clone();
+    // Events arrive spelled against the path being watched, not the window's.
+    let root = canonical.clone();
     let mut watcher = new_watcher(move |res| {
-        forward_watch_event(res, is_relevant_directory_change, |event| {
-            // Re-index before the frontend hears about the change, so the
-            // snapshot it asks for next is already current.
-            if let Some(store) = app_handle.try_state::<VaultStore>() {
-                crate::vault::apply_changes(&store, &watched_path, &event.paths);
-            }
-            let _ = app_handle.emit("directory-changed", &watched_path);
-        });
+        forward_directory_event(
+            res,
+            &root,
+            |paths| {
+                if let Some(store) = app_handle.try_state::<VaultStore>() {
+                    crate::vault::apply_changes(&store, &watched_path, paths);
+                }
+            },
+            |change| {
+                let payload = DirectoryChangedPayload {
+                    root: &watched_path,
+                    documents_changed: change == DirectoryChange::Documents,
+                };
+                let _ = app_handle.emit("directory-changed", payload);
+            },
+        );
     })?;
     // A recursive watch walks the whole tree to register it, and the lock is
     // not held meanwhile: every other watch and unwatch call would wait.
@@ -171,8 +273,7 @@ pub fn unwatch_directory<R: Runtime>(path: String, app: AppHandle<R>) -> Result<
 #[cfg(test)]
 mod tests {
     use super::*;
-    use notify::event::{CreateKind, ModifyKind, RemoveKind};
-    use std::path::PathBuf;
+    use notify::event::{AccessKind, CreateKind, DataChange, MetadataKind, RemoveKind, RenameMode};
     use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
     use tauri::test::{mock_app, MockRuntime};
     use tauri::{App, Listener};
@@ -229,24 +330,28 @@ mod tests {
         dir
     }
 
-    /// Subscribe to `event` on the app handle, returning a shared counter that
-    /// the listener bumps every time the event fires.
-    fn count_event(app: &App<MockRuntime>, event: &'static str) -> Arc<Mutex<usize>> {
-        let counter: Arc<Mutex<usize>> = Arc::new(Mutex::new(0));
-        let sink = Arc::clone(&counter);
-        app.handle().listen(event, move |_| {
-            *sink.lock().unwrap() += 1;
+    /// Subscribe to `event` on the app handle, returning the payloads it
+    /// carries, in the order it fires.
+    fn record_event(
+        app: &App<MockRuntime>,
+        event: &'static str,
+    ) -> Arc<Mutex<Vec<serde_json::Value>>> {
+        let payloads = Arc::new(Mutex::new(Vec::new()));
+        let sink = Arc::clone(&payloads);
+        app.handle().listen(event, move |fired| {
+            let payload = serde_json::from_str(fired.payload()).unwrap();
+            sink.lock().unwrap().push(payload);
         });
-        counter
+        payloads
     }
 
-    /// Poll `counter` until it is non-zero or `timeout` elapses. Returns the
+    /// Poll `payloads` until one arrives or `timeout` elapses. Returns the
     /// final count. Filesystem-notification latency varies by platform, so the
     /// emission tests poll rather than sleeping a fixed amount.
-    fn wait_for_event(counter: &Arc<Mutex<usize>>, timeout: Duration) -> usize {
+    fn wait_for_event(payloads: &Arc<Mutex<Vec<serde_json::Value>>>, timeout: Duration) -> usize {
         let start = Instant::now();
         loop {
-            let n = *counter.lock().unwrap();
+            let n = payloads.lock().unwrap().len();
             if n > 0 || start.elapsed() >= timeout {
                 return n;
             }
@@ -272,127 +377,352 @@ mod tests {
     }
 
     #[test]
-    fn forward_watch_event_emits_for_relevant_events() {
+    fn forward_file_event_emits_for_relevant_events() {
         let mut fired = false;
-        forward_watch_event(
+        forward_file_event(
             Ok(event(
                 EventKind::Modify(ModifyKind::Any),
                 vec![PathBuf::from("/watch/note.md")],
             )),
-            is_relevant_file_change,
-            |_| fired = true,
+            || fired = true,
         );
         assert!(fired);
     }
 
     #[test]
-    fn forward_watch_event_skips_irrelevant_events() {
+    fn forward_file_event_skips_irrelevant_events() {
         let mut fired = false;
-        forward_watch_event(
+        forward_file_event(
             Ok(event(
                 EventKind::Remove(RemoveKind::Any),
                 vec![PathBuf::from("/watch/note.md")],
             )),
-            is_relevant_file_change,
-            |_| fired = true,
+            || fired = true,
         );
         assert!(!fired);
     }
 
     #[test]
-    fn forward_watch_event_drops_watcher_errors() {
+    fn forward_file_event_drops_watcher_errors() {
         let mut fired = false;
-        forward_watch_event(
-            Err(notify::Error::generic("backend failure")),
-            is_relevant_file_change,
-            |_| fired = true,
-        );
+        let failure = Err(notify::Error::generic("backend failure"));
+        forward_file_event(failure, || fired = true);
         assert!(!fired);
     }
 
+    /// What an event of `kind` naming `names` below `root` leaves out of date.
+    fn change(kind: EventKind, root: &Path, names: &[&str]) -> Option<DirectoryChange> {
+        let paths = names.iter().map(|name| root.join(name)).collect();
+        directory_change(&event(kind, paths), root)
+    }
+
+    /// A workspace on disk, so the cases that look an entry up find it: every
+    /// kind of document, files that are not documents, and a folder.
+    fn workspace_with_entries(name: &str) -> PathBuf {
+        let root = unique_tmp(name);
+        for file in [
+            "notes.md",
+            "board.canvas",
+            "analysis.ipynb",
+            "diagram.d2",
+            "photo.png",
+            "sketch.excalidraw",
+            "LICENSE",
+        ] {
+            std::fs::write(root.join(file), b"x").unwrap();
+        }
+        std::fs::create_dir_all(root.join("folder")).unwrap();
+        root
+    }
+
+    const CAME_OR_WENT: [EventKind; 4] = [
+        EventKind::Create(CreateKind::File),
+        EventKind::Create(CreateKind::Any),
+        EventKind::Remove(RemoveKind::Any),
+        EventKind::Modify(ModifyKind::Name(RenameMode::To)),
+    ];
+
+    const EDITS: [EventKind; 3] = [
+        EventKind::Modify(ModifyKind::Any),
+        EventKind::Modify(ModifyKind::Data(DataChange::Content)),
+        EventKind::Modify(ModifyKind::Metadata(MetadataKind::Any)),
+    ];
+
     #[test]
-    fn relevant_when_markdown_file_is_created() {
-        let e = event(
+    fn a_document_coming_going_or_renamed_is_a_document_change() {
+        // On disk, so only its name can make it one. Quick Open lists notebooks
+        // and D2 files too.
+        let root = workspace_with_entries("documents");
+        for name in ["notes.md", "board.canvas", "analysis.ipynb", "diagram.d2"] {
+            for kind in CAME_OR_WENT
+                .into_iter()
+                .chain([EventKind::Remove(RemoveKind::File)])
+            {
+                assert_eq!(
+                    change(kind, &root, &[name]),
+                    Some(DirectoryChange::Documents),
+                    "{name} {kind:?}"
+                );
+            }
+        }
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn only_an_edit_to_a_note_or_canvas_reaches_the_index() {
+        // The tree shows no content or modification times, and only the index
+        // reads content: an image or a folder changed in place changes nothing.
+        let root = workspace_with_entries("edits");
+        for kind in EDITS {
+            for name in ["notes.md", "board.canvas"] {
+                assert_eq!(
+                    change(kind, &root, &[name]),
+                    Some(DirectoryChange::Documents),
+                    "{name} {kind:?}"
+                );
+            }
+            for name in ["analysis.ipynb", "diagram.d2", "photo.png", "folder"] {
+                assert_eq!(change(kind, &root, &[name]), None, "{name} {kind:?}");
+            }
+        }
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_file_that_is_not_a_document_changes_only_the_listing() {
+        // An image, a plugin's file type, or any other file the tree may list.
+        let root = workspace_with_entries("listing");
+        for name in ["photo.png", "sketch.excalidraw", "LICENSE"] {
+            for kind in [
+                EventKind::Create(CreateKind::File),
+                EventKind::Create(CreateKind::Any),
+                EventKind::Modify(ModifyKind::Name(RenameMode::To)),
+            ] {
+                assert_eq!(
+                    change(kind, &root, &[name]),
+                    Some(DirectoryChange::Listing),
+                    "{name} {kind:?}"
+                );
+            }
+        }
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_folder_coming_in_is_a_document_change() {
+        // It may hold documents, whatever its name looks like.
+        let root = workspace_with_entries("folder");
+        for kind in [
+            EventKind::Create(CreateKind::Folder),
+            EventKind::Create(CreateKind::Any),
+            EventKind::Modify(ModifyKind::Name(RenameMode::To)),
+        ] {
+            assert_eq!(
+                change(kind, &root, &["folder"]),
+                Some(DirectoryChange::Documents),
+                "{kind:?}"
+            );
+        }
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn an_entry_that_is_gone_is_a_document_change() {
+        // Once it is gone nothing says it was not a folder of notes: a folder
+        // moved to the Trash is reported as one rename, not file by file.
+        let root = workspace_with_entries("gone");
+        for kind in [
+            EventKind::Remove(RemoveKind::Any),
+            EventKind::Remove(RemoveKind::Folder),
+            EventKind::Modify(ModifyKind::Name(RenameMode::From)),
+        ] {
+            assert_eq!(
+                change(kind, &root, &["gone.png"]),
+                Some(DirectoryChange::Documents),
+                "{kind:?}"
+            );
+        }
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_removal_the_backend_reports_as_a_file_changes_only_the_listing() {
+        // inotify and FSEvents say what went; a file that is not a document
+        // held none, so deleting a build folder does not re-index per file.
+        let root = workspace_with_entries("removed_file");
+        let removed = EventKind::Remove(RemoveKind::File);
+        assert_eq!(
+            change(removed, &root, &["gone.png"]),
+            Some(DirectoryChange::Listing)
+        );
+        assert_eq!(
+            change(removed, &root, &["gone.md"]),
+            Some(DirectoryChange::Documents)
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_folder_the_index_never_walks_changes_only_the_listing() {
+        // The tree lists `node_modules` and `target`, but neither the document
+        // list nor the index holds anything inside them.
+        let root = Path::new("/p");
+        for name in [
+            "node_modules",
+            "node_modules/pkg/README.md",
+            "docs/target/notes.md",
+        ] {
+            for kind in CAME_OR_WENT {
+                assert_eq!(
+                    change(kind, root, &[name]),
+                    Some(DirectoryChange::Listing),
+                    "{name} {kind:?}"
+                );
+            }
+            for kind in EDITS {
+                assert_eq!(change(kind, root, &[name]), None, "{name} {kind:?}");
+            }
+        }
+        assert_eq!(
+            change(
+                EventKind::Create(CreateKind::File),
+                root,
+                &["targets/notes.md"]
+            ),
+            Some(DirectoryChange::Documents),
+            "only whole folder names are skipped"
+        );
+    }
+
+    #[test]
+    fn an_event_counts_its_strongest_path() {
+        let root = workspace_with_entries("strongest");
+        let rename = EventKind::Modify(ModifyKind::Name(RenameMode::Both));
+        assert_eq!(
+            change(rename, &root, &["photo.png", "photo.png.tmp"]),
+            Some(DirectoryChange::Documents),
+            "the side that is gone decides, wherever it comes"
+        );
+        assert_eq!(
+            change(rename, &root, &["photo.png", "sketch.excalidraw"]),
+            Some(DirectoryChange::Listing)
+        );
+        assert_eq!(
+            change(rename, &root, &[".draft.md", "notes.md"]),
+            Some(DirectoryChange::Documents),
+            "a hidden side does not hide the other"
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn hidden_entries_change_nothing() {
+        // Neither the tree nor the index reads them, so a commit writing under
+        // `.git` must not refresh anything.
+        let root = Path::new("/p");
+        for name in [
+            ".git/objects/ab",
+            ".obsidian/workspace.md",
+            ".hidden.md",
+            "notes/.draft.md",
+        ] {
+            for kind in CAME_OR_WENT.into_iter().chain(EDITS) {
+                assert_eq!(change(kind, root, &[name]), None, "{name} {kind:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_workspace_inside_a_hidden_folder_still_reports() {
+        let root = Path::new("/home/u/.config/notes");
+        let created = EventKind::Create(CreateKind::File);
+        assert_eq!(
+            change(created, root, &["a.md"]),
+            Some(DirectoryChange::Documents)
+        );
+        assert_eq!(change(created, root, &[".cache/a.md"]), None);
+    }
+
+    #[test]
+    fn the_watched_folder_itself_changes_nothing() {
+        let root = Path::new("/p");
+        for kind in [
+            EventKind::Remove(RemoveKind::Folder),
+            EventKind::Modify(ModifyKind::Metadata(MetadataKind::Any)),
+        ] {
+            let itself = event(kind, vec![root.to_path_buf()]);
+            assert_eq!(directory_change(&itself, root), None, "{kind:?}");
+        }
+    }
+
+    #[test]
+    fn access_other_and_empty_events_change_nothing() {
+        let root = Path::new("/p");
+        for kind in [
+            EventKind::Access(AccessKind::Read),
+            EventKind::Other,
+            EventKind::Any,
+        ] {
+            assert_eq!(change(kind, root, &["notes.md"]), None, "{kind:?}");
+        }
+        assert_eq!(change(EventKind::Create(CreateKind::File), root, &[]), None);
+    }
+
+    #[test]
+    fn a_link_to_a_folder_changes_only_the_listing() {
+        // Followed, it would read as a folder of documents. A junction on
+        // Windows, which needs no privilege to create.
+        let root = workspace_with_entries("link");
+        crate::vault::test_support::link_folder(&root.join("folder"), &root.join("to-folder"));
+        assert_eq!(
+            change(EventKind::Create(CreateKind::Any), &root, &["to-folder"]),
+            Some(DirectoryChange::Listing)
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// Run `forward_directory_event` and return what it did, in order.
+    fn forward(res: Result<Event, notify::Error>, root: &Path) -> Vec<String> {
+        let log = std::cell::RefCell::new(Vec::new());
+        forward_directory_event(
+            res,
+            root,
+            |paths| log.borrow_mut().push(format!("reindex {}", paths.len())),
+            |change| log.borrow_mut().push(format!("emit {change:?}")),
+        );
+        log.into_inner()
+    }
+
+    #[test]
+    fn forward_directory_event_re_indexes_a_document_change_before_emitting() {
+        let root = Path::new("/p");
+        let created = event(
             EventKind::Create(CreateKind::File),
-            vec![PathBuf::from("/p/notes.md")],
+            vec![root.join("notes.md")],
         );
-        assert!(is_relevant_directory_change(&e));
+        assert_eq!(forward(Ok(created), root), ["reindex 1", "emit Documents"]);
     }
 
     #[test]
-    fn relevant_when_markdown_file_is_removed() {
-        let e = event(
-            EventKind::Remove(RemoveKind::File),
-            vec![PathBuf::from("/p/notes.md")],
-        );
-        assert!(is_relevant_directory_change(&e));
-    }
-
-    #[test]
-    fn relevant_when_markdown_file_is_modified() {
-        let e = event(
-            EventKind::Modify(ModifyKind::Any),
-            vec![PathBuf::from("/p/notes.md")],
-        );
-        assert!(is_relevant_directory_change(&e));
-    }
-
-    #[test]
-    fn relevant_when_a_canvas_board_changes() {
-        // Boards are in the index too, so an edit to one has to reach it.
-        let e = event(
-            EventKind::Modify(ModifyKind::Any),
-            vec![PathBuf::from("/p/board.canvas")],
-        );
-        assert!(is_relevant_directory_change(&e));
-    }
-
-    #[test]
-    fn not_relevant_for_non_markdown_files() {
-        let e = event(
+    fn forward_directory_event_emits_a_listing_change_without_re_indexing() {
+        let root = workspace_with_entries("forward_listing");
+        let created = event(
             EventKind::Create(CreateKind::File),
-            vec![
-                PathBuf::from("/p/image.png"),
-                PathBuf::from("/p/binary.bin"),
-            ],
+            vec![root.join("photo.png")],
         );
-        assert!(!is_relevant_directory_change(&e));
+        assert_eq!(forward(Ok(created), &root), ["emit Listing"]);
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[test]
-    fn not_relevant_for_access_or_other_event_kinds() {
-        let e = event(
-            EventKind::Access(notify::event::AccessKind::Read),
-            vec![PathBuf::from("/p/notes.md")],
+    fn forward_directory_event_drops_errors_and_unchanged_events() {
+        let root = Path::new("/p");
+        let read = event(
+            EventKind::Access(AccessKind::Read),
+            vec![root.join("notes.md")],
         );
-        assert!(!is_relevant_directory_change(&e));
-
-        let other = event(EventKind::Other, vec![PathBuf::from("/p/notes.md")]);
-        assert!(!is_relevant_directory_change(&other));
-    }
-
-    #[test]
-    fn relevant_for_directory_create_even_if_not_markdown() {
-        let dir = std::env::temp_dir().join(format!(
-            "glyph_watcher_test_{}_{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
-
-        let e = event(EventKind::Create(CreateKind::Folder), vec![dir.clone()]);
-        assert!(is_relevant_directory_change(&e));
-
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn not_relevant_when_paths_are_empty() {
-        let e = event(EventKind::Create(CreateKind::File), vec![]);
-        assert!(!is_relevant_directory_change(&e));
+        assert!(forward(Ok(read), root).is_empty());
+        assert!(forward(Err(notify::Error::generic("backend failure")), root).is_empty());
     }
 
     #[test]
@@ -619,7 +949,7 @@ mod tests {
 
         let app = mock_app_with_state();
         grant_dir(&app, &dir);
-        let fired = count_event(&app, "file-changed");
+        let fired = record_event(&app, "file-changed");
         watch_file(
             path.clone(),
             app.handle().clone(),
@@ -642,7 +972,7 @@ mod tests {
 
         let app = mock_app_with_state();
         grant_dir(&app, &dir);
-        let fired = count_event(&app, "directory-changed");
+        let fired = record_event(&app, "directory-changed");
         watch_directory(
             path.clone(),
             app.handle().clone(),
@@ -655,6 +985,10 @@ mod tests {
 
         let count = wait_for_event(&fired, Duration::from_secs(10));
         assert!(count > 0, "expected at least one directory-changed emit");
+        assert_eq!(
+            fired.lock().unwrap()[0],
+            serde_json::json!({ "root": path, "documentsChanged": true })
+        );
         // The index for this root is built lazily by the command surface, so
         // an event arriving before that has nothing to update and must not
         // panic the watcher thread.
@@ -675,7 +1009,7 @@ mod tests {
 
         let app = mock_app_with_state();
         grant_dir(&app, &dir);
-        let fired = count_event(&app, "directory-changed");
+        let fired = record_event(&app, "directory-changed");
         let store = app.state::<VaultStore>();
         store.0.lock().unwrap().insert(
             std::fs::canonicalize(&dir).unwrap(),
@@ -701,6 +1035,70 @@ mod tests {
         assert_eq!(indexed, 2);
         let _ = std::fs::remove_dir_all(&dir);
     }
+
+    #[test]
+    fn a_new_image_in_a_watched_directory_changes_only_the_listing() {
+        let dir = unique_tmp("watch_dir_image");
+        let path = dir.to_string_lossy().to_string();
+
+        let app = mock_app_with_state();
+        grant_dir(&app, &dir);
+        let fired = record_event(&app, "directory-changed");
+        watch_directory(
+            path.clone(),
+            app.handle().clone(),
+            app.state::<GrantRegistry>(),
+        )
+        .unwrap();
+
+        std::fs::write(dir.join("photo.png"), b"x").unwrap();
+        assert!(wait_for_event(&fired, Duration::from_secs(10)) > 0);
+
+        for payload in fired.lock().unwrap().iter() {
+            assert_eq!(
+                *payload,
+                serde_json::json!({ "root": path, "documentsChanged": false })
+            );
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_folder_moved_out_of_a_watched_directory_leaves_the_index() {
+        // Moving a folder to the Trash is one rename, with nothing reported for
+        // the notes inside it.
+        let parent = unique_tmp("watch_dir_moved_out");
+        let dir = parent.join("workspace");
+        std::fs::create_dir_all(dir.join("sub")).unwrap();
+        std::fs::write(dir.join("sub").join("note.md"), "# note").unwrap();
+        let path = dir.to_string_lossy().to_string();
+
+        let app = mock_app_with_state();
+        grant_dir(&app, &dir);
+        let fired = record_event(&app, "directory-changed");
+        let store = app.state::<VaultStore>();
+        let key = std::fs::canonicalize(&dir).unwrap();
+        let vault = crate::vault::Vault::build(&dir).unwrap();
+        store.0.lock().unwrap().insert(key.clone(), vault);
+        watch_directory(
+            path.clone(),
+            app.handle().clone(),
+            app.state::<GrantRegistry>(),
+        )
+        .unwrap();
+
+        std::fs::rename(dir.join("sub"), parent.join("moved")).unwrap();
+        assert!(wait_for_event(&fired, Duration::from_secs(10)) > 0);
+
+        assert_eq!(
+            fired.lock().unwrap()[0],
+            serde_json::json!({ "root": path, "documentsChanged": true })
+        );
+        // Without waiting, as above: the re-index ran before the emit.
+        assert!(store.0.lock().unwrap()[&key].snapshot().files.is_empty());
+        let _ = std::fs::remove_dir_all(&parent);
+    }
+
     #[test]
     fn two_calls_watching_the_same_directory_together_register_it_once() {
         let dir = unique_tmp("watch_dir_race");
@@ -739,7 +1137,7 @@ mod tests {
 
         let app = mock_app_with_state();
         grant_dir(&app, &dir);
-        let fired = count_event(&app, "directory-changed");
+        let fired = record_event(&app, "directory-changed");
         watch_directory(
             path.clone(),
             app.handle().clone(),
@@ -752,7 +1150,7 @@ mod tests {
         std::fs::write(dir.join("link").join("new.md"), "# outside").unwrap();
         std::thread::sleep(Duration::from_millis(500));
         assert_eq!(
-            *fired.lock().unwrap(),
+            fired.lock().unwrap().len(),
             0,
             "a write behind a link must not reach the watch"
         );
