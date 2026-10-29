@@ -62,16 +62,31 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
   useSettingsSyncedReload({ loaded, storeRef, changedPathsRef, setSettings });
 
-  // Listen for system theme changes when theme is "system"
+  // Listen for system theme changes when theme is "system". Chromium reports a light
+  // scheme while a print is open, so obeying it then turns the app light behind the dialog.
   useEffect(() => {
     if (settings.appearance.theme !== "system") return;
 
     const mq = window.matchMedia("(prefers-color-scheme: dark)");
-    const handler = (e: MediaQueryListEvent) => {
+    let isPrinting = false;
+    const handleChange = (e: MediaQueryListEvent) => {
+      if (isPrinting) return;
       document.documentElement.classList.toggle("dark", e.matches);
     };
-    mq.addEventListener("change", handler);
-    return () => mq.removeEventListener("change", handler);
+    const handleBeforePrint = () => {
+      isPrinting = true;
+    };
+    const handleAfterPrint = () => {
+      isPrinting = false;
+    };
+    mq.addEventListener("change", handleChange);
+    window.addEventListener("beforeprint", handleBeforePrint);
+    window.addEventListener("afterprint", handleAfterPrint);
+    return () => {
+      mq.removeEventListener("change", handleChange);
+      window.removeEventListener("beforeprint", handleBeforePrint);
+      window.removeEventListener("afterprint", handleAfterPrint);
+    };
   }, [settings.appearance.theme]);
 
   // Write the latest pending settings to the store and disk. Secrets never

@@ -343,7 +343,7 @@ describe("useTabs workspace teardown races", () => {
     });
 
     await act(async () => {
-      dirChanged.handler?.({ payload: "/p/ws" });
+      dirChanged.handler?.({ payload: { root: "/p/ws", documentsChanged: true } });
       // Past the refresh debounce: the handler is now parked on the index read.
       await new Promise((r) => setTimeout(r, 350));
       result.current.closeWorkspace();
