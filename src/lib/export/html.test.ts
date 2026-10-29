@@ -22,6 +22,22 @@ describe("buildHtmlDocument", () => {
     expect(out).not.toContain('<html lang="en" class="dark">');
   });
 
+  it("keeps a stylesheet's </style> from closing the style element", () => {
+    const out = buildHtmlDocument({
+      bodyHtml: "",
+      title: "t",
+      css: '.x::after{content:"</style><script>alert(1)</script>"}',
+      dark: false,
+    });
+    const doc = new DOMParser().parseFromString(out, "text/html");
+    const scripts = Array.from(doc.scripts, (script) => script.textContent);
+    expect(scripts.some((text) => text.includes("alert(1)"))).toBe(false);
+    expect(doc.querySelectorAll("style")).toHaveLength(1);
+    expect(doc.querySelector("style")?.textContent).toContain(
+      String.raw`content:"<\/style><script>alert(1)<\/script>"`,
+    );
+  });
+
   it("adds the dark class to <html> when dark is true", () => {
     const out = buildHtmlDocument({ bodyHtml: "", title: "t", css: "", dark: true });
     expect(out).toContain('<html lang="en" class="dark">');
