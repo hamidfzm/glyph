@@ -22,6 +22,26 @@ pub fn has_extension(path: &Path, extensions: &[&str]) -> bool {
         .unwrap_or(false)
 }
 
+/// The plugin file type extensions a window passes, checked the way
+/// `registerFileType` in `src/lib/plugins/fileTypes.ts` checks them, so every
+/// list the window's registry can hold passes and only a forged one fails.
+pub fn checked_extensions(extensions: &[String]) -> Result<Vec<&str>, String> {
+    extensions
+        .iter()
+        .map(|ext| {
+            let plain = !ext.is_empty()
+                && ext
+                    .bytes()
+                    .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit());
+            if plain {
+                Ok(ext.as_str())
+            } else {
+                Err("Invalid file type extension: expected lowercase letters or digits".to_string())
+            }
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -72,6 +92,42 @@ mod tests {
         // src/lib/extensionConfig.ts agrees, and a test there pins it.
         assert!(!has_extension(Path::new(".md"), &["md"]));
         assert!(has_extension(Path::new(".hidden.md"), &["md"]));
+    }
+
+    #[test]
+    fn checked_extensions_takes_only_what_register_file_type_does() {
+        let plain = [
+            "excalidraw".to_string(),
+            "x3d".to_string(),
+            "7z".to_string(),
+        ];
+        assert_eq!(
+            checked_extensions(&plain).unwrap(),
+            ["excalidraw", "x3d", "7z"]
+        );
+        assert!(checked_extensions(&[]).unwrap().is_empty());
+
+        // Non-ASCII letters and digits too: the frontend's rule is ASCII only.
+        for bad in [
+            "",
+            ".txt",
+            "*",
+            "t?t",
+            "../txt",
+            "a/b",
+            "a\\b",
+            "TXT",
+            "tx t",
+            "caf\u{e9}",
+            "\u{663}",
+        ] {
+            let list = ["excalidraw".to_string(), bad.to_string()];
+            let err = checked_extensions(&list).expect_err(bad);
+            assert!(
+                err.starts_with("Invalid file type extension"),
+                "{bad}: {err}"
+            );
+        }
     }
 
     #[test]

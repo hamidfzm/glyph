@@ -10,6 +10,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use tauri::State;
 
+use crate::extensions::{checked_extensions, has_extension};
 use crate::grants::GrantRegistry;
 use crate::vault::{relocate, respelled, Relink, VaultStore};
 
@@ -168,8 +169,13 @@ pub fn create_folder(
 /// means no name is left. A file keeps its extension unless the name ends in
 /// that extension or in another of its kind, a document's for a document and
 /// an image's for an image: any other dot belongs to the name ("Trip v1.2").
+/// A file whose extension is in `plugin_extensions` counts as a document.
 /// A folder has no extension.
-fn renamed_parts<'a>(source: &'a Path, typed: &'a str) -> (&'a str, Option<&'a str>) {
+fn renamed_parts<'a>(
+    source: &'a Path,
+    typed: &'a str,
+    plugin_extensions: &[&str],
+) -> (&'a str, Option<&'a str>) {
     // Windows drops a trailing dot or space, so a name must not end in one.
     let bare = typed.trim_end_matches(['.', ' ']);
     if bare.is_empty() || !source.is_file() {
@@ -184,7 +190,9 @@ fn renamed_parts<'a>(source: &'a Path, typed: &'a str) -> (&'a str, Option<&'a s
         return as_typed;
     };
     let its_own = typed_ext.is_some_and(|ext| ext.eq_ignore_ascii_case(own_ext));
-    let both_documents = crate::is_supported_file(bare_path) && crate::is_supported_file(source);
+    let is_document =
+        |path: &Path| crate::is_supported_file(path) || has_extension(path, plugin_extensions);
+    let both_documents = is_document(bare_path) && is_document(source);
     let both_images = crate::is_image_file(bare_path) && crate::is_image_file(source);
     if its_own || both_documents || both_images {
         return as_typed;
@@ -204,16 +212,20 @@ fn is_current_name(source: &Path, name: &str) -> bool {
 /// the rename would break. A file keeps its extension (so "My Note" stays a
 /// `.md` file) unless the name ends in one `renamed_parts` accepts. Reports
 /// the final (collision-safe) path; a dry run reports it without renaming or writing.
+/// `extensions` are the window's plugin file types: they only decide where the
+/// typed name splits, and the entry stays in its folder whatever they hold.
 #[tauri::command]
 pub async fn rename_path(
     path: String,
     new_name: String,
     root: String,
     dry_run: bool,
+    extensions: Vec<String>,
     grants: State<'_, GrantRegistry>,
     store: State<'_, VaultStore>,
 ) -> Result<Relink, String> {
     let root_dir = grants.ensure_workspace(&root)?;
+    let extensions = checked_extensions(&extensions)?;
     let source = Path::new(&path);
     ensure_entry_inside_root(&grants, source, &root_dir)?;
     let parent = source
@@ -221,7 +233,7 @@ pub async fn rename_path(
         .ok_or_else(|| "Path has no parent directory".to_string())?;
 
     let sanitized = sanitize_name(&new_name);
-    let (stem, ext) = renamed_parts(source, &sanitized);
+    let (stem, ext) = renamed_parts(source, &sanitized, &extensions);
     if stem.is_empty() {
         return Err("Name is empty".to_string());
     }
@@ -409,10 +421,26 @@ mod tests {
     }
 
     fn rename_path(path: String, new_name: String, root: String) -> Result<String, String> {
-        let app = app_with_root(&root);
+        rename_with_types(&path, &new_name, &root, &[])
+    }
+
+    /// A rename from a window whose plugins registered `extensions`.
+    fn rename_with_types(
+        path: &str,
+        new_name: &str,
+        root: &str,
+        extensions: &[&str],
+    ) -> Result<String, String> {
+        let app = app_with_root(root);
         let (grants, store) = (app.state::<GrantRegistry>(), app.state::<VaultStore>());
         block_on(super::rename_path(
-            path, new_name, root, false, grants, store,
+            path.to_string(),
+            new_name.to_string(),
+            root.to_string(),
+            false,
+            extensions.iter().map(|ext| ext.to_string()).collect(),
+            grants,
+            store,
         ))
         .map(|done| done.new_path)
     }
@@ -495,8 +523,9 @@ mod tests {
             let folder = dir.join("Untitled Folder");
             fs::create_dir_all(folder.join("hooks")).unwrap();
             fs::write(folder.join("hooks").join("pre-commit"), "#!/bin/sh\n").unwrap();
+            // The rename's own check, not only the one `relocate` repeats.
             let err = rename_path(s(&folder), name.to_string(), root.clone()).unwrap_err();
-            assert!(err.contains(".git"), "{err}");
+            assert_eq!(err, "Refusing to name an entry .git");
             assert!(folder.join("hooks").join("pre-commit").is_file());
             let landed = listed(dir).iter().any(|n| n.eq_ignore_ascii_case(".git"));
             assert!(!landed, "{name} landed in {}", dir.display());
@@ -505,7 +534,8 @@ mod tests {
         // A file named `.git` is a gitfile: it sends git to the folder it names.
         let plain = ws.join("notes");
         fs::write(&plain, "gitdir: ../elsewhere\n").unwrap();
-        assert!(rename_path(s(&plain), ".git".to_string(), root.clone()).is_err());
+        let err = rename_path(s(&plain), ".git".to_string(), root.clone()).unwrap_err();
+        assert_eq!(err, "Refusing to name an entry .git");
         assert!(plain.is_file());
         assert!(!ws.join(".git").exists());
         // A note keeps its extension, so the name it lands on is not git's.
@@ -789,6 +819,7 @@ mod tests {
             "y".into(),
             root.clone(),
             true,
+            Vec::new(),
             grants.clone(),
             store.clone(),
         ));
@@ -816,6 +847,7 @@ mod tests {
             "y".into(),
             root.clone(),
             true,
+            Vec::new(),
             grants.clone(),
             store.clone(),
         ))
@@ -1055,6 +1087,122 @@ mod tests {
         let renamed = rename_path(renamed, "todo v1.2".to_string(), root.clone()).unwrap();
         assert!(renamed.ends_with("todo v1.2.JSON"));
         assert_eq!(listed(&dir), ["todo v1.2.JSON"]);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn rename_treats_a_plugin_file_type_as_a_document() {
+        let dir = unique_tmp("rename_plugin_type");
+        let root = dir.to_string_lossy().to_string();
+        let note = create_note(root.clone(), root.clone()).unwrap();
+        let rename = |path: &str, name: &str| {
+            rename_with_types(path, name, &root, &["excalidraw", "puml"]).unwrap()
+        };
+
+        // The preview the tree asks for first names it, and moves nothing.
+        let app = app_with_root(&root);
+        let (grants, store) = (app.state::<GrantRegistry>(), app.state::<VaultStore>());
+        let preview = block_on(super::rename_path(
+            note.clone(),
+            "drawing.excalidraw".to_string(),
+            root.clone(),
+            true,
+            vec!["excalidraw".to_string()],
+            grants,
+            store,
+        ))
+        .unwrap();
+        assert_eq!(Path::new(&preview.new_path), dir.join("drawing.excalidraw"));
+        assert_eq!(listed(&dir), ["Untitled.md"]);
+
+        // How the tree makes one: a new note named for the type, left empty.
+        let drawing = rename(&note, "drawing.excalidraw");
+        assert_eq!(Path::new(&drawing), dir.join("drawing.excalidraw"));
+        assert_eq!(fs::read_to_string(&drawing).unwrap(), "");
+        // And back, to another plugin type, in any case.
+        let notes = rename(&drawing, "notes.md");
+        assert!(notes.ends_with("notes.md"));
+        let plan = rename(&notes, "Plan.EXCALIDRAW");
+        assert!(plan.ends_with("Plan.EXCALIDRAW"));
+        let flow = rename(&plan, "flow.puml");
+        assert!(flow.ends_with("flow.puml"));
+        // A plain name keeps the type, and an image's extension is part of the name.
+        let flow = rename(&flow, "flow v1.2");
+        assert!(flow.ends_with("flow v1.2.puml"));
+        let logo = rename(&flow, "logo.png");
+        assert!(logo.ends_with("logo.png.puml"));
+        assert_eq!(listed(&dir), ["logo.png.puml"]);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn rename_without_the_plugin_type_keeps_the_extension() {
+        let dir = unique_tmp("rename_unlisted_type");
+        let root = dir.to_string_lossy().to_string();
+        let note = create_note(root.clone(), root.clone()).unwrap();
+
+        // No plugin registered the type, or only another one: as before.
+        let renamed = rename_with_types(&note, "drawing.excalidraw", &root, &[]).unwrap();
+        assert!(renamed.ends_with("drawing.excalidraw.md"));
+        let renamed = rename_with_types(&renamed, "sketch.excalidraw", &root, &["puml"]).unwrap();
+        assert!(renamed.ends_with("sketch.excalidraw.md"));
+        // A file of the type, once its plugin is gone, keeps its own extension.
+        let old = dir.join("old.excalidraw").to_string_lossy().to_string();
+        fs::write(&old, "{}").unwrap();
+        let renamed = rename_with_types(&old, "notes.md", &root, &[]).unwrap();
+        assert!(renamed.ends_with("notes.md.excalidraw"));
+        // A listed `git` makes no name git's: `.git` has no extension to take.
+        let types = ["git", "excalidraw"];
+        let renamed = rename_with_types(&renamed, ".git", &root, &types).unwrap();
+        assert!(renamed.ends_with(".git.excalidraw"));
+        assert_eq!(listed(&dir), [".git.excalidraw", "sketch.excalidraw.md"]);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn rename_refuses_a_forged_plugin_type_list() {
+        let dir = unique_tmp("rename_forged_types");
+        let root = dir.to_string_lossy().to_string();
+        let note = dir.join("note.md").to_string_lossy().to_string();
+        let missing = dir.join("gone.md").to_string_lossy().to_string();
+        fs::write(&note, "x").unwrap();
+
+        // Every malformed shape is in `checked_extensions`' own test. The list
+        // is judged before the entry is looked up, so a missing one reports it too.
+        for path in [&note, &missing] {
+            let err = rename_with_types(path, "x.excalidraw", &root, &["excalidraw", "../md"]);
+            let err = err.unwrap_err();
+            assert!(err.starts_with("Invalid file type extension"), "{err}");
+        }
+        assert_eq!(listed(&dir), ["note.md"]);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn rename_with_plugin_types_is_denied_without_a_grant() {
+        let dir = unique_tmp("rename_types_denied");
+        let note = dir.join("note.md");
+        fs::write(&note, "x").unwrap();
+        let app = mock_app();
+        app.manage(GrantRegistry::default());
+        app.manage(VaultStore::default());
+
+        // The grant is judged before the list, so a forged one reports it too.
+        for extensions in [vec!["excalidraw"], vec!["../x"]] {
+            let (grants, store) = (app.state::<GrantRegistry>(), app.state::<VaultStore>());
+            let result = block_on(super::rename_path(
+                note.to_string_lossy().to_string(),
+                "drawing.excalidraw".to_string(),
+                dir.to_string_lossy().to_string(),
+                false,
+                extensions.iter().map(|ext| ext.to_string()).collect(),
+                grants,
+                store,
+            ));
+            let err = result.map(|done| done.new_path).unwrap_err();
+            assert!(err.starts_with("path is outside the allowed workspaces and files:"));
+        }
+        assert_eq!(listed(&dir), ["note.md"]);
         let _ = fs::remove_dir_all(&dir);
     }
 
@@ -1327,6 +1475,7 @@ mod tests {
             "note".to_string(),
             root.clone(),
             true,
+            Vec::new(),
             grants,
             store,
         ))
@@ -1517,7 +1666,7 @@ mod tests {
 
         let preview = call(
             "rename_path",
-            json!({ "path": note, "newName": "renamed", "root": root, "dryRun": true }),
+            json!({ "path": note, "newName": "renamed", "root": root, "dryRun": true, "extensions": [] }),
         );
         assert!(preview["newPath"].as_str().unwrap().ends_with("renamed.md"));
         assert!(dir.join("note.md").is_file());
@@ -1527,7 +1676,7 @@ mod tests {
         let outside_root = outside.to_string_lossy().to_string();
         assert!(refused(
             "rename_path",
-            json!({ "path": note, "newName": "x", "root": root })
+            json!({ "path": note, "newName": "x", "root": root, "dryRun": true })
         ));
         assert!(refused(
             "move_path",

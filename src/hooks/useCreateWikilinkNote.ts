@@ -19,6 +19,7 @@ export function useCreateWikilinkNote(): ((target: string) => Promise<void>) | n
       if (!created) return;
       // rename_path keeps the .md extension unless the name ends in another
       // document's, and resolves collisions, so the target name goes through as authored.
+      // No plugin file types: the vault resolves `[[x.excalidraw]]` to `x.excalidraw.md` only.
       const renamed = await renamePath(created, target);
       await openFile(renamed ?? created);
     },
