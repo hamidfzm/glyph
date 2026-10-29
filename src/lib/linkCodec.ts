@@ -1,6 +1,6 @@
 import { base64ToBytes, bytesToBase64 } from "@/lib/base64";
 import { chunked, collect } from "@/lib/byteStreams";
-import { decodeUtf8, MAX_DOCUMENT_BYTES } from "./documentText";
+import { decodeUtf8, MAX_DOCUMENT_BYTES } from "@/lib/previewDocument";
 
 // The fragment's format version, so a later encoding can coexist with old links.
 const PREFIX = "v1.";

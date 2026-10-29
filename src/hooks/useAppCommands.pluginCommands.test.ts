@@ -16,7 +16,13 @@ function paletteWith(command: CommandEntry, workspaceOpen: boolean) {
   commands.register(command);
   plugins.current = { commands };
   const { result } = renderHook(() =>
-    useAppCommands({ workspaceOpen, workspaceFiles: [], tocEntries: [], actions }),
+    useAppCommands({
+      workspaceOpen,
+      canShareLink: false,
+      workspaceFiles: [],
+      tocEntries: [],
+      actions,
+    }),
   );
   return result.current.find((entry) => entry.id === "plugin:com.x.notes/today");
 }

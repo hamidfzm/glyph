@@ -1,7 +1,7 @@
 import { screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { i18n } from "@/lib/i18n";
-import { decodeDocument, encodeDocument } from "./linkCodec";
+import { decodeDocument, encodeDocument } from "@/lib/linkCodec";
 import { startWebViewer } from "./webViewer";
 
 vi.mock("@/preview/renderPreview", () => ({
@@ -10,8 +10,8 @@ vi.mock("@/preview/renderPreview", () => ({
   ),
 }));
 
-vi.mock("./linkCodec", async (importOriginal) => {
-  const original = await importOriginal<typeof import("./linkCodec")>();
+vi.mock("@/lib/linkCodec", async (importOriginal) => {
+  const original = await importOriginal<typeof import("@/lib/linkCodec")>();
   return { ...original, encodeDocument: vi.fn(original.encodeDocument) };
 });
 

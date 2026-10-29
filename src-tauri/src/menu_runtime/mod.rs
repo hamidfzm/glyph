@@ -49,6 +49,7 @@ pub struct MenuItemRefs<R: Runtime = Wry> {
     export_epub: MenuItem<R>,
     export_pdf: MenuItem<R>,
     export_website: MenuItem<R>,
+    copy_share_link: MenuItem<R>,
     workspace_settings: MenuItem<R>,
     find: MenuItem<R>,
     search_workspace: MenuItem<R>,
@@ -131,6 +132,7 @@ pub struct MenuLabels {
     export_epub: String,
     export_pdf: String,
     export_website: String,
+    copy_share_link: String,
     workspace_settings: String,
     close_tab: String,
     close_workspace: String,
@@ -168,6 +170,7 @@ pub struct MenuStateFlags {
     pub tts_available: bool,
     pub has_dirty: bool,
     pub auto_save: bool,
+    pub can_share_link: bool,
 }
 
 /// Per-window menu handles, keyed by window label. Windows cannot share one

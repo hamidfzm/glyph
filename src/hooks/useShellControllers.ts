@@ -8,11 +8,12 @@ import { usePluginExporterRunner } from "@/hooks/usePluginExporterRunner";
 import { usePrint } from "@/hooks/usePrint";
 import { useReadAloudController } from "@/hooks/useReadAloudController";
 import { useSettings } from "@/hooks/useSettings";
+import { useShareLink } from "@/hooks/useShareLink";
 import { aiDocContext } from "@/lib/aiPrompts";
 
 /**
  * The document-surface controllers the shell owns: AI chat, read-aloud, print,
- * the export formats, workspace website export, the notice those exports share,
+ * the export formats, workspace website export, the share link, the notice they share,
  * zoom, and the plugin exporter runner. Each is driven by the active document,
  * so they are built together.
  */
@@ -42,6 +43,7 @@ export function useShellControllers() {
     captureSeenNotice,
   });
   const siteExporter = useExportSite({ root: workspace?.root, showNotice, captureSeenNotice });
+  const copyShareLink = useShareLink({ file: activeFile, showNotice });
   // Zoom In/Out/Actual-Size dispatch to whichever document surface is active
   // (note font, graph camera) via the ZoomProvider; no-op with nothing focused.
   const zoomActions = useZoomApi()?.actions;
@@ -59,6 +61,7 @@ export function useShellControllers() {
     printDoc,
     exporters,
     siteExporter,
+    copyShareLink,
     exportNotice,
     zoomActions,
     runPluginExporter,
