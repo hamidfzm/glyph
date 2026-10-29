@@ -612,6 +612,39 @@ the way a renderer-supplied path is.
   admit, and nothing at all while the app is closed, which it learns from an
   OS lock the interactive app holds on `instance.lock` in its data directory.
 
+## Release pipeline
+
+A release runs the whole npm and cargo dependency tree on four runners, so a
+dependency's build script is code with the release's reach. `release.yml`
+keeps that reach to one platform's own bundle:
+
+- **A build leg writes nothing.** The build jobs hold `contents: read` and no
+  publishing secret; the bundles go to the workflow's artifact store. Their
+  one secret, the Sentry token for source maps, reaches them through the
+  `release` environment, which the repository settings restrict to `v*` tags.
+- **One job publishes.** `publish-release` runs no dependency code: it hashes
+  the bundles into `SHA256SUMS`, attests their provenance under GitHub's OIDC
+  identity for the run (`gh attestation verify <file> --repo hamidfzm/glyph`),
+  renders the `PKGBUILD` from those hashes, and uploads them. Nothing else in
+  the workflow holds a write to the release; `update-release-notes` edits the
+  notes alone.
+- **Every channel verifies.** The publish jobs download through
+  `.github/actions/release-download`, which checks each file against
+  `SHA256SUMS` and fails on a file the list does not name, so an asset
+  replaced on the release page after publishing cannot reach Homebrew,
+  Chocolatey, Scoop, the AUR, the PPA, apt, dnf or Flathub. The container
+  image pins the package's hash into `ADD --checksum`, and the snap checks the
+  same list. winget's updater downloads on its own and is the one channel not
+  covered; the manifest it submits carries the hash of what it downloaded.
+- **Publishing secrets live in the `release` environment**, not the
+  repository, so a workflow a pull request edits runs with none of them, and
+  `ci.yml` hands its reusable workflows the Codecov token alone.
+
+What this does not cover: a tag can be pushed by anyone with write access
+unless a tag ruleset restricts `v*` to the release deploy key, and the
+provenance attestation vouches for the workflow run, not for the dependency
+tree it built from.
+
 ## Residual risks
 
 - **An MCP client reads everything in the vaults it is given.** Whatever a

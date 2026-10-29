@@ -1,0 +1,34 @@
+name: Download verified release assets
+description: >-
+  Download assets of this run's release and check each against the SHA256SUMS
+  that publish-release wrote next to them. A file the list does not name, or
+  one whose bytes differ, fails the job, so a publish job packages what the
+  build legs produced and not what a later upload put under the same name.
+inputs:
+  patterns:
+    description: >-
+      Asset names to download, one per line (each a `gh release download
+      --pattern`). SHA256SUMS is always downloaded, and is left in place.
+    default: ""
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        PATTERNS: ${{ inputs.patterns }}
+      run: |
+        set -euo pipefail
+        patterns=()
+        while IFS= read -r pattern; do
+          [ -n "$pattern" ] && patterns+=("$pattern")
+        done <<< "$PATTERNS"
+        args=(--pattern SHA256SUMS)
+        for pattern in "${patterns[@]}"; do
+          args+=(--pattern "$pattern")
+        done
+        gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --clobber "${args[@]}"
+
+        # Every file a pattern names must be listed, and must match the list.
+        # The checkout this action follows puts the script here.
+        bash scripts/release-assets.sh verify "${patterns[@]}"
