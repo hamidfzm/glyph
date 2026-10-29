@@ -303,6 +303,8 @@
     "linkCopied": "Enlace copiado",
     "copyFailed": "No se pudo copiar el enlace",
     "linkTooLong": "Este documento es demasiado grande para compartirlo como enlace",
+    "chooseImageFolder": "Elegir carpeta de imágenes",
+    "noFolderImages": "Ninguna de las imágenes de este documento está en esa carpeta",
     "invalidLink": "Este enlace no contiene un documento que Glyph pueda abrir. Puede que se haya cortado al compartirlo."
   }
 }

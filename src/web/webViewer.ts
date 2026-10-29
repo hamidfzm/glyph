@@ -2,6 +2,7 @@ import { i18n } from "@/lib/i18n";
 import { decodeDocument, encodeDocument, MAX_LINK_LENGTH } from "@/lib/linkCodec";
 import { type PreviewMessage, startPreview } from "@/preview/startPreview";
 import { readDocumentFile } from "./documentText";
+import { type FolderImages, pickFolderImages } from "./folderImages";
 import { handleDocumentClick } from "./linkClicks";
 import { createWebChrome } from "./webChrome";
 
@@ -9,6 +10,12 @@ export interface WebViewerOptions {
   root: HTMLElement;
   darkQuery: MediaQueryList;
   language: string;
+}
+
+/** A document on screen whose relative images became alt text: `dropped` of them with no folder picked. */
+interface ImageOffer {
+  message: PreviewMessage;
+  dropped: number;
 }
 
 /** The preview page in a browser: documents come from a picked or dropped file, or from the URL fragment. */
@@ -22,25 +29,36 @@ export async function startWebViewer({ root, darkQuery, language }: WebViewerOpt
   // Only a fragment not already handled loads anything, so a repeated
   // hashchange cannot replace a file opened since.
   let handledFragment: string | null = null;
+  let imageOffer: ImageOffer | null = null;
+  // The offer the folder picker was opened for, so a pick that lands after the
+  // document changed is dropped (INV-3).
+  let pickingFor: ImageOffer | null = null;
+  let folder: FolderImages | null = null;
 
   function present(message: PreviewMessage | null) {
+    folder?.revoke();
+    folder = null;
     const emptyStateHadFocus = chrome.emptyState.contains(document.activeElement);
-    preview.show(message);
+    const shown = preview.show(message);
     chrome.emptyState.hidden = message !== null;
     root.hidden = message === null;
     // Hiding the focused Open File button would drop focus to the body.
     if (emptyStateHadFocus && message) root.focus({ preventScroll: true });
+    return shown;
   }
 
   async function load(request: () => Promise<PreviewMessage | null>) {
     const id = ++latestRequest;
     link = null;
+    imageOffer = null;
     chrome.copyButton.disabled = true;
+    chrome.imagesButton.hidden = true;
     chrome.status.textContent = "";
     const message = await request();
     if (id !== latestRequest) return;
-    present(message);
+    const shown = present(message);
     if (message?.kind !== "document") return;
+    void offerFolder(id, message, shown);
     // Encoded now so a click can copy synchronously: Safari refuses a clipboard
     // write that follows an await. A browser without deflate-raw keeps the
     // button disabled.
@@ -48,6 +66,25 @@ export async function startWebViewer({ root, darkQuery, language }: WebViewerOpt
     if (id !== latestRequest || fragment === null) return;
     link = `${location.origin}${location.pathname}${location.search}#${fragment}`;
     chrome.copyButton.disabled = false;
+  }
+
+  async function offerFolder(id: number, message: PreviewMessage, shown: Promise<number | null>) {
+    const dropped = await shown;
+    if (!dropped || id !== latestRequest) return;
+    imageOffer = { message, dropped };
+    chrome.imagesButton.hidden = false;
+  }
+
+  async function showFolderImages(files: File[]) {
+    const offer = pickingFor;
+    if (!offer || offer !== imageOffer) return;
+    folder?.revoke();
+    folder = pickFolderImages(files);
+    chrome.status.textContent = "";
+    const dropped = await preview.show(offer.message, folder.url);
+    if (offer !== imageOffer) return;
+    const noneFound = dropped === offer.dropped;
+    if (noneFound) chrome.status.textContent = i18n.t("preview.noFolderImages");
   }
 
   function showFragment() {
@@ -95,6 +132,15 @@ export async function startWebViewer({ root, darkQuery, language }: WebViewerOpt
     // Cleared so picking the same file again still fires a change.
     chrome.fileInput.value = "";
     if (file) showFile(file);
+  });
+  chrome.imagesButton.addEventListener("click", () => {
+    pickingFor = imageOffer;
+    chrome.folderInput.click();
+  });
+  chrome.folderInput.addEventListener("change", () => {
+    const files = Array.from(chrome.folderInput.files ?? []);
+    chrome.folderInput.value = "";
+    void showFolderImages(files);
   });
   chrome.copyButton.addEventListener("click", copyLink);
   root.addEventListener("click", (event) => handleDocumentClick(event, root));

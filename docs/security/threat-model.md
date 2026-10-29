@@ -345,14 +345,29 @@ control is the page's own:
 - **The same sanitizer.** Documents go through `renderPageHtml` and the app's
   `rehype-sanitize` schema, as in the OS previews.
 - **No network.** A meta CSP, first in the page's head, allows the page's own
-  files, `data:` images and fonts, and no media, workers, frames or objects.
-  It is the only layer: nothing beneath it blocks a request it lets through,
-  so the WebKit smoke suite opens a hostile document in the built page and
-  checks that nothing reaches another origin (and, with the CSP removed, that
-  the same document does). `<img>` elements become their alt text before they
-  reach the DOM; SVG images, posters and CSS `url()` are left to the CSP.
+  files, `data:` images and fonts, `blob:` images, and no media, workers,
+  frames or objects. It is the only layer: nothing beneath it blocks a
+  request it lets through, so the WebKit smoke suite opens a hostile document
+  in the built page and checks that nothing reaches another origin (and, with
+  the CSP removed, that the same document does). `<img>` elements become their
+  alt text before they reach the DOM, unless a folder the reader picked holds
+  them (below); SVG images, posters and CSS `url()` are left to the CSP.
   `no-referrer` keeps the page URL out of `Referer`, DNS prefetch is off, and
   nothing on the page reports telemetry, so the document never leaves the tab.
+- **Images only from a folder the reader picks.** A document with relative
+  images offers **Choose Folder for Images**, a `webkitdirectory` file input.
+  A relative `src` with no `..` maps to the picked image file at that path
+  inside the folder (an exact match, so an encoded `%2E%2E` or a leading `/`
+  finds nothing), and only image types map. Each mapped file loads through a
+  `blob:` URL the page makes for it, which is all `blob:` in the CSP is for.
+  A document cannot name one in an `<img>`, since only relative sources map;
+  an SVG image or CSS `url()` would have to guess its random name, and would
+  only show the reader's own image again. A `blob:` URL is memory in the tab,
+  never a request. The URLs are revoked when the viewer shows another
+  document or the empty state, a pick that lands after the document changed
+  is dropped, and nothing about the folder is kept. Remote images stay alt
+  text with or without a folder; the smoke suite picks a folder and checks
+  that its images load while nothing reaches another origin.
 - **No navigation.** One click handler covers every link in the document,
   an SVG anchor included should one reach the page (the Mermaid render drops
   its own): in-document anchors scroll without touching the fragment that
@@ -714,11 +729,15 @@ the way a renderer-supplied path is.
   repo under `glyph-md.github.io`, so the viewer's `'self'` covers the other
   sites there, and a script any of them publishes could run on the viewer's
   page. The viewer holds no secret and no session, so such a script reaches
-  only the document in the tab. A subdomain of its own, once the org has a
-  custom domain, separates it.
+  only the document in the tab and, once the reader picks a folder for its
+  images, every file in that folder: the browser hands the page all of them,
+  though the viewer itself opens only the images the document names. A
+  subdomain of its own, once the org has a custom domain, separates it.
 - **The web viewer can be framed.** A meta CSP cannot set `frame-ancestors`,
   and GitHub Pages sets no headers, so another site can embed the viewer. Its
-  only action is Copy link, which copies what the viewer already shows.
+  actions are Copy link, which copies what the viewer already shows, and
+  Choose Folder for Images, whose files stay in the viewer's own origin where
+  the framing site cannot read them.
 - **A shared document can look official.** It renders on a Glyph URL with the
   styles it brings (`style` is allowed, see `style-src` below), so a link can
   dress up as a Glyph page and point readers at another download. The
