@@ -32,6 +32,7 @@ function makeActions(over: Partial<AppActions> = {}): AppActions {
     exportEpub: vi.fn(),
     exportPdf: vi.fn(),
     exportWebsite: vi.fn(),
+    copyShareLink: vi.fn(),
     workspaceSettings: vi.fn(),
     zoomIn: vi.fn(),
     zoomOut: vi.fn(),
@@ -57,6 +58,7 @@ describe("useAppCommands", () => {
     const { result } = renderHook(() =>
       useAppCommands({
         workspaceOpen: false,
+        canShareLink: false,
         workspaceFiles: [],
         tocEntries: [],
         actions,
@@ -73,6 +75,7 @@ describe("useAppCommands", () => {
     const { result } = renderHook(() =>
       useAppCommands({
         workspaceOpen: true,
+        canShareLink: false,
         workspaceFiles: ["/workspace/a.md", "/workspace/sub/b.md"],
         tocEntries: [],
         actions,
@@ -88,6 +91,7 @@ describe("useAppCommands", () => {
     const { result } = renderHook(() =>
       useAppCommands({
         workspaceOpen: false,
+        canShareLink: false,
         workspaceFiles: ["/anywhere/note.md"],
         tocEntries: [],
         actions: makeActions(),
@@ -101,6 +105,7 @@ describe("useAppCommands", () => {
     const open = renderHook(() =>
       useAppCommands({
         workspaceOpen: true,
+        canShareLink: false,
         workspaceFiles: [],
         tocEntries: [],
         actions,
@@ -114,6 +119,7 @@ describe("useAppCommands", () => {
     const closed = renderHook(() =>
       useAppCommands({
         workspaceOpen: false,
+        canShareLink: false,
         workspaceFiles: [],
         tocEntries: [],
         actions: makeActions(),
@@ -122,10 +128,44 @@ describe("useAppCommands", () => {
     expect(closed.result.current.some((c) => c.id === "cmd:exportWebsite")).toBe(false);
   });
 
+  it("offers Copy Share Link only when the active tab can be shared", () => {
+    const actions = makeActions();
+    const shareable = renderHook(() =>
+      useAppCommands({
+        workspaceOpen: false,
+        canShareLink: true,
+        workspaceFiles: [],
+        tocEntries: [],
+        actions,
+      }),
+    );
+    const cmd = shareable.result.current.find((c) => c.id === "cmd:copyShareLink");
+    expect(cmd?.title).toBe("Copy Share Link");
+    cmd?.run();
+    expect(actions.copyShareLink).toHaveBeenCalledOnce();
+
+    const other = renderHook(() =>
+      useAppCommands({
+        workspaceOpen: false,
+        canShareLink: false,
+        workspaceFiles: [],
+        tocEntries: [],
+        actions: makeActions(),
+      }),
+    );
+    expect(other.result.current.some((c) => c.id === "cmd:copyShareLink")).toBe(false);
+  });
+
   it("offers the workspace search only when a workspace is open", () => {
     const actions = makeActions();
     const open = renderHook(() =>
-      useAppCommands({ workspaceOpen: true, workspaceFiles: [], tocEntries: [], actions }),
+      useAppCommands({
+        workspaceOpen: true,
+        canShareLink: false,
+        workspaceFiles: [],
+        tocEntries: [],
+        actions,
+      }),
     );
     const cmd = open.result.current.find((c) => c.id === "cmd:searchWorkspace");
     expect(cmd?.title).toBe("Search in Workspace");
@@ -135,6 +175,7 @@ describe("useAppCommands", () => {
     const closed = renderHook(() =>
       useAppCommands({
         workspaceOpen: false,
+        canShareLink: false,
         workspaceFiles: [],
         tocEntries: [],
         actions: makeActions(),
@@ -147,6 +188,7 @@ describe("useAppCommands", () => {
     const { result } = renderHook(() =>
       useAppCommands({
         workspaceOpen: false,
+        canShareLink: false,
         workspaceFiles: [],
         tocEntries: [
           { id: "intro", text: "Introduction", level: 1 },
@@ -166,6 +208,7 @@ describe("useAppCommands", () => {
     const withoutWorkspace = renderHook(() =>
       useAppCommands({
         workspaceOpen: false,
+        canShareLink: false,
         workspaceFiles: [],
         tocEntries: [],
         actions: makeActions(),
@@ -176,6 +219,7 @@ describe("useAppCommands", () => {
     const withWorkspace = renderHook(() =>
       useAppCommands({
         workspaceOpen: true,
+        canShareLink: false,
         workspaceFiles: [],
         tocEntries: [],
         actions: makeActions(),
@@ -189,6 +233,7 @@ describe("useAppCommands", () => {
     const { result } = renderHook(() =>
       useAppCommands({
         workspaceOpen: false,
+        canShareLink: false,
         workspaceFiles: [],
         tocEntries: [],
         actions,
@@ -241,6 +286,7 @@ describe("useAppCommands", () => {
     const { result } = renderHook(() =>
       useAppCommands({
         workspaceOpen: false,
+        canShareLink: false,
         workspaceFiles: [],
         tocEntries: [{ id: "intro-heading", text: "Intro", level: 2 }],
         actions: makeActions(),
@@ -256,6 +302,7 @@ describe("useAppCommands", () => {
     const { result } = renderHook(() =>
       useAppCommands({
         workspaceOpen: true,
+        canShareLink: false,
         workspaceFiles: ["loose"],
         tocEntries: [],
         actions: makeActions(),
@@ -279,6 +326,7 @@ describe("useAppCommands", () => {
       () =>
         useAppCommands({
           workspaceOpen: false,
+          canShareLink: false,
           workspaceFiles: [],
           tocEntries: [],
           actions: makeActions(),
@@ -313,7 +361,14 @@ describe("useAppCommands", () => {
     const actions = makeActions();
 
     const { result } = renderHook(
-      () => useAppCommands({ workspaceOpen: false, workspaceFiles: [], tocEntries: [], actions }),
+      () =>
+        useAppCommands({
+          workspaceOpen: false,
+          canShareLink: false,
+          workspaceFiles: [],
+          tocEntries: [],
+          actions,
+        }),
       { wrapper },
     );
 
@@ -326,7 +381,13 @@ describe("useAppCommands", () => {
   it("gives navigation and view commands a palette icon", () => {
     const actions = makeActions();
     const { result } = renderHook(() =>
-      useAppCommands({ workspaceOpen: false, workspaceFiles: [], tocEntries: [], actions }),
+      useAppCommands({
+        workspaceOpen: false,
+        canShareLink: false,
+        workspaceFiles: [],
+        tocEntries: [],
+        actions,
+      }),
     );
     for (const id of ["cmd:openFile", "cmd:openGraph", "cmd:zoomIn", "cmd:exportPdf"]) {
       expect(result.current.find((c) => c.id === id)?.icon).toBeTypeOf("function");
@@ -336,7 +397,13 @@ describe("useAppCommands", () => {
   it("includes a Manage Plugins command", () => {
     const actions = makeActions();
     const { result } = renderHook(() =>
-      useAppCommands({ workspaceOpen: false, workspaceFiles: [], tocEntries: [], actions }),
+      useAppCommands({
+        workspaceOpen: false,
+        canShareLink: false,
+        workspaceFiles: [],
+        tocEntries: [],
+        actions,
+      }),
     );
     const manage = result.current.find((c) => c.id === "cmd:managePlugins")!;
     expect(manage).toBeTruthy();

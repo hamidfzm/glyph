@@ -114,7 +114,10 @@
     "failed": "导出失败。",
     "siteFailed": "网站导出失败。",
     "insideWorkspace": "无法将网站导出到生成它的工作区内。请选择工作区之外的文件夹。",
-    "dismiss": "忽略导出提示"
+    "linkCopied": "已复制分享链接。链接包含整个文档，任何拿到链接的人都能阅读。",
+    "linkTooLong": "此文档过大，无法以链接形式分享。",
+    "linkFailed": "无法复制链接。",
+    "dismiss": "忽略提示"
   },
   "contextMenu": {
     "copy": "复制",

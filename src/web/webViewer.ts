@@ -1,8 +1,8 @@
 import { i18n } from "@/lib/i18n";
+import { decodeDocument, encodeDocument, MAX_LINK_LENGTH } from "@/lib/linkCodec";
 import { type PreviewMessage, startPreview } from "@/preview/startPreview";
 import { readDocumentFile } from "./documentText";
 import { handleDocumentClick } from "./linkClicks";
-import { decodeDocument, encodeDocument, MAX_LINK_LENGTH } from "./linkCodec";
 import { createWebChrome } from "./webChrome";
 
 export interface WebViewerOptions {

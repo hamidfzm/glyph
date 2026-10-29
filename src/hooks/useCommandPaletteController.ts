@@ -8,6 +8,7 @@ import { useCommandPalette } from "./useCommandPalette";
 interface UseCommandPaletteControllerOptions {
   platform: Platform;
   workspaceOpen: boolean;
+  canShareLink: boolean;
   workspaceFiles: readonly string[];
   tocEntries: readonly TocEntry[];
   /** App-level callbacks, e.g. the menu-handler object. */
@@ -30,6 +31,7 @@ export interface CommandPaletteController {
 export function useCommandPaletteController({
   platform,
   workspaceOpen,
+  canShareLink,
   workspaceFiles,
   tocEntries,
   actions,
@@ -37,6 +39,7 @@ export function useCommandPaletteController({
   const palette = useCommandPalette({ platform });
   const commands = useAppCommands({
     workspaceOpen,
+    canShareLink,
     workspaceFiles,
     tocEntries,
     actions,

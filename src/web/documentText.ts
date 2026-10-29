@@ -1,17 +1,6 @@
 import { adaptMmdContent } from "@/lib/mmd";
+import { decodeUtf8, MAX_DOCUMENT_BYTES } from "@/lib/previewDocument";
 import type { PreviewMessage } from "@/preview/startPreview";
-
-/** The OS previews' cap (preview-handler document.rs, Quick Look Document.swift). */
-export const MAX_DOCUMENT_BYTES = 2 * 1024 * 1024;
-
-/** Strict UTF-8, as the OS previews require; a leading BOM is dropped. */
-export function decodeUtf8(bytes: Uint8Array): string | null {
-  try {
-    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
-  } catch {
-    return null;
-  }
-}
 
 export async function readDocumentFile(file: File): Promise<PreviewMessage> {
   // Checked before reading, so an oversized file is never loaded at all.

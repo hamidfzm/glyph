@@ -1,20 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { decodeUtf8, MAX_DOCUMENT_BYTES, readDocumentFile } from "./documentText";
-
-describe("decodeUtf8", () => {
-  it("decodes UTF-8 and drops a leading BOM", () => {
-    const bytes = new Uint8Array([0xef, 0xbb, 0xbf, ...new TextEncoder().encode("# Hi")]);
-    expect(decodeUtf8(bytes)).toBe("# Hi");
-  });
-
-  it("returns null for bytes that are not UTF-8", () => {
-    expect(decodeUtf8(new Uint8Array([0x48, 0xff, 0xfe]))).toBeNull();
-  });
-
-  it("keeps an empty document distinct from an unreadable one", () => {
-    expect(decodeUtf8(new Uint8Array())).toBe("");
-  });
-});
+import { MAX_DOCUMENT_BYTES } from "@/lib/previewDocument";
+import { readDocumentFile } from "./documentText";
 
 describe("readDocumentFile", () => {
   it("reads a markdown file as a document with no folder", async () => {
