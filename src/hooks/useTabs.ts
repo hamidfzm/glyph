@@ -408,6 +408,7 @@ export function useTabs(options: UseTabsOptions) {
     workspaceRef,
     isAutoReloadEnabled,
     reloadFromDisk,
+    refreshTree: refreshLoadedDirs,
     refreshWorkspace,
   });
 

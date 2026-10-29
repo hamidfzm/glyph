@@ -114,7 +114,10 @@
     "failed": "Der Export ist fehlgeschlagen.",
     "siteFailed": "Der Website-Export ist fehlgeschlagen.",
     "insideWorkspace": "Die Website kann nicht in den Arbeitsbereich exportiert werden, aus dem sie erstellt wird. Wähle einen Ordner außerhalb davon.",
-    "dismiss": "Export-Hinweis ausblenden"
+    "linkCopied": "Freigabelink kopiert. Er enthält das ganze Dokument, also kann jeder, der den Link hat, es lesen.",
+    "linkTooLong": "Dieses Dokument ist zu groß, um es als Link zu teilen.",
+    "linkFailed": "Link konnte nicht kopiert werden.",
+    "dismiss": "Hinweis ausblenden"
   },
   "contextMenu": {
     "copy": "Kopieren",

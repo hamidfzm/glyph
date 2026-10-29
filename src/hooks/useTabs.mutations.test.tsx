@@ -899,7 +899,7 @@ describe("useTabs reloads across a rename or move", () => {
     return disk;
   }
 
-  type FileChanged = ReturnType<typeof captureListener>;
+  type FileChanged = ReturnType<typeof captureListener<"file-changed">>;
 
   /** Report a change to each path, then run `action` before the debounce can end. */
   async function reportThen(

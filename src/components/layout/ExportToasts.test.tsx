@@ -51,7 +51,7 @@ describe("ExportToasts", () => {
         onDismissNotice={onDismissNotice}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Dismiss export notice" }));
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss notice" }));
     expect(onDismissNotice).toHaveBeenCalledOnce();
   });
 });
