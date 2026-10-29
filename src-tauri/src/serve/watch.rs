@@ -22,9 +22,9 @@ const DEBOUNCE: Duration = Duration::from_millis(300);
 
 /// Whether a filesystem change should rebuild the site.
 ///
-/// Unlike the app's own directory watch this does not filter down to markdown:
-/// an image, a stylesheet, or the site configuration all change what the
-/// export produces.
+/// Unlike the app's own directory watch this counts an edit to any file, not
+/// only to notes: an image, a stylesheet, or the site configuration all change
+/// what the export produces.
 ///
 /// What it does filter out is hidden paths, which the export's own walker
 /// skips, so a `.git` write during a commit would otherwise rebuild a site

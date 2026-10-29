@@ -47,8 +47,8 @@ export function MarkdownEditor({
 
   // Read workspace state through refs so the completion source — installed
   // once at mount — picks up updates without reconfiguring the editor. The
-  // extension is intentionally NOT in a Compartment: directory-changed events
-  // produce a new array identity every time the watcher fires, and any
+  // extension is intentionally NOT in a Compartment: each document refresh
+  // after a directory-changed event produces a new array identity, and any
   // reconfigure mid-completion would tear down the popup state.
   const workspaceFilesRef = useRef<readonly string[]>(workspaceFiles ?? []);
   const workspaceRootRef = useRef<string | undefined>(workspaceRoot);
