@@ -18,8 +18,10 @@ pub fn is_notebook_file(path: &Path) -> bool {
 /// Any document Glyph can open: a markdown file, a Jupyter notebook, a JSON
 /// Canvas, or a D2 diagram. Used by the open-gating paths (CLI args, drag-drop,
 /// file-tree walking) so every supported document type reaches the renderer
-/// while everything else is rejected. Mirrors `isSupportedFile` in
-/// `src/lib/notebookExtensions.ts`.
+/// while everything else is rejected. `isSupportedFile` in
+/// `src/lib/notebookExtensions.ts` adds plugin file types, and so does the
+/// file tree (`read_directory`, `rename_path`); the launch paths run before
+/// plugins load and mint grants, so they never take them.
 pub fn is_supported_file(path: &Path) -> bool {
     crate::is_markdown_file(path)
         || is_notebook_file(path)

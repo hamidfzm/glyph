@@ -1081,6 +1081,17 @@ mod tests {
     }
 
     #[test]
+    fn classify_initial_arg_rejects_plugin_file_types() {
+        // A launch is classified before any plugin loads, and it mints a grant,
+        // so a type only a plugin opens is skipped like any unknown one.
+        let cwd = unique_tmp("cia_plugin_type");
+        fs::write(cwd.join("sketch.excalidraw"), "{}").unwrap();
+        let result = classify_initial_arg("sketch.excalidraw", &cwd).expect("classifies");
+        assert!(matches!(result, InitialOpenAction::RejectedUnsupported(_)));
+        let _ = fs::remove_dir_all(&cwd);
+    }
+
+    #[test]
     fn classify_initial_arg_returns_none_for_unresolvable_paths() {
         let cwd = unique_tmp("cia_missing");
         assert!(classify_initial_arg("does_not_exist.md", &cwd).is_none());

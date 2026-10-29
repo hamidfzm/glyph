@@ -142,7 +142,7 @@ looked up (see "Network paths" below).
 
 | Command | Check |
 | ------- | ----- |
-| `read_file`, `check_path_exists`, `read_directory`, `list_markdown_files` | readable. `read_file` also refuses a document over 64 MiB, judged from its metadata before any of it is read: the whole document crosses IPC and sits in the renderer's editor, so this is the bound on what one file can make the app hold |
+| `read_file`, `check_path_exists`, `read_directory`, `list_markdown_files` | readable. `read_file` also refuses a document over 64 MiB, judged from its metadata before any of it is read: the whole document crosses IPC and sits in the renderer's editor, so this is the bound on what one file can make the app hold. `read_directory` also takes the window's plugin file type extensions, judged after the grant and refused unless each is lowercase ASCII letters and digits. They only add entries of the readable directory to its listing. That lets a renderer list, in one call, every file there with a plain extension, where before it could only probe names with `check_path_exists`; each such file was already readable through `read_file`, and nothing is granted |
 | `search_workspace` | readable. The walk below it skips hidden names and follows no link, like every workspace walk |
 | `allow_document_asset` | an existing image, audio, or video file, judged after symlinks resolve, inside the folder of a loose file (opened or saved under a new name); mirrored into the asset scope only |
 | `vault_snapshot`, `vault_refresh`, `vault_backlinks`, `vault_resolve`, `vault_query`, `vault_paths_with_tag` | granted workspace, not merely readable: the index is per workspace, and a readable check would also accept every directory inside one, letting a caller cache an index per subdirectory. The second path argument is answered from the index in memory, never read from disk, so an ungranted one returns nothing rather than content |
@@ -155,7 +155,7 @@ looked up (see "Network paths" below).
 | `pick_save` | no starting folder: an export's dialog opens wherever the platform opens it. The grant it mints is for the file the user picks, to write only |
 | `watch_file`, `watch_directory` | readable (unwatch stays open; it only drops a watcher). A directory watch does not follow symbolic links, so a link to `/` or to the home folder inside a workspace puts no watch on the tree behind it; followed, it would take one watch per directory there and exhaust the user's quota. The `glyph serve` watch keeps the same rule |
 | `create_note`, `create_canvas`, `create_folder` | `root` must be a granted workspace and the target directory canonicalizes inside it; a network or device path is refused before that lookup. The entry takes the first default name nothing holds, and a link holds its name even when its target is missing, so creating never writes through one |
-| `rename_path`, `duplicate_path`, `move_path`, `delete_path` | `root` must be a granted workspace and the entry itself canonicalizes strictly inside it (a network or device path is refused before that lookup, for a move's destination too; a trailing `..`, the root itself, or a symlink resolving outside is refused; `duplicate_path` refuses a folder containing a symlink rather than copying its target). `rename_path` and `move_path` also rewrite links in the workspace's own indexed notes and canvases, each write passing `ensure_writable`; a link or canvas card target that resolves outside the workspace is never rewritten or probed on disk, a file changed since the plan read it is left as it is, and `dryRun` reads without writing. The name a copy, a rename, or a move lands on is picked the way a new entry's is, so it is never one a link holds. Neither the entry nor its destination may sit inside the workspace's `.git` directory, and the name a rename lands on may not be `.git` itself, in any case: a folder built with ordinary writes and renamed `.git` would make its `hooks` git's own, and a file so named is a gitfile that sends git to whatever directory it names (a note keeps its extension, so `.git.md` is what it lands on). `relink::plan` refuses both ends of a move that name `.git` as well, so no caller of `relocate` lands there |
+| `rename_path`, `duplicate_path`, `move_path`, `delete_path` | `root` must be a granted workspace and the entry itself canonicalizes strictly inside it (a network or device path is refused before that lookup, for a move's destination too; a trailing `..`, the root itself, or a symlink resolving outside is refused; `duplicate_path` refuses a folder containing a symlink rather than copying its target). `rename_path` and `move_path` also rewrite links in the workspace's own indexed notes and canvases, each write passing `ensure_writable`; a link or canvas card target that resolves outside the workspace is never rewritten or probed on disk, a file changed since the plan read it is left as it is, and `dryRun` reads without writing. The name a copy, a rename, or a move lands on is picked the way a new entry's is, so it is never one a link holds. Neither the entry nor its destination may sit inside the workspace's `.git` directory, and the name a rename lands on may not be `.git` itself, in any case: a folder built with ordinary writes and renamed `.git` would make its `hooks` git's own, and a file so named is a gitfile that sends git to whatever directory it names (a note keeps its extension, so `.git.md` is what it lands on). `relink::plan` refuses both ends of a move that name `.git` as well, so no caller of `relocate` lands there. `rename_path` also takes the window's plugin file type extensions, judged after the grant and before the entry is looked up, and refused unless each is lowercase ASCII letters and digits. A typed name ending in one splits there like a document's, so a note renamed `drawing.excalidraw` lands on that name. The list widens nothing: the entry stays in its folder under the checks above, and every name it can land on is one `write_file` could already write there |
 | `request_open` | folders only; the path must already be a granted workspace root |
 | `open_in_new_window` | readable |
 | `reveal_path` | readable, checked before the file manager is asked to show the path. A file just exported holds only a grant to write, so it is not revealed. It stands in for the opener plugin's `reveal_item_in_dir`, which the capability does not grant (see [Plugin permissions](#plugin-permissions)) |
@@ -301,7 +301,8 @@ keys over it. What holds it in:
   keys are off.
 - **A size cap.** Files over 2 MiB get a notice instead of a render, so a
   large file cannot stall Explorer's pane. Quick Look and the web viewer
-  apply the same cap, all three reading it from `src-tauri/preview.json`.
+  apply the same cap, as does the app's Copy Share Link, all reading it
+  from `src-tauri/preview.json`.
 - **Process isolation.** The handler runs in Explorer's `prevhost.exe`
   surrogate, not in Explorer, and the WebView2 renderer keeps its own sandbox.
   A crash or a hang takes down the surrogate only.
@@ -378,16 +379,24 @@ permission: the marketplace download runs in Rust
 registry index from its fixed URL and follows the entry to a package on the
 marketplace hosts alone, so the renderer never names a URL.
 
-- **Clipboard.** `clipboard-manager:allow-read-text` alone, for the editor's
+- **Clipboard.** `clipboard-manager:allow-read-text`, for the editor's
   context-menu Paste (`src/lib/editorContextMenu.ts`): `execCommand("paste")`
   is blocked in the webview, and WebKit gates `navigator.clipboard.readText()`
   behind a second native confirmation, so the item reads the native clipboard
-  through the plugin. Copying uses the browser clipboard API, which needs no
-  grant, so there is no `allow-write-text`. The command takes no argument and
-  no path, but nothing ties it to the menu item: a compromised renderer can
-  read whatever the user last copied, at any time, a password manager's
-  entry included. Accepted, since paste has to read the clipboard and this
-  is the only read that works without the extra prompt.
+  through the plugin. The command takes no argument and no path, but nothing
+  ties it to the menu item: a compromised renderer can read whatever the user
+  last copied, at any time, a password manager's entry included. Accepted,
+  since paste has to read the clipboard and this is the only read that works
+  without the extra prompt.
+  `clipboard-manager:allow-write-text` backs Copy Share Link
+  (`src/hooks/useShareLink.ts`): it runs from a native menu item, a click that
+  carries no user activation, and WebKit refuses
+  `navigator.clipboard.writeText()` without one. Every other copy still uses
+  the browser clipboard API. Nothing ties the write to the command either, so
+  a compromised renderer can replace what the user copied, say an address
+  they are about to paste. Accepted: such a renderer already reads the
+  clipboard through the grant above, and WebView2 lets page script write it
+  without a gesture while the window has focus.
 - **Dialog.** Desktop holds `dialog:allow-message` alone (it backs `ask`).
   The plugin's `open` command adds whatever the user picks to the fs and asset
   scopes, so `dialog:allow-open` lives in `capabilities/mobile.json`

@@ -1,6 +1,6 @@
 import { deflateRawSync, inflateRawSync } from "node:zlib";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { MAX_DOCUMENT_BYTES } from "./documentText";
+import { MAX_DOCUMENT_BYTES } from "@/lib/previewDocument";
 import { decodeDocument, encodeDocument, MAX_LINK_LENGTH } from "./linkCodec";
 
 // An encoder independent of the one under test, so a bug symmetric in both

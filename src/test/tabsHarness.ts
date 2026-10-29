@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { act, waitFor } from "@testing-library/react";
 import { expect, vi } from "vitest";
+import type { DirectoryChanged } from "@/hooks/useTabEvents";
 import type { useTabs } from "@/hooks/useTabs";
 import { pickFiles, pickFolder, pickNewWorkspace, pickSaveDocument } from "@/lib/pickers";
 import { EMPTY_SNAPSHOT, type VaultSnapshot } from "@/lib/vault";
@@ -129,9 +130,16 @@ export function defaultOptions(over: Partial<Parameters<typeof useTabs>[0]> = {}
   };
 }
 
-export function captureListener(event: "opens-pending" | "file-changed" | "directory-changed") {
-  const ref: { handler: ((e: { payload: string }) => void) | null } = { handler: null };
-  vi.mocked(listen).mockImplementation(((name: string, fn: (e: { payload: string }) => void) => {
+interface EventPayloads {
+  "opens-pending": string;
+  "file-changed": string;
+  "directory-changed": DirectoryChanged;
+}
+
+export function captureListener<E extends keyof EventPayloads>(event: E) {
+  type Handler = (e: { payload: EventPayloads[E] }) => void;
+  const ref: { handler: Handler | null } = { handler: null };
+  vi.mocked(listen).mockImplementation(((name: string, fn: Handler) => {
     if (name === event) ref.handler = fn;
     return Promise.resolve(() => {});
   }) as unknown as typeof listen);
@@ -139,7 +147,10 @@ export function captureListener(event: "opens-pending" | "file-changed" | "direc
 }
 
 /** Report a change to `path` and wait out the reload debounce; a parked read stays out. */
-export async function changeOnDisk(fileChanged: ReturnType<typeof captureListener>, path: string) {
+export async function changeOnDisk(
+  fileChanged: ReturnType<typeof captureListener<"file-changed">>,
+  path: string,
+) {
   await act(async () => {
     fileChanged.handler?.({ payload: path });
     await new Promise((r) => setTimeout(r, 350));

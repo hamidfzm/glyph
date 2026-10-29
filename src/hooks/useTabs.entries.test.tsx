@@ -243,7 +243,44 @@ describe("useTabs creating entries", () => {
       newName: "My Note",
       root: "/p/ws",
       dryRun: false,
+      extensions: [],
     });
+  });
+
+  it("renamePath sends the same plugin file types to the preview and the rename", async () => {
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        rename_path: async () => ({ newPath: "/p/ws/drawing.excalidraw", files: [], failed: null }),
+        read_directory: async () => [],
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+    await act(async () => {
+      await result.current.openFolder("/p/ws");
+    });
+
+    await act(async () => {
+      await result.current.renamePath("/p/ws/Untitled.md", "drawing.excalidraw", ["excalidraw"]);
+    });
+
+    const renames = vi.mocked(invoke).mock.calls.filter(([command]) => command === "rename_path");
+    expect(renames.map(([, args]) => args)).toEqual([
+      {
+        path: "/p/ws/Untitled.md",
+        newName: "drawing.excalidraw",
+        root: "/p/ws",
+        dryRun: true,
+        extensions: ["excalidraw"],
+      },
+      {
+        path: "/p/ws/Untitled.md",
+        newName: "drawing.excalidraw",
+        root: "/p/ws",
+        dryRun: false,
+        extensions: ["excalidraw"],
+      },
+    ]);
   });
 
   it("create/rename are no-ops when no workspace is open", async () => {

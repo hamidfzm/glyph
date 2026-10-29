@@ -2,6 +2,7 @@ import { act, renderHook } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { TabsContext, type TabsContextValue } from "@/contexts/TabsContext";
+import { registerFileType } from "@/lib/plugins/fileTypes";
 import { useCreateWikilinkNote } from "./useCreateWikilinkNote";
 
 // Minimal context stubs, like renderInWorkspace: only the fields the hook reads.
@@ -71,5 +72,27 @@ describe("useCreateWikilinkNote", () => {
     });
     // Falls back to the untitled path so the new note still opens.
     expect(openFile).toHaveBeenCalledWith("/w/Untitled.md");
+  });
+
+  it("keeps a note for a target ending in a plugin file type", async () => {
+    // The vault resolves `[[sketch.excalidraw]]` to `sketch.excalidraw.md` only,
+    // so the rename gets no plugin types even while one is registered.
+    const dispose = registerFileType({ extensions: ["excalidraw"], language: "excalidraw" });
+    const createNote = vi.fn().mockResolvedValue("/w/Untitled.md");
+    const renamePath = vi.fn().mockResolvedValue("/w/sketch.excalidraw.md");
+    const openFile = vi.fn();
+    const { result } = renderHook(() => useCreateWikilinkNote(), {
+      wrapper: wrapperFor({ workspace: { root: "/w" }, createNote, renamePath, openFile }),
+    });
+
+    try {
+      await act(async () => {
+        await result.current?.("sketch.excalidraw");
+      });
+    } finally {
+      dispose();
+    }
+    expect(renamePath).toHaveBeenCalledWith("/w/Untitled.md", "sketch.excalidraw");
+    expect(openFile).toHaveBeenCalledWith("/w/sketch.excalidraw.md");
   });
 });

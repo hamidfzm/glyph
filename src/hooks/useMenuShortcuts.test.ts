@@ -49,6 +49,7 @@ function makeHandlers(): MenuEventHandlers {
     exportEpub: vi.fn(),
     exportPdf: vi.fn(),
     exportWebsite: vi.fn(),
+    copyShareLink: vi.fn(),
     workspaceSettings: vi.fn(),
     zoomIn: vi.fn(),
     zoomOut: vi.fn(),

@@ -6,11 +6,18 @@ import { subscribe } from "@/lib/tauriEvent";
 const DIRECTORY_REFRESH_DEBOUNCE = 300;
 const FILE_RELOAD_DEBOUNCE = 300;
 
+/** A workspace change; `documentsChanged` is false when only the tree's listing changed. */
+export interface DirectoryChanged {
+  root: string;
+  documentsChanged: boolean;
+}
+
 interface UseTabEventsParams {
   stateRef: RefObject<TabsState>;
   workspaceRef: RefObject<Workspace | null>;
   isAutoReloadEnabled: () => boolean;
   reloadFromDisk: (tabId: string, path: string) => Promise<void>;
+  refreshTree: (root: string) => Promise<void>;
   refreshWorkspace: (root: string) => Promise<void>;
 }
 
@@ -24,6 +31,7 @@ export function useTabEvents({
   workspaceRef,
   isAutoReloadEnabled,
   reloadFromDisk,
+  refreshTree,
   refreshWorkspace,
 }: UseTabEventsParams): void {
   // Listen for file-changed events (auto-reload). Applies to any open file tab.
@@ -62,20 +70,32 @@ export function useTabEvents({
     };
   }, []);
 
-  // Listen for directory-changed events: refresh the workspace tree + indexes.
+  // Listen for directory-changed events: refresh the workspace tree, and the
+  // indexes too when a burst changed any document.
   useEffect(() => {
-    let timeout: ReturnType<typeof setTimeout> | null = null;
-    const unsubscribe = subscribe<string>("directory-changed", (event) => {
-      const watchedRoot = event.payload;
-      if (timeout) clearTimeout(timeout);
-      timeout = setTimeout(async () => {
-        if (workspaceRef.current?.root !== watchedRoot) return;
-        await refreshWorkspace(watchedRoot);
+    // Per root: every window hears every watch, and another workspace's change
+    // must not reset the timer this one's refresh is waiting on.
+    const pending = new Map<
+      string,
+      { timeout: ReturnType<typeof setTimeout>; documentsChanged: boolean }
+    >();
+    const unsubscribe = subscribe<DirectoryChanged>("directory-changed", ({ payload }) => {
+      const { root } = payload;
+      const earlier = pending.get(root);
+      clearTimeout(earlier?.timeout);
+      const documentsChanged = payload.documentsChanged || (earlier?.documentsChanged ?? false);
+      const timeout = setTimeout(async () => {
+        pending.delete(root);
+        // Judged when the timer fires: a folder is watched before its tree is in place.
+        if (workspaceRef.current?.root !== root) return;
+        const refresh = documentsChanged ? refreshWorkspace : refreshTree;
+        await refresh(root);
       }, DIRECTORY_REFRESH_DEBOUNCE);
+      pending.set(root, { timeout, documentsChanged });
     });
     return () => {
-      if (timeout) clearTimeout(timeout);
+      for (const { timeout } of pending.values()) clearTimeout(timeout);
       unsubscribe();
     };
-  }, [refreshWorkspace, workspaceRef]);
+  }, [refreshTree, refreshWorkspace, workspaceRef]);
 }

@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { EDITOR_MODE } from "@/lib/settings";
+import type { DirEntry } from "@/lib/tabs";
 import type { NoteSummary } from "@/lib/vault";
 import { type Deferred, deferred } from "@/test/deferred";
 import {
@@ -627,8 +628,8 @@ describe("useTabs directory-changed events", () => {
     await act(async () => {
       // Fire twice in quick succession: the second event resets the debounce
       // timer rather than scheduling a parallel refresh.
-      dirChanged.handler?.({ payload: "/p/ws" });
-      dirChanged.handler?.({ payload: "/p/ws" });
+      dirChanged.handler?.({ payload: { root: "/p/ws", documentsChanged: true } });
+      dirChanged.handler?.({ payload: { root: "/p/ws", documentsChanged: true } });
       await new Promise((r) => setTimeout(r, 350));
     });
 
@@ -661,7 +662,7 @@ describe("useTabs directory-changed events", () => {
     // The rescan of /p/ws is still in flight when the window switches to
     // /p/other; its results must not land on the new workspace.
     await act(async () => {
-      dirChanged.handler?.({ payload: "/p/ws" });
+      dirChanged.handler?.({ payload: { root: "/p/ws", documentsChanged: true } });
       await result.current.openFolder("/p/other");
       await new Promise((r) => setTimeout(r, 350));
     });
@@ -690,10 +691,118 @@ describe("useTabs directory-changed events", () => {
     const readsBefore = readDirs.length;
 
     await act(async () => {
-      dirChanged.handler?.({ payload: "/p/other" });
+      dirChanged.handler?.({ payload: { root: "/p/other", documentsChanged: true } });
       await new Promise((r) => setTimeout(r, 350));
     });
 
     expect(readDirs.length).toBe(readsBefore);
+  });
+
+  const callsTo = (command: string) =>
+    vi.mocked(invoke).mock.calls.filter(([name]) => name === command).length;
+
+  /** Open /p/ws, whose root lists whatever `rootEntries` holds when it is read. */
+  async function openWatched(rootEntries: { current: DirEntry[] }) {
+    const dirChanged = captureListener("directory-changed");
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        read_directory: async (_cmd, args) =>
+          String(args?.path ?? "") === "/p/ws" ? rootEntries.current : [],
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+    await act(async () => {
+      await result.current.openFolder("/p/ws");
+    });
+    return { result, dirChanged };
+  }
+
+  const photo: DirEntry = {
+    name: "photo.png",
+    path: "/p/ws/photo.png",
+    isDirectory: false,
+    modified: 0,
+  };
+
+  it("re-reads only the tree when no document changed", async () => {
+    const rootEntries = { current: [] as DirEntry[] };
+    const { result, dirChanged } = await openWatched(rootEntries);
+    const walksBefore = callsTo("list_markdown_files");
+    const snapshotsBefore = callsTo("vault_snapshot");
+
+    rootEntries.current = [photo];
+    await act(async () => {
+      dirChanged.handler?.({ payload: { root: "/p/ws", documentsChanged: false } });
+      await new Promise((r) => setTimeout(r, 350));
+    });
+
+    expect(result.current.workspace?.nodes.get("/p/ws")).toEqual([photo]);
+    expect(callsTo("list_markdown_files")).toBe(walksBefore);
+    expect(callsTo("vault_snapshot")).toBe(snapshotsBefore);
+  });
+
+  it("keeps a burst's document refresh when a listing change follows it", async () => {
+    const rootEntries = { current: [] as DirEntry[] };
+    const { dirChanged } = await openWatched(rootEntries);
+    const snapshotsBefore = callsTo("vault_snapshot");
+
+    await act(async () => {
+      dirChanged.handler?.({ payload: { root: "/p/ws", documentsChanged: true } });
+      dirChanged.handler?.({ payload: { root: "/p/ws", documentsChanged: false } });
+      await new Promise((r) => setTimeout(r, 350));
+    });
+
+    expect(callsTo("vault_snapshot")).toBe(snapshotsBefore + 1);
+  });
+
+  it("refreshes after another window's workspace reports a change during the debounce", async () => {
+    // Every window hears every watch, so the other root's event must not
+    // reset this root's timer.
+    const rootEntries = { current: [] as DirEntry[] };
+    const { result, dirChanged } = await openWatched(rootEntries);
+    const snapshotsBefore = callsTo("vault_snapshot");
+
+    rootEntries.current = [photo];
+    await act(async () => {
+      dirChanged.handler?.({ payload: { root: "/p/ws", documentsChanged: true } });
+      dirChanged.handler?.({ payload: { root: "/p/other", documentsChanged: true } });
+      await new Promise((r) => setTimeout(r, 350));
+    });
+
+    expect(result.current.workspace?.nodes.get("/p/ws")).toEqual([photo]);
+    expect(callsTo("vault_snapshot")).toBe(snapshotsBefore + 1);
+  });
+
+  it("refreshes for a change reported while the folder was still opening", async () => {
+    // The folder is watched before its tree is in place, so the change arrives
+    // while this window has no workspace yet.
+    const dirChanged = captureListener("directory-changed");
+    const firstRead = deferred<DirEntry[]>();
+    let rootReads = 0;
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        read_directory: async (_cmd, args) => {
+          if (String(args?.path ?? "") !== "/p/ws") return [];
+          rootReads += 1;
+          return rootReads === 1 ? firstRead.promise : [photo];
+        },
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      const opening = result.current.openFolder("/p/ws");
+      await vi.waitFor(() => expect(rootReads).toBe(1));
+      dirChanged.handler?.({ payload: { root: "/p/ws", documentsChanged: false } });
+      firstRead.resolve([]);
+      await opening;
+    });
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 350));
+    });
+
+    expect(result.current.workspace?.nodes.get("/p/ws")).toEqual([photo]);
   });
 });
