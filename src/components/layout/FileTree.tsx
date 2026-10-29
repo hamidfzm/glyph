@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { ContextMenu, type ContextMenuModel } from "@/components/menu/ContextMenu";
 import { useFileTreeDragMove } from "@/hooks/useFileTreeDragMove";
 import { parentDir } from "@/lib/paths";
+import { registeredExtensions } from "@/lib/plugins/fileTypes";
 import type { DirEntry } from "@/lib/tabs";
 import {
   type EntryEditingState,
@@ -25,8 +26,9 @@ interface FileTreeProps {
   onCreateNote: (dir: string) => Promise<string | null>;
   onCreateCanvas: (dir: string) => Promise<string | null>;
   onCreateFolder: (dir: string) => Promise<string | null>;
-  // Rename an entry to the inline-typed name; resolves to the final path.
-  onRename: (path: string, newName: string) => Promise<string | null>;
+  // Rename an entry to the inline-typed name, which may end in one of
+  // `extensions`, the plugin file types; resolves to the final path.
+  onRename: (path: string, newName: string, extensions: string[]) => Promise<string | null>;
   // Duplicate an entry next to itself; resolves to the new path.
   onDuplicate: (path: string) => Promise<string | null>;
   // Move an entry: prompt for a destination folder, then relocate it.
@@ -119,7 +121,7 @@ export const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(function FileT
       setEditing(null);
       const name = value.trim();
       if (name) {
-        const finalPath = await onRename(path, name);
+        const finalPath = await onRename(path, name, registeredExtensions());
         if (kind !== "folder" && openOnCommit) onOpenFile(finalPath ?? path);
       } else if (kind !== "folder" && openOnCommit) {
         onOpenFile(path);
