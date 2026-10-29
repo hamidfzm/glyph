@@ -38,8 +38,8 @@ optional loads on first use:
   are `lazy()` components (`lazyEditor`, `lazyNotebook`, `lazyCanvas`,
   `lazyGraph`, `lazySettings`, `lazyWorkspaceSettings`).
 - The AI chat panel (`lazyAIChatPanel`) loads on first open, and the AI
-  providers and the assistant's tool loop load on the first question
-  (`useAIChat`). The plugin marketplace rides in the settings chunk as its
+  providers, the assistant's tool loop and the code that runs its tool calls
+  load on the first question (`useAIChat`). The plugin marketplace rides in the settings chunk as its
   Plugins tab.
 - Syntax highlighting and the gemoji table load when a document first needs
   them (`lazyHighlight`, `lazyGemoji`), and so does KaTeX, through the math

@@ -1,14 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { assistantTools, runAssistantTool } from "@/lib/ai/assistantTools";
-import {
-  type ChatTurn,
-  chatHistory,
-  withReplyEnded,
-  withRunningStopped,
-  withToolCall,
-  withToolResult,
-} from "@/lib/ai/chatTurn";
+import type { ChatTurn } from "@/lib/ai/chatTurn";
 import type { ToolLoopEnd } from "@/lib/ai/toolLoop";
 import { rememberToolsRefused, toolsOffered, toolsRefusedByModel } from "@/lib/ai/toolSupport";
 import { type ToolDefinition, ToolsUnsupportedError } from "@/lib/ai/types";
@@ -37,11 +29,18 @@ export function useAIChat(aiSettings: AISettings, getDocContext: () => AIDocCont
 
   const send = useCallback(
     async (content: string, display?: string) => {
-      // Loaded on first use, to keep the providers and the loop out of the
-      // startup bundle.
-      const [{ createAIProvider }, { runToolLoop }] = await Promise.all([
+      // Loaded on first use, to keep the providers, the loop and the tool
+      // calls out of the startup bundle.
+      const [
+        { createAIProvider },
+        { runToolLoop },
+        { assistantTools, runAssistantTool },
+        { chatHistory, withReplyEnded, withRunningStopped, withToolCall, withToolResult },
+      ] = await Promise.all([
         import("@/lib/ai-providers"),
         import("@/lib/ai/toolLoop"),
+        import("@/lib/ai/assistantTools"),
+        import("@/lib/ai/chatTurn"),
       ]);
       const provider = createAIProvider(aiSettings);
       if (!provider) {
