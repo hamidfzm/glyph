@@ -1,7 +1,5 @@
 {
-  "label": "طرح رنگ",
   "presets": {
-    "none": "هیچ‌کدام",
     "sepia": "سپیا",
     "solarized": "سولارایزد",
     "high-contrast": "کنتراست بالا"

@@ -167,6 +167,13 @@
   margin-top: 2px;
 }
 
+/* An action inside a description line, styled as a link. */
+.settings-link {
+  color: var(--color-accent);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 /* Full-width search box at the top of the Hotkeys pane. */
 .settings-hotkey-search {
   width: 100%;

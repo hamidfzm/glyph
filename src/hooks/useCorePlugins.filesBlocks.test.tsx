@@ -63,7 +63,7 @@ describe("core plugins with Files panel blocks", () => {
     const loads = CORE_PLUGINS.map((core) => vi.spyOn(core, "load"));
     const { result, blocks } = renderCore(settingsValue({}));
 
-    await waitFor(() => expect(result.current).toBe(true));
+    await waitFor(() => expect(result.current.ready).toBe(true));
     for (const load of loads) expect(load).not.toHaveBeenCalled();
     expect(blocks()).toEqual([]);
   });

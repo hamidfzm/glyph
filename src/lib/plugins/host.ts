@@ -1,6 +1,7 @@
 import { registerDictionarySource } from "@/lib/spellcheck/dictionarySources";
 import { PLUGIN_API_COMPAT_FLOOR, PLUGIN_API_VERSION, satisfiesApiVersion } from "./apiVersion";
 import { createAssetsApi } from "./assetsApi";
+import { colorSchemeEntry } from "./colorSchemes";
 import { DisposerBag } from "./disposer";
 import { registerFileType } from "./fileTypes";
 import { importPluginModule, type ModuleImporter } from "./loader";
@@ -9,6 +10,7 @@ import { cssReachesOutside, isAppNamespace } from "./pluginNamespace";
 import { createRegistry, type Registry } from "./registry";
 import { startSandbox, type WorkerSpawner } from "./sandbox/sandbox";
 import type {
+  ColorSchemeEntry,
   CommandEntry,
   ExporterEntry,
   FencedRendererContribution,
@@ -69,6 +71,8 @@ export interface PluginHost {
   readonly workspaceSettingsPanels: Registry<WorkspaceSettingsPanelEntry>;
   /** Stylesheets contributed by loaded plugins, injected after app styles. */
   readonly styles: Registry<StyleContribution>;
+  /** Color schemes contributed by loaded plugins, for the Appearance picker. */
+  readonly colorSchemes: Registry<ColorSchemeEntry>;
   /** Export formats contributed by loaded plugins. */
   readonly exporters: Registry<ExporterEntry>;
   /** Website-export themes contributed by loaded plugins. */
@@ -123,6 +127,7 @@ export function createPluginHost(
   const settingsPanels = createRegistry<SettingsPanelContribution>();
   const workspaceSettingsPanels = createRegistry<WorkspaceSettingsPanelEntry>();
   const styles = createRegistry<StyleContribution>();
+  const colorSchemes = createRegistry<ColorSchemeEntry>();
   const exporters = createRegistry<ExporterEntry>();
   const siteThemes = createRegistry<SiteThemeContribution>();
   const loaded = new Map<string, LoadedPlugin>();
@@ -137,6 +142,7 @@ export function createPluginHost(
     settingsPanels,
     workspaceSettingsPanels,
     styles,
+    colorSchemes,
     exporters,
     siteThemes,
   };
@@ -178,6 +184,7 @@ export function createPluginHost(
     settingsPanels,
     workspaceSettingsPanels,
     styles,
+    colorSchemes,
     exporters,
     siteThemes,
     async load(plugin, importer) {
@@ -222,6 +229,14 @@ export function createPluginHost(
                 return;
               }
               tracked(styles.register, bag)({ css });
+            },
+            addColorScheme(scheme) {
+              const entry = colorSchemeEntry(plugin.id, scheme);
+              if (cssReachesOutside(entry.css)) {
+                console.error(`Plugin ${plugin.id} color scheme was dropped: it references URLs`);
+                return;
+              }
+              tracked(colorSchemes.register, bag)(entry);
             },
             registerExporter(exporter) {
               tracked(exporters.register, bag)({ ...exporter, pluginId: plugin.id });
