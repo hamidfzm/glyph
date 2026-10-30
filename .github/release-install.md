@@ -52,4 +52,4 @@ On Arch, when the AUR lags behind a release, download the `PKGBUILD` asset below
 ### No internet on the target machine
 - **Windows:** download `Glyph_*_x64_en-US_offline.msi` below. It carries the WebView2 runtime Glyph needs, so it is over 200 MB.
 - **macOS:** the `.dmg` below needs nothing else.
-- **Linux:** the `.AppImage` below carries its own libraries.
+- **Linux:** the `.AppImage` below carries its own libraries. On a machine with no FUSE, run it with `--appimage-extract` and start `squashfs-root/AppRun`.

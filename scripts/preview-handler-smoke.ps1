@@ -13,7 +13,7 @@ $root = Split-Path $PSScriptRoot -Parent
 $conf = Get-Content "$root\src-tauri\tauri.conf.json" -Raw | ConvertFrom-Json
 $extensions = ($conf.bundle.fileAssociations | Where-Object mimeType -eq 'text/markdown').ext
 
-$msi = if ($Path) { Get-Item $Path } else { Get-ChildItem "$root\src-tauri\target\release\bundle\msi\*.msi" | Select-Object -First 1 }
+$msi = if ($PSBoundParameters.ContainsKey('Path')) { Get-Item $Path } else { Get-ChildItem "$root\src-tauri\target\release\bundle\msi\*.msi" | Select-Object -First 1 }
 if (-not $msi) { throw 'No MSI found; run pnpm tauri build --bundles msi first.' }
 
 function Invoke-Msi($arguments) {

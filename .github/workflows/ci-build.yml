@@ -99,6 +99,7 @@ jobs:
       # pull request skips it: it downloads the 200 MB WebView2 installer.
       - name: Offline MSI build and preview handler smoke test
         if: matrix.platform == 'windows-latest' && github.event_name != 'pull_request'
+        timeout-minutes: 20
         shell: pwsh
         run: |
           ./scripts/build-offline-msi.ps1

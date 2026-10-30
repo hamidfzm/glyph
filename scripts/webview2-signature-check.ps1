@@ -14,7 +14,7 @@ if ($signature.SignatureType -ne 'Authenticode') {
   throw "$Path fails on type: $($signature.SignatureType), not embedded"
 }
 # One name per line, so a value that merely contains this text cannot match.
-if ($signature.SignerCertificate.SubjectName.Format($true) -notmatch '(?m)^O=Microsoft Corporation\r?$') {
+if ($signature.SignerCertificate.SubjectName.Format($true) -cnotmatch '(?m)^O=Microsoft Corporation\r?$') {
   throw "$Path fails on signer: $($signature.SignerCertificate.Subject)"
 }
 Write-Host "Signed by Microsoft Corporation: $Path" -ForegroundColor Green

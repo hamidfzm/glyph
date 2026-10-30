@@ -616,6 +616,7 @@ jobs:
 
           $msi = "Glyph_$($env:VERSION)_x64_en-US_offline.msi"
           gh release download $env:TAG --repo $env:GITHUB_REPOSITORY --pattern $msi
+          if ($LASTEXITCODE -ne 0) { Write-Error "$env:TAG has no $msi"; exit 1 }
 
           $proc = Start-Process msiexec.exe -ArgumentList "/i `"$PWD\$msi`" /qn /norestart" -Wait -PassThru
           if ($proc.ExitCode -ne 0) { Write-Error "msiexec exited $($proc.ExitCode)"; exit 1 }
