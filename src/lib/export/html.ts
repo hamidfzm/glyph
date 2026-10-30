@@ -1,4 +1,4 @@
-import { escapeXml } from "./escape";
+import { escapeStyleText, escapeXml } from "./escape";
 import { LAYOUT_OVERRIDES, SITE_LAYOUT, THEME_SCRIPT, THEME_TOGGLE_BUTTON } from "./siteChrome";
 
 export interface HtmlDocOptions {
@@ -57,7 +57,7 @@ export function buildHtmlDocument({
   const styleBlock = stylesheetHref
     ? ""
     : `\n<style>
-${css}
+${escapeStyleText(css)}
 ${LAYOUT_OVERRIDES}${navHtml ? SITE_LAYOUT : ""}
 </style>`;
   // dir="auto" mirrors the viewer: a fully-RTL document resolves an RTL base

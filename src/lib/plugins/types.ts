@@ -284,7 +284,10 @@ export interface WorkspaceSettingsPanelEntry extends WorkspaceSettingsPanelContr
 export interface ExportDocument {
   /** Plain text; escape it before putting it in markup. */
   title: string;
-  /** Every style rule the app applies, so the body HTML renders as it does in the app. */
+  /**
+   * Every style rule the app applies, so the body HTML renders as it does in
+   * the app. Safe to place inside a `<style>` element: `</` arrives as `<\/`.
+   */
   css: string;
   dark: boolean;
 }
