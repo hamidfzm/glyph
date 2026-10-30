@@ -15,12 +15,14 @@ function isBlockLayout(value: unknown): boolean {
   return (height === null || typeof height === "number") && typeof value.collapsed === "boolean";
 }
 
-/** Maps keyed by free-form ids, whose defaults list no keys to compare with. */
+/** Maps whose defaults cannot give their values' type: keyed by free-form ids,
+ *  or holding `null` until the user chooses. */
 const RECORD_VALUES: Record<string, Check> = {
   "layout.blocks": isBlockLayout,
   "keybindings.overrides": (value) => typeof value === "string",
   "ai.apiKeys": (value) => typeof value === "string",
   "ai.agentWriteTools": (value) => typeof value === "boolean",
+  "ai.assistantTools": (value) => value === null || typeof value === "boolean",
 };
 
 /** `stored` with every value whose type differs from its default left out,

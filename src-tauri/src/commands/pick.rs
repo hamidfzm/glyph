@@ -97,18 +97,17 @@ pub async fn pick_files<R: Runtime>(
     Ok(Some(paths))
 }
 
-/// Export save dialog: pick a destination file and grant it write-only.
-/// `default_dir` is the folder it opens in, when given. It is passed on as
-/// spelled, not canonicalized: the dialog cannot open a `\\?\UNC\` path.
-#[tauri::command]
-pub async fn pick_save<R: Runtime>(
-    app: AppHandle<R>,
+/// Save dialog. `default_dir` is the folder it opens in, when given. It is
+/// passed on as spelled, not canonicalized: the dialog cannot open a
+/// `\\?\UNC\` path.
+async fn pick_save_target<R: Runtime>(
+    app: &AppHandle<R>,
     default_name: String,
     filter_name: String,
     extensions: Vec<String>,
     default_dir: Option<String>,
-) -> Result<Option<String>, String> {
-    ensure_start_dir(&app, default_dir.as_deref())?;
+) -> Result<Option<PathBuf>, String> {
+    ensure_start_dir(app, default_dir.as_deref())?;
     let exts: Vec<&str> = extensions.iter().map(String::as_str).collect();
     let mut dialog = app
         .dialog()
@@ -124,8 +123,41 @@ pub async fn pick_save<R: Runtime>(
     let Some(picked) = picked else {
         return Ok(None);
     };
-    let path = to_path(picked)?;
+    to_path(picked).map(Some)
+}
+
+/// Export save dialog: pick a destination file and grant it write-only.
+#[tauri::command]
+pub async fn pick_save<R: Runtime>(
+    app: AppHandle<R>,
+    default_name: String,
+    filter_name: String,
+    extensions: Vec<String>,
+) -> Result<Option<String>, String> {
+    let picked = pick_save_target(&app, default_name, filter_name, extensions, None).await?;
+    let Some(path) = picked else {
+        return Ok(None);
+    };
     app.state::<GrantRegistry>().grant_export_file(&path)?;
+    Ok(Some(path.to_string_lossy().to_string()))
+}
+
+/// Save As for a new document: the picked file is granted as Open File grants
+/// one, so once written it reloads from disk and its relative images load.
+#[tauri::command]
+pub async fn pick_save_document<R: Runtime>(
+    app: AppHandle<R>,
+    default_name: String,
+    filter_name: String,
+    extensions: Vec<String>,
+    default_dir: Option<String>,
+) -> Result<Option<String>, String> {
+    let picked = pick_save_target(&app, default_name, filter_name, extensions, default_dir).await?;
+    let Some(path) = picked else {
+        return Ok(None);
+    };
+    let canonical = app.state::<GrantRegistry>().grant_document_target(&path)?;
+    grants::allow_asset_file(&app, &canonical);
     Ok(Some(path.to_string_lossy().to_string()))
 }
 
@@ -261,10 +293,10 @@ mod tests {
     }
 
     #[test]
-    fn the_save_picker_refuses_a_starting_folder_that_is_not_a_granted_workspace() {
+    fn the_document_save_picker_refuses_a_starting_folder_that_is_not_a_granted_workspace() {
         let fx = fixture();
         for (dir, refusal) in &fx.refused {
-            let picked = block_on(pick_save(
+            let picked = block_on(pick_save_document(
                 fx.app.handle().clone(),
                 "Untitled-1.md".to_string(),
                 "Markdown".to_string(),

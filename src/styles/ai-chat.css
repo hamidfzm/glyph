@@ -111,6 +111,120 @@
    `unicode-bidi: plaintext` rule in markdown.css (the reply container carries
    .markdown-body). */
 
+/* The tool calls a reply made, collapsed above it so its basis can be checked. */
+.ai-tool-calls {
+  list-style: none;
+  margin: 0 0 6px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* A flex summary loses its disclosure marker in Chromium, so it draws one. */
+.ai-tool-call summary {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 3px 6px;
+  border-radius: var(--glyph-radius-sm);
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  list-style: none;
+}
+
+.ai-tool-call summary::-webkit-details-marker {
+  display: none;
+}
+
+/* Borders, not a glyph: nothing for a screen reader to read, and the logical
+   sides flip under right-to-left on their own. */
+.ai-tool-call summary::before {
+  content: "";
+  flex-shrink: 0;
+  align-self: center;
+  border-block: 4px solid transparent;
+  border-inline-start: 5px solid currentColor;
+}
+
+.ai-tool-call details[open] > summary::before {
+  border-inline: 4px solid transparent;
+  border-block-start: 5px solid currentColor;
+  border-block-end: 0;
+}
+
+.ai-tool-call summary:hover {
+  background: var(--color-surface-secondary);
+}
+
+.ai-tool-call summary:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+.ai-tool-call-name,
+.ai-tool-call-subject {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ai-tool-call-name {
+  font-weight: 500;
+}
+
+/* The subject gives way first; a model-chosen name takes its own direction. */
+.ai-tool-call-subject {
+  flex-shrink: 100;
+  unicode-bidi: plaintext;
+}
+
+.ai-tool-call-status {
+  flex-shrink: 0;
+  margin-inline-start: auto;
+}
+
+.ai-tool-call[data-status="failed"] .ai-tool-call-status {
+  color: var(--color-error);
+}
+
+.ai-tool-call-detail {
+  margin: 4px 0 6px;
+  padding-inline-start: 12px;
+  border-inline-start: 2px solid var(--color-border);
+}
+
+/* JSON reads left to right, even in a right-to-left interface. */
+.ai-tool-call-detail pre {
+  margin: 0 0 6px;
+  max-height: 240px;
+  overflow: auto;
+  padding: 6px 8px;
+  border-radius: var(--glyph-radius-sm);
+  background: var(--color-surface-secondary);
+  font-family: var(--glyph-code-font, ui-monospace, monospace);
+  font-size: 11px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  direction: ltr;
+  unicode-bidi: isolate;
+  text-align: left;
+}
+
+.ai-tool-call-label {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  margin-bottom: 2px;
+}
+
+.ai-tool-call-note {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  padding: 2px 6px;
+}
+
 /* Per-message actions, revealed on hover to keep the transcript quiet. */
 .ai-msg-actions {
   display: flex;

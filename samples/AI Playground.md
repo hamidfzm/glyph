@@ -14,7 +14,7 @@ Open the AI chat (the sparkle button in the tab bar, or `Ctrl`/`Cmd`+`Shift`+`A`
 2. Ask a follow-up: *"Shorten that to one sentence."*
 3. Ask *"What does the lighthouse keeper find in the story below?"* and click **Show in document** on the quoted passage the assistant returns.
 4. Select the Persian paragraph and use right-click → AI → **Translate Selection**. The reply should render right-to-left where appropriate.
-5. Ask *"What files are in this workspace?"* after opening the `samples` folder as a workspace.
+5. Open the `samples` folder as a workspace and ask *"Which notes link to Graph View?"* or *"Summarize the first note Index links to."* With the assistant allowed to read notes (Settings → AI), it looks them up and lists each lookup above its reply; open one to see what it returned.
 6. Press **Stop** mid-reply; the partial answer stays in the transcript.
 
 ## A short story to question

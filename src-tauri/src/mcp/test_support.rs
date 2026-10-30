@@ -6,7 +6,7 @@ use std::path::PathBuf;
 
 use serde_json::Value;
 
-use super::registry::{dispatch, AllowVault, Session, ToolError};
+use super::registry::{dispatch, AllowVault, Caller, Session, ToolError};
 use super::session::OpenState;
 use crate::data_dir::{Editing, OpenDocuments};
 use crate::grants::GrantRegistry;
@@ -121,6 +121,7 @@ impl Harness {
             editing: &*self.app,
             exe: &self.exe,
             allow_vault: self.allow.as_deref(),
+            caller: Caller::Stdio,
         }
     }
 

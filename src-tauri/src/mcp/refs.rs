@@ -6,10 +6,10 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
-use super::registry::Session;
+use super::registry::{Caller, Session};
 use crate::cli::plain_path;
 use crate::commands::walk::SCAN_MAX_FILE_BYTES;
-use crate::vault::{split_heading, strip_bom, with_synced_vault, Vault};
+use crate::vault::{split_heading, strip_bom, with_synced_vault, with_vault, Vault};
 
 /// Most rows one listing returns. A listing that had more says so.
 pub(super) const MAX_ITEMS: usize = 200;
@@ -29,7 +29,7 @@ pub(super) struct NoteArgs {
 pub(super) fn vault_property() -> Value {
     json!({
         "type": "string",
-        "description": "Root folder of the vault to work in. Defaults to the vault of the note open in Glyph, or to the only vault; vault_context lists them. Any other folder, given as an absolute path, is served once the user allows it."
+        "description": "Root folder of the vault to work in. Defaults to the vault of the note open in Glyph, or to the only vault; vault_context lists them. When vault_context reports canAskForVaults, any other folder, given as an absolute path, is served once the user allows it."
     })
 }
 
@@ -65,7 +65,7 @@ pub(super) fn cut_text(text: &str) -> (&str, bool) {
     }
 }
 
-/// Run `read` against the chosen vault's index, caught up with the disk.
+/// Run `read` against the chosen vault's index, current with the disk.
 pub(super) fn read_vault<T>(
     session: &Session,
     requested: Option<&str>,
@@ -75,9 +75,11 @@ pub(super) fn read_vault<T>(
     if !Path::new(&root).is_dir() {
         return Err(format!("the vault folder {root} no longer exists"));
     }
-    with_synced_vault(&root, session.grants, session.vaults, |vault| {
-        read(vault, &root)
-    })
+    let read = |vault: &Vault| read(vault, &root);
+    match session.caller {
+        Caller::Stdio => with_synced_vault(&root, session.grants, session.vaults, read),
+        Caller::App => with_vault(&root, session.grants, session.vaults, read),
+    }
 }
 
 /// The root a call reads: the one it names, else the vault holding the note
@@ -173,9 +175,11 @@ fn add_vault(session: &Session, requested: &str) -> Result<String, String> {
 /// What the agent can do about a vault this session does not serve.
 pub(super) fn how_to_add_a_vault(session: &Session) -> &'static str {
     if session.allow_vault.is_some() {
-        "give a folder's absolute path as `vault` and the user is asked to allow it, or open a folder in Glyph"
-    } else {
-        "open a folder in Glyph, or start the server with --vault <folder>"
+        return "give a folder's absolute path as `vault` and the user is asked to allow it, or open a folder in Glyph";
+    }
+    match session.caller {
+        Caller::Stdio => "open a folder in Glyph, or start the server with --vault <folder>",
+        Caller::App => "open a folder in this Glyph window",
     }
 }
 
@@ -252,9 +256,15 @@ pub(super) fn resolve_note(
         });
     }
     let target = link_target(raw);
-    let found = vault
-        .resolve_link(target, None)
-        .ok_or_else(|| format!("no note in {root} goes by {raw:?}"))?;
+    let found = vault.resolve_link(target, None).ok_or_else(|| {
+        // A miss in a partial index is not proof the note is absent.
+        let partial = if vault.status().truncated {
+            "; the index is incomplete, so it may be a note past its limits (vault_context says which)"
+        } else {
+            ""
+        };
+        format!("no note in {root} goes by {raw:?}{partial}")
+    })?;
     Ok(NoteRef {
         path: found.path.to_string(),
         heading: split_heading(target).1.map(str::to_string),
@@ -274,20 +284,30 @@ pub(super) fn note_path(
     // An absolute `raw` replaces the root it is joined to.
     let candidate = Path::new(root).join(raw);
     let checked = session.grants.ensure_readable(&candidate.to_string_lossy());
-    let readable_file = checked.as_ref().is_ok_and(|path| path.is_file());
+    // Asked only inside this vault: the grants admit every vault the app has
+    // open, and a path into another must not learn whether a file is there.
+    let inside = checked
+        .as_ref()
+        .ok()
+        .and_then(|canonical| vault.inside_root(canonical));
+    let readable_file = inside.is_some() && checked.as_ref().is_ok_and(|path| path.is_file());
     // Nothing to read here, so perhaps a wikilink target instead.
     if !absolute && !readable_file {
         return Ok(None);
     }
     let canonical = checked?;
+    let Some((indexed, _)) = inside else {
+        let can_pick_another = session.open.roots.len() > 1 || session.allow_vault.is_some();
+        let others = if can_pick_another {
+            "; pass `vault` to read another one"
+        } else {
+            ""
+        };
+        return Err(format!("{raw} is not in the vault {root}{others}"));
+    };
     if !canonical.is_file() {
         return Err(format!("{raw} is not a file"));
     }
-    let Some((indexed, _)) = vault.inside_root(&canonical) else {
-        return Err(format!(
-            "{raw} is not in the vault {root}; pass `vault` to read another one"
-        ));
-    };
     let indexed = indexed.to_string_lossy().to_string();
     if vault.note(&indexed).is_none() {
         return Err(format!(

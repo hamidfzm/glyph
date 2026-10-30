@@ -290,6 +290,13 @@
           "description": "Mueve una nota a otra carpeta y reescribe los enlaces que apuntan a ella."
         }
       }
+    },
+    "assistantTools": {
+      "title": "El asistente lee tus notas",
+      "description": "El asistente puede consultar las notas del espacio de trabajo de esta ventana para responderte: enlaces, enlaces entrantes, etiquetas, encabezados y el texto de cualquier nota. Cada consulta aparece sobre la respuesta, con lo que devolvió. Solo lee: nunca modifica una nota.",
+      "label": "Permitir que el asistente lea notas",
+      "cloud": "Lo que lee se envía a {{provider}} junto con tu pregunta, como ya ocurre con el documento abierto.",
+      "local": "Lo que lee va al servidor de Ollama configurado arriba, junto con tu pregunta."
     }
   },
   "print": {

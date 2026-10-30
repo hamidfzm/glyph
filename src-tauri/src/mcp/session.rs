@@ -1,7 +1,8 @@
-//! What the user has open, read from the stores the app persists: the
-//! workspace pointer and loose files in `settings.json`, and each workspace's
-//! own tabs in `workspace-sessions.json` under its root. The renderer writes
-//! both, so every field is optional and anything malformed is skipped.
+//! What the user has open. For `glyph mcp` it is read from the stores the app
+//! persists: the workspace pointer and loose files in `settings.json`, and
+//! each workspace's own tabs in `workspace-sessions.json` under its root. The
+//! renderer writes both, so every field is optional and anything malformed is
+//! skipped. The in-app assistant builds it from the calling window instead.
 
 use std::collections::BTreeMap;
 use std::path::Path;

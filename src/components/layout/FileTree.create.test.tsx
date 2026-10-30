@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { type ComponentProps, createRef } from "react";
 import { describe, expect, it, vi } from "vitest";
+import { registerFileType } from "@/lib/plugins/fileTypes";
 import type { DirEntry } from "@/lib/tabs";
 import { FileTree, type FileTreeHandle } from "./FileTree";
 
@@ -81,8 +82,44 @@ describe("FileTree creating and inline rename", () => {
     fireEvent.change(input, { target: { value: "My Note" } });
     fireEvent.keyDown(input, { key: "Enter" });
 
-    await waitFor(() => expect(onRename).toHaveBeenCalledWith("/root/Untitled.md", "My Note"));
+    await waitFor(() => expect(onRename).toHaveBeenCalledWith("/root/Untitled.md", "My Note", []));
     await waitFor(() => expect(onOpenFile).toHaveBeenCalledWith("/root/My Note.md"));
+  });
+
+  it("names a new note with the registered plugin file types, so it can become one", async () => {
+    const created: DirEntry = {
+      name: "Untitled.md",
+      path: "/root/Untitled.md",
+      isDirectory: false,
+      modified: 0,
+    };
+    const onCreateNote = vi.fn(async () => "/root/Untitled.md");
+    const onRename = vi.fn(async () => "/root/drawing.excalidraw");
+    const onOpenFile = vi.fn();
+    const dispose = registerFileType({ extensions: ["excalidraw"], language: "excalidraw" });
+
+    try {
+      renderFileTree({
+        nodes: new Map([["/root", [created]]]),
+        onCreateNote,
+        onRename,
+        onOpenFile,
+      });
+      fireEvent.contextMenu(container_root());
+      fireEvent.click(screen.getByText("New Note"));
+      const input = await screen.findByRole("textbox");
+      fireEvent.change(input, { target: { value: "drawing.excalidraw" } });
+      fireEvent.keyDown(input, { key: "Enter" });
+
+      await waitFor(() =>
+        expect(onRename).toHaveBeenCalledWith("/root/Untitled.md", "drawing.excalidraw", [
+          "excalidraw",
+        ]),
+      );
+      await waitFor(() => expect(onOpenFile).toHaveBeenCalledWith("/root/drawing.excalidraw"));
+    } finally {
+      dispose();
+    }
   });
 
   it("creates a canvas via the context menu, inline-renames, and opens it", async () => {
@@ -111,7 +148,9 @@ describe("FileTree creating and inline rename", () => {
     fireEvent.change(input, { target: { value: "Board" } });
     fireEvent.keyDown(input, { key: "Enter" });
 
-    await waitFor(() => expect(onRename).toHaveBeenCalledWith("/root/Untitled.canvas", "Board"));
+    await waitFor(() =>
+      expect(onRename).toHaveBeenCalledWith("/root/Untitled.canvas", "Board", []),
+    );
     await waitFor(() => expect(onOpenFile).toHaveBeenCalledWith("/root/Board.canvas"));
   });
 
@@ -181,7 +220,7 @@ describe("FileTree creating and inline rename", () => {
     fireEvent.change(input, { target: { value: "Renamed" } });
     fireEvent.keyDown(input, { key: "Enter" });
 
-    await waitFor(() => expect(onRename).toHaveBeenCalledWith("/root/Untitled.md", "Renamed"));
+    await waitFor(() => expect(onRename).toHaveBeenCalledWith("/root/Untitled.md", "Renamed", []));
     await waitFor(() => expect(onOpenFile).toHaveBeenCalledWith("/root/Untitled.md"));
   });
 
@@ -209,7 +248,9 @@ describe("FileTree creating and inline rename", () => {
     fireEvent.change(input, { target: { value: "Archive" } });
     fireEvent.keyDown(input, { key: "Enter" });
 
-    await waitFor(() => expect(onRename).toHaveBeenCalledWith("/root/Untitled Folder", "Archive"));
+    await waitFor(() =>
+      expect(onRename).toHaveBeenCalledWith("/root/Untitled Folder", "Archive", []),
+    );
     expect(onOpenFile).not.toHaveBeenCalled();
   });
 

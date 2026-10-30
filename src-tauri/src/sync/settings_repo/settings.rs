@@ -27,9 +27,10 @@ pub(super) const SYNCED_GROUPS: [&str; 9] = [
 
 /// Settings that never leave this machine and are never taken from the
 /// repo: absolute paths the app turns into file grants at launch, secrets, a
-/// data endpoint, a capability switch, a prompt about this machine, and two
-/// safety checks a hostile remote could otherwise switch off.
-const NEVER_SYNC: [(&str, &str); 9] = [
+/// data endpoint, a capability switch, the consent to send notes to an AI
+/// provider, a prompt about this machine, and two safety checks a hostile
+/// remote could otherwise switch off.
+const NEVER_SYNC: [(&str, &str); 10] = [
     ("behavior", "recentFiles"),
     ("behavior", "openTabs"),
     ("behavior", "activeTabPath"),
@@ -39,6 +40,7 @@ const NEVER_SYNC: [(&str, &str); 9] = [
     ("ai", "apiKeys"),
     ("ai", "ollamaUrl"),
     ("ai", "agentWriteTools"),
+    ("ai", "assistantTools"),
 ];
 
 pub(super) fn is_synced_group(name: &str) -> bool {
@@ -220,7 +222,7 @@ mod tests {
                 "confirmExternalLinks": false,
                 "checkForUpdates": false
             },
-            "ai": {"model": "m", "apiKeys": {"claude": "k"}, "ollamaUrl": "http://x", "agentWriteTools": {"a": true}},
+            "ai": {"model": "m", "apiKeys": {"claude": "k"}, "ollamaUrl": "http://x", "agentWriteTools": {"a": true}, "assistantTools": {"claude": true}},
             "privacy": {"errorReporting": true},
             "keybindings": "not an object"
         }));
@@ -291,12 +293,12 @@ mod tests {
     fn never_sync_keys_and_other_groups_keep_their_local_values() {
         let hostile = files(json!({
             "behavior": {"recentFiles": ["\\\\attacker\\share\\x.md"], "confirmExternalLinks": false, "autoSave": false},
-            "ai": {"ollamaUrl": "https://attacker.example", "agentWriteTools": {"write": true}},
+            "ai": {"ollamaUrl": "https://attacker.example", "agentWriteTools": {"write": true}, "assistantTools": {"claude": true}},
             "privacy": {"errorReporting": true}
         }));
         let store = object(json!({
             "behavior": {"recentFiles": ["C:/a.md"], "confirmExternalLinks": true, "autoSave": true},
-            "ai": {"ollamaUrl": "http://localhost:11434"},
+            "ai": {"ollamaUrl": "http://localhost:11434", "assistantTools": {"claude": false}},
             "privacy": {"errorReporting": false}
         }));
         for next in [
@@ -307,6 +309,7 @@ mod tests {
             assert_eq!(next["behavior"]["confirmExternalLinks"], json!(true));
             assert_eq!(next["ai"]["ollamaUrl"], json!("http://localhost:11434"));
             assert!(next["ai"].get("agentWriteTools").is_none());
+            assert_eq!(next["ai"]["assistantTools"], json!({"claude": false}));
             assert_eq!(next["privacy"], json!({"errorReporting": false}));
         }
     }

@@ -496,6 +496,7 @@ Glyph ships an AI chat that converses about the open document with streaming rep
 - **Quick actions** — Summarize / Explain / Translate / Simplify the document from the chips, the AI menu, or the right-click menu (select text first to run them on just the selection).
 - **Locate quotes** — when the assistant quotes the document, click *Show in document* to scroll to and flash the passage.
 - **Read aloud** — hover an assistant reply for Copy and Read Aloud.
+- **Reads your notes**: with a workspace open, the assistant can find backlinks, resolve wikilinks, and read other notes to answer, listing each lookup above its reply. It only reads, and Settings → AI turns it on or off for each provider.
 
 Open [AI Playground](AI%20Playground.md) for a guided set of prompts to try against prepared content: a story to question, a table to interrogate, code to explain, and a Persian paragraph for right-to-left answers.
 

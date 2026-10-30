@@ -13,7 +13,7 @@ import { useTabs } from "./useTabs";
 vi.mock("@/lib/pickers", () => ({
   pickFolder: vi.fn(),
   pickFiles: vi.fn(),
-  pickSave: vi.fn(),
+  pickSaveDocument: vi.fn(),
   pickNewWorkspace: vi.fn(),
 }));
 vi.mock("@/lib/cliExport", () => ({ isCliExportProcess: vi.fn(() => false) }));

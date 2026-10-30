@@ -58,6 +58,14 @@ describe("conformToDefaults", () => {
     });
   });
 
+  it("keeps a choice made for a setting whose default is unset", () => {
+    expect(
+      conformToDefaults({
+        ai: { assistantTools: { claude: true, openai: null, ollama: false, other: "yes" } },
+      }),
+    ).toEqual({ ai: { assistantTools: { claude: true, openai: null, ollama: false } } });
+  });
+
   it("drops keys that would replace an object's prototype", () => {
     const stored = JSON.parse(
       '{"__proto__":{"x":1},"appearance":{"__proto__":{"theme":"dark"},"theme":"light"},"keybindings":{"overrides":{"constructor":"a","save":"Mod+S"}}}',

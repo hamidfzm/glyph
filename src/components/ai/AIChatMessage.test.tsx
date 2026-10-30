@@ -113,4 +113,82 @@ describe("AIChatMessage", () => {
     expect(screen.queryByRole("button", { name: "Read Aloud" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Copy" })).toBeInTheDocument();
   });
+
+  const backlinksCall = {
+    key: 0,
+    call: { id: "c1", name: "backlinks", input: { ref: "Cooking" } },
+    status: "done" as const,
+    result: "{}",
+  };
+
+  it("lists the notes a reply read above it", () => {
+    render(
+      <AIChatMessage
+        turn={{
+          id: 1,
+          role: "assistant",
+          content: "Two notes link here.",
+          toolCalls: [backlinksCall],
+        }}
+      />,
+    );
+    const calls = screen.getByRole("list", { name: "Lookups the assistant made" });
+    expect(calls).toHaveTextContent("Backlinks");
+    expect(screen.getByText("Two notes link here.")).toBeInTheDocument();
+  });
+
+  it("shows the calls already made while the reply is still being written", () => {
+    render(
+      <AIChatMessage
+        turn={{ id: 1, role: "assistant", content: "", toolCalls: [backlinksCall] }}
+        pending
+      />,
+    );
+    expect(screen.getByText("Backlinks")).toBeInTheDocument();
+    expect(screen.getByRole("status", { name: "Thinking…" })).toBeInTheDocument();
+  });
+
+  it("says when a model that takes no tools answered without them", () => {
+    render(
+      <AIChatMessage
+        turn={{ id: 1, role: "assistant", content: "From the list.", toolsSkipped: true }}
+      />,
+    );
+    expect(screen.getByText(/This model cannot use tools/)).toBeInTheDocument();
+  });
+
+  it("says when the call budget ended a reply, and offers no actions for a reply with no text", () => {
+    render(
+      <AIChatMessage
+        turn={{
+          id: 1,
+          role: "assistant",
+          content: "",
+          toolCalls: [backlinksCall],
+          stoppedAtBudget: true,
+        }}
+      />,
+    );
+    expect(screen.getByText(/Stopped after 10 lookups/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Copy" })).not.toBeInTheDocument();
+  });
+
+  // A note read through a tool is untrusted text the user never opened: an
+  // image URL in it stays text even when the reply names it.
+  it("shows an image from a note a tool read as text", () => {
+    const leak = "https://evil.test/leak.png";
+    const { container } = render(
+      <AIChatMessage
+        turn={{
+          id: 1,
+          role: "assistant",
+          content: `Here it is ![leak](${leak})`,
+          quotedImageUrls: ["https://img.test/a.png"],
+          toolCalls: [{ ...backlinksCall, result: `{"content":"![leak](${leak})"}` }],
+        }}
+      />,
+    );
+    expect(container.querySelector("img")).toBeNull();
+    expect(screen.getByText("leak")).toHaveAttribute("title", leak);
+  });
 });

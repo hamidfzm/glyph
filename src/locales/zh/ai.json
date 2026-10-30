@@ -37,5 +37,30 @@
   "readAloud": "朗读",
   "error": {
     "notConfigured": "尚未配置 AI 提供商。请打开设置进行配置。"
+  },
+  "tools": {
+    "label": "助手的查阅",
+    "names": {
+      "vault_context": "工作区概览",
+      "resolve_link": "解析链接",
+      "read_note": "读取笔记",
+      "note_info": "笔记详情",
+      "backlinks": "反向链接",
+      "graph_neighbors": "相关笔记",
+      "vault_report": "工作区状况",
+      "list_tags": "标签",
+      "notes_by_tag": "带标签的笔记",
+      "read_canvas": "读取画布"
+    },
+    "status": {
+      "running": "读取中…",
+      "failed": "失败",
+      "stopped": "已停止"
+    },
+    "arguments": "请求",
+    "result": "返回",
+    "resultCut": "显示前 {{shown}} 个字符，共 {{total}} 个。助手已收到全部内容。",
+    "budget": "已在 {{limit}} 次查阅后停止，这是一个问题允许的上限，因此这个回答可能有遗漏。",
+    "unsupported": "此模型无法使用工具，因此助手根据当前打开的文档和文件列表作答。"
   }
 }

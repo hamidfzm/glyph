@@ -120,7 +120,8 @@ fn nothing_that_never_syncs_reaches_the_remote() {
             "model": "m",
             "apiKeys": {"claude": "NS-key"},
             "ollamaUrl": "NS-ollama",
-            "agentWriteTools": {"NS-tool": true}
+            "agentWriteTools": {"NS-tool": true},
+            "assistantTools": {"claude": "NS-assistant"}
         },
         "privacy": {"errorReporting": "NS-privacy"}
     }));

@@ -54,7 +54,7 @@ export function useRelocation({
   // Null when the user backs out at the prompt, or the workspace changed while
   // it was open.
   const relocate = useCallback(
-    async (command: "rename_path" | "move_path", args: Record<string, string>, root: string) => {
+    async (command: "rename_path" | "move_path", args: Record<string, unknown>, root: string) => {
       const preview = await invoke<Relink>(command, { ...args, root, dryRun: true });
       if (!(await confirm(preview, root))) return null;
       if (workspaceRef.current?.root !== root) return null;
@@ -89,12 +89,13 @@ export function useRelocation({
     [markSelfSave, onWorkspaceNotice, refreshIndexes, reloadFromDisk, stateRef, workspaceRef],
   );
 
+  // `extensions`: the plugin file types the new name may end in.
   const renamePath = useCallback(
-    async (path: string, newName: string): Promise<string | null> => {
+    async (path: string, newName: string, extensions: string[] = []): Promise<string | null> => {
       const root = workspaceRef.current?.root;
       if (!root) return null;
       try {
-        const relocated = await relocate("rename_path", { path, newName }, root);
+        const relocated = await relocate("rename_path", { path, newName, extensions }, root);
         if (!relocated) return null;
         const { done, revisions } = relocated;
         await refreshAfterRename(path, done.newPath, root);

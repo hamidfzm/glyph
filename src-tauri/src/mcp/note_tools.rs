@@ -74,6 +74,7 @@ fn resolve_link(session: &Session, args: Value) -> Result<Value, String> {
             "target": target,
             "heading": split_heading(target).1,
             "resolution": resolution,
+            "status": vault.status(),
         }))
     })
 }

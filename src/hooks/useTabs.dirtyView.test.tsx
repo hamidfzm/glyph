@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from "vitest";
-import { pickSave } from "@/lib/pickers";
+import { pickSaveDocument } from "@/lib/pickers";
 import { expectConsole } from "@/test/consoleGuard";
 import { deferred } from "@/test/deferred";
 import {
@@ -17,7 +17,7 @@ import { useTabs } from "./useTabs";
 vi.mock("@/lib/pickers", () => ({
   pickFolder: vi.fn(),
   pickFiles: vi.fn(),
-  pickSave: vi.fn(),
+  pickSaveDocument: vi.fn(),
   pickNewWorkspace: vi.fn(),
 }));
 
@@ -248,7 +248,7 @@ describe("useTabs programmatic edits on a dirty view-mode tab", () => {
 
   it("a toggle in an untitled document waits for Save As like the text around it", async () => {
     const writeFile = mockDisk(SAVED);
-    vi.mocked(pickSave).mockResolvedValue("/p/saved.md");
+    vi.mocked(pickSaveDocument).mockResolvedValue("/p/saved.md");
     const { result } = renderHook(() => useTabs(defaultOptions()));
     await waitFor(() => expect(result.current.initializing).toBe(false));
     act(() => {
