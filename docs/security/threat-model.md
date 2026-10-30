@@ -167,6 +167,7 @@ looked up (see "Network paths" below).
 | `install_plugin` | consumes the pending picked folder; no path argument |
 | `install_plugin_from_registry` | takes a plugin id and nothing else. The backend fetches the registry index from its fixed URL, finds the entry, downloads the package the entry names (the marketplace hosts alone, a redirect included, 50 MiB at most), and verifies the sha256 and the manifest id before anything is written, so a package that lies about itself never lands on another installed plugin |
 | `finish_cli_export` | ends the process, so it is refused unless a CLI export is in progress: the command is registered in every session, and a renderer could otherwise end an interactive one |
+| `assistant_tools`, `assistant_tool_call` | the roots and tabs are the calling window's own report, kept only where `ensure_workspace` and `ensure_readable` pass; the active note is compared with those tabs and never looked up; the tool arguments get the same checks as in `glyph mcp`, so a `vault` must be one of those roots and a note or canvas path must be readable and inside it; only read-only tools are dispatched (see [In-app assistant tools](#in-app-assistant-tools)) |
 
 Reading no content does not exempt a command. Looking a path up is itself an
 effect on Windows, where it connects to the host a network path names, so a
@@ -227,8 +228,9 @@ feature:
   be a channel for its contents, while a quoted one carries nothing the
   document view would not already fetch. The URLs are read from the
   document when the reply is requested and kept on the reply, since the
-  chat outlives a switch to another document. Any other image is shown as
-  its alt text and URL. Mermaid's on-screen SVG goes through DOMPurify
+  chat outlives a switch to another document. A note the assistant read
+  through a tool adds none (see [In-app assistant tools](#in-app-assistant-tools)).
+  Any other image is shown as its alt text and URL. Mermaid's on-screen SVG goes through DOMPurify
   before it is put in the document, as the page renders already did.
 - `object-src 'none'`, `frame-src 'none'`, `base-uri 'self'`, and
   `form-action 'none'` close the remaining injection sinks.
@@ -630,6 +632,70 @@ the way a renderer-supplied path is.
   admit, and nothing at all while the app is closed, which it learns from an
   OS lock the interactive app holds on `instance.lock` in its data directory.
 
+## In-app assistant tools
+
+Two commands give the in-app AI assistant the server's read-only tools,
+dispatched in-process through the same registry: `assistant_tools` lists
+them, and `assistant_tool_call` runs one call. The call's name and arguments
+come from a model that reads note content, by way of the renderer, so they
+are treated as both: untrusted model output and renderer input. The commands
+exist on desktop only, like `glyph mcp`.
+
+- **Read-only at dispatch.** `assistant_tool_call` goes through
+  `dispatch_read`, which refuses every tool that is not read-only before its
+  handler runs: `open_in_glyph` starts a process, `export` writes a file, and
+  the five edit tools change notes. The refusal holds whatever the agent-tool
+  switches in `settings.json` say, and the session it builds turns no edit
+  tool on. Listing only the read tools is not the control, since a model can
+  call a name it was never offered.
+- **The calling window's workspace only.** The roots are the workspace the
+  calling window reported with `set_window_workspace`, kept only when it
+  passes `ensure_workspace`. Grants are app-wide, so another window's
+  workspace is granted too: the scoping comes from the session's roots, among
+  which a tool's `vault` argument can only pick, and from the vault a call
+  reads through, which refuses an absolute or `..` path into another vault
+  before it asks the disk anything, so the refusal is the same whether a file
+  is there or not.
+  No folder can be added. A `vault` naming any other folder passes the
+  network-path check, is resolved once to match it against the roots, and is
+  refused, since the session has no way to ask the user for more.
+- **The active note.** The renderer names the note in front of the user. It
+  is compared with the window's reported file tabs that pass
+  `ensure_readable`, never looked up, and dropped when it is not one of them.
+  It only picks the default vault and is reported back to the model.
+- **Bounds.** The same as for `glyph mcp`: a result over 1 MiB is refused, a
+  listing stops at 200 rows and note text at 50,000 characters and says so,
+  and a handler that panics is a refusal, not a crash. The call runs on a
+  blocking worker, off the main thread. It reads the index the app's watcher
+  keeps current, the one the UI reads, so it never walks the vault while
+  holding the store's lock the UI's queries wait on; only a first call for a
+  vault builds its index, outside that lock.
+- **What leaves the machine.** Without tools a question sends the open
+  document and a listing of the workspace's files to the configured provider.
+  With them the model can pull any note of the window's workspace into the
+  conversation, and with a cloud provider that note goes to the provider; the
+  latest reply's calls and results go again with the next question, older
+  ones only as the reply's text. The AI settings say so, and the switch that
+  offers the tools is kept per provider: it is off for the Anthropic provider
+  and OpenAI and on for Ollama, whose server the user names, until the user
+  sets it. The tools are offered only while the window has a workspace open,
+  and a call to a tool the reply was not offered is not run. The switch lives
+  in `settings.json`, which the renderer writes; it gates nothing the renderer
+  could not already send, since the renderer reads every granted file and
+  holds the provider's key. Each call and its result are listed with the
+  reply, so the basis of an answer can be checked.
+- **Note content is untrusted model input.** A note read through a tool can
+  carry text written to steer the model. The tools only read, so the harm left
+  is in the reply. The system prompt says that tool results are the user's
+  notes and not instructions, which a model may ignore, so nothing depends on
+  it. A reply image still loads only when the open document already named its
+  URL (see [Content Security Policy](#content-security-policy)); a URL in a
+  note the model read through a tool does not count, since the user never
+  opened that note, and loading it would let a planted note send what the
+  model read to its own host. A link in a reply opens in the system browser,
+  never in the app's webview, behind the external-link prompt when that
+  setting is on, as before.
+
 ## Residual risks
 
 - **An MCP client reads everything in the vaults it is given.** Whatever a
@@ -667,6 +733,16 @@ the way a renderer-supplied path is.
 - **A replaced destination.** A rename or a move checks that nothing is at
   the destination and renames afterwards, as a rename made in the app does. A
   file created there in between is replaced.
+- **A note the assistant reads can steer its reply.** Read-only tools keep a
+  planted note from changing anything, but not from shaping what the reply
+  says, a link included. A link whose URL carries what the model read opens
+  on one click when the external-link prompt is off; with it on, the prompt
+  shows the URL first.
+- **The assistant's window scope holds against the model, not the
+  renderer.** The workspace a window reports is the renderer's word, so a
+  compromised renderer can report another granted workspace and have the
+  tools read it. That gives it nothing it lacks: `read_file` and the vault
+  commands already read every granted workspace.
 - **The caps bound the index; they do not make it small.** A workspace at
   the file cap with every note at the link cap is still hundreds of megabytes
   of index, and a search over it reads every file under 5 MiB. Each cap says
@@ -767,7 +843,13 @@ the way a renderer-supplied path is.
   lowercase name, or under `.localhost`. A stylesheet a sandboxed plugin
   adds is dropped when it would make requests (`url()`, `image-set()`,
   `@import`: with a selector on an attribute, each one reports what the
-  page holds), and a plugin of either kind may not register translations
+  page holds), however the name is spelled: the check reads the text with
+  its CSS escapes decoded, since `\75rl(` is still `url(`. Exports carry
+  every plugin's styles, so the HTML export, and the styles handed to a
+  plugin's exporter, write `</` as `<\/`. CSS reads both the same, and a
+  stylesheet cannot end the `<style>` element it is placed in and add a
+  script to the exported page (EPUB and the website export write the
+  styles to a separate `style.css`). A plugin of either kind may not register translations
   under one of the app's own namespaces, which the consent dialog and the
   external-link prompt read; any other namespace is its to fill. A plugin
   that declares

@@ -1608,3 +1608,425 @@ fn a_poisoned_store_recovers_on_the_next_call() {
     let tags = h.ok("list_tags", json!({}));
     assert_eq!(tags["vault"], json!(h.root.to_string_lossy()));
 }
+
+// -------------------------------------------------------- the in-app assistant
+
+mod assistant {
+    use std::path::Path;
+
+    use tauri::test::{mock_app, MockRuntime};
+    use tauri::{Manager, WebviewWindowBuilder};
+
+    use super::*;
+    use crate::mcp::assistant::{assistant_tools, call_for_window};
+    use crate::mcp::registry::dispatch_read;
+    use crate::vault::{apply_changes, Vault, VaultStore};
+    use crate::windows::WindowRegistry;
+
+    /// The app with two windows, each showing its own vault, both granted as
+    /// every workspace the app has open is. Calls come from `main`.
+    struct App {
+        app: tauri::App<MockRuntime>,
+        root: PathBuf,
+        other: PathBuf,
+    }
+
+    impl App {
+        fn new(name: &str) -> Self {
+            let root = fixture_vault(name);
+            let other = fixture_vault(&format!("{name}_other"));
+            let app = mock_app();
+            app.manage(WindowRegistry::new());
+            app.manage(GrantRegistry::default());
+            app.manage(VaultStore::default());
+            for (label, folder) in [("main", &root), ("w1", &other)] {
+                app.state::<GrantRegistry>()
+                    .grant_workspace(folder)
+                    .unwrap();
+                app.state::<WindowRegistry>()
+                    .set_workspace(label, Some(spelled(folder)));
+            }
+            App { app, root, other }
+        }
+
+        fn path(&self, relative: &str) -> String {
+            in_vault(&self.root, relative)
+        }
+
+        /// The calling window reports these as its file tabs.
+        fn tabs(&self, paths: &[&str]) {
+            let paths = paths.iter().map(|path| path.to_string()).collect();
+            self.app.state::<WindowRegistry>().set_files("main", paths);
+        }
+
+        fn call(
+            &self,
+            tool: &str,
+            args: Value,
+            active_note: Option<&str>,
+        ) -> Result<Value, String> {
+            let active_note = active_note.map(str::to_string);
+            let text = call_for_window(self.app.handle(), "main", tool, args, active_note)?;
+            Ok(serde_json::from_str(&text).expect("a tool answers in JSON"))
+        }
+
+        fn ok(&self, tool: &str, args: Value) -> Value {
+            self.call(tool, args.clone(), None)
+                .unwrap_or_else(|err| panic!("{tool}({args}) failed: {err}"))
+        }
+
+        fn refused(&self, tool: &str, args: Value) -> String {
+            self.call(tool, args.clone(), None)
+                .expect_err(&format!("{tool}({args}) should have refused"))
+        }
+    }
+
+    impl Drop for App {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.root);
+            let _ = fs::remove_dir_all(&self.other);
+        }
+    }
+
+    fn spelled(path: &Path) -> String {
+        path.to_string_lossy().to_string()
+    }
+
+    /// Every file under `root` with its bytes, to show nothing was written.
+    fn files(root: &Path) -> Vec<(PathBuf, Vec<u8>)> {
+        let mut found = Vec::new();
+        for entry in fs::read_dir(root).unwrap().flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                found.extend(files(&path));
+            } else {
+                found.push((path.clone(), fs::read(&path).unwrap()));
+            }
+        }
+        found.sort();
+        found
+    }
+
+    #[test]
+    fn only_the_tools_that_read_are_offered() {
+        let offered = assistant_tools().unwrap();
+        let names: Vec<&str> = offered
+            .iter()
+            .map(|tool| tool["name"].as_str().unwrap())
+            .collect();
+        // `AIToolCall.test.tsx` holds the panel's tool names to the same file,
+        // so a read tool cannot be added here without its label.
+        assert_eq!(json!(names), fixture("mcp-read-tools.json"));
+        assert!(offered
+            .iter()
+            .all(|tool| tool["annotations"]["readOnlyHint"] == true));
+    }
+
+    #[test]
+    fn a_tool_that_launches_writes_or_edits_is_refused_even_when_turned_on() {
+        // Every edit tool on, as for a user who turned them on for `glyph mcp`.
+        let h = Harness::writing("assistant_refuses_registry");
+        let app = App::new("assistant_refuses");
+        let before = (files(&h.root), files(&app.root));
+        let mut calls = write_calls().to_vec();
+        calls.push(("open_in_glyph", json!({ "ref": "Index" })));
+        calls.push(("export", json!({ "ref": "Index", "format": "html" })));
+
+        for (tool, args) in &calls {
+            let refusal = format!(
+                "{tool} is not available here: the assistant in Glyph can only read notes."
+            );
+            assert_eq!(
+                dispatch_read(tool, args.clone(), &h.session()),
+                Err(ToolError::Failed(refusal.clone()))
+            );
+            assert_eq!(app.refused(tool, args.clone()), refusal);
+        }
+        assert_eq!((files(&h.root), files(&app.root)), before);
+        assert_eq!(app.ok("vault_context", json!({}))["writeTools"], json!([]));
+        // The same session's own dispatch would have run them.
+        assert!(h.call("set_property", write_calls()[1].1.clone()).is_ok());
+    }
+
+    #[test]
+    fn another_windows_vault_is_out_of_reach() {
+        let app = App::new("assistant_other_window");
+        let other = spelled(&app.other);
+        let refusal = app.refused("list_tags", json!({ "vault": other }));
+        assert!(refusal.contains("is not an open vault"), "{refusal}");
+        assert!(refusal.contains("cannot ask the user"), "{refusal}");
+        // Paths the grants admit, which only the vault being read keeps out,
+        // and which say nothing of whether a file is there.
+        let folder = app.other.file_name().unwrap().to_string_lossy().to_string();
+        let refusals = |note: &str, board: &str| -> Vec<String> {
+            let absolute = in_vault(&app.other, note);
+            [
+                ("read_note", json!({ "ref": absolute })),
+                ("read_note", json!({ "ref": format!("../{folder}/{note}") })),
+                ("backlinks", json!({ "ref": absolute })),
+                ("resolve_link", json!({ "ref": "Index", "from": absolute })),
+                (
+                    "read_canvas",
+                    json!({ "path": in_vault(&app.other, board) }),
+                ),
+            ]
+            .into_iter()
+            .map(|(tool, args)| {
+                app.refused(tool, args)
+                    .replace(note, "<note>")
+                    .replace(board, "<board>")
+            })
+            .collect()
+        };
+        let there = refusals("Index.md", "Board.canvas");
+        assert_eq!(there, refusals("Missing.md", "Missing.canvas"));
+        for refusal in &there {
+            assert!(!refusal.contains("pass `vault`"), "{refusal}");
+        }
+        assert!(there[0].contains("is not in the vault"), "{}", there[0]);
+
+        let context = app.ok("vault_context", json!({}));
+        assert_eq!(context["vaults"].as_array().unwrap().len(), 1);
+        assert_eq!(context["vaults"][0]["root"], json!(spelled(&app.root)));
+        assert_eq!(context["canAskForVaults"], false);
+    }
+
+    #[test]
+    fn a_path_outside_the_grants_is_refused_and_an_unlisted_active_note_dropped() {
+        let app = App::new("assistant_outside");
+        let outside = unique_tmp("assistant_outside_target");
+        let secret = spelled(&outside.join("Secret.md"));
+        fs::write(&secret, "classified\n").unwrap();
+        let refusal = app.refused("read_note", json!({ "ref": secret }));
+        assert!(refusal.starts_with("path is outside the allowed workspaces and files"));
+        assert!(!refusal.contains("classified"));
+
+        let index = app.path("Index.md");
+        let active = |note: &str| {
+            app.call("vault_context", json!({}), Some(note)).unwrap()["activeNote"].clone()
+        };
+        // Not one of the window's tabs yet.
+        assert_eq!(active(&index), Value::Null);
+        app.tabs(&[&index, &secret]);
+        assert_eq!(active(&index), json!(index));
+        // A tab the window reported that the grants refuse.
+        assert_eq!(active(&secret), Value::Null);
+        assert_eq!(app.ok("vault_context", json!({}))["openTabs"]["total"], 1);
+        fs::remove_dir_all(&outside).unwrap();
+    }
+
+    #[test]
+    fn a_workspace_reported_without_a_grant_is_no_vault() {
+        let app = App::new("assistant_ungranted");
+        let ungranted = unique_tmp("assistant_ungranted_root");
+        let windows = app.app.state::<WindowRegistry>();
+        windows.set_workspace("main", Some(spelled(&ungranted)));
+        let refusal = app.refused("list_tags", json!({}));
+        assert!(refusal.contains("no vault is open"), "{refusal}");
+        // The hint is for someone in the app, not for a server's flags.
+        assert!(
+            refusal.ends_with("open a folder in this Glyph window"),
+            "{refusal}"
+        );
+
+        windows.set_workspace("main", None);
+        let context = app.ok("vault_context", json!({}));
+        assert!(context["note"].as_str().unwrap().contains("No vault"));
+        // A window that closed has nothing open either.
+        windows.set_workspace("main", Some(spelled(&app.root)));
+        windows.remove("main");
+        assert!(app
+            .refused("list_tags", json!({}))
+            .contains("no vault is open"));
+        fs::remove_dir_all(&ungranted).unwrap();
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_network_path_a_window_reports_is_no_vault_and_no_tab() {
+        let app = App::new("assistant_network");
+        let share = r"\\glyph-test-host.invalid\share";
+        let note = format!(r"{share}\Note.md");
+        let windows = app.app.state::<WindowRegistry>();
+        windows.set_workspace("main", Some(share.to_string()));
+        windows.set_files("main", vec![note.clone()]);
+        let context = app.call("vault_context", json!({}), Some(&note)).unwrap();
+        assert_eq!(context["vaults"], json!([]));
+        assert_eq!(context["openTabs"]["total"], 0);
+        assert_eq!(context["activeNote"], Value::Null);
+    }
+
+    #[test]
+    fn a_miss_in_an_incomplete_index_says_the_index_is_incomplete() {
+        let app = App::new("assistant_partial");
+        // Past the 2,000 links the index keeps of one note.
+        let links: String = (0..2_005).map(|i| format!("[[Note {i}]] ")).collect();
+        fs::write(app.root.join("Linky.md"), links).unwrap();
+
+        let resolved = app.ok("resolve_link", json!({ "ref": "Nowhere" }));
+        assert!(resolved["resolution"].is_null());
+        assert_eq!(resolved["status"]["truncated"], true);
+        let refusal = app.refused("read_note", json!({ "ref": "Nowhere" }));
+        assert!(refusal.contains("the index is incomplete"), "{refusal}");
+
+        // A complete index says nothing of the kind.
+        let whole = App::new("assistant_whole");
+        assert_eq!(
+            whole.ok("resolve_link", json!({ "ref": "Nowhere" }))["status"]["truncated"],
+            false
+        );
+        assert!(!whole
+            .refused("read_note", json!({ "ref": "Nowhere" }))
+            .contains("incomplete"));
+    }
+
+    #[test]
+    fn the_assistant_reads_the_index_the_watcher_keeps() {
+        let app = App::new("assistant_watched");
+        let fresh =
+            |app: &App| app.ok("notes_by_tag", json!({ "tag": "fresh" }))["notes"]["total"].clone();
+        assert_eq!(fresh(&app), 0);
+        let note = app.root.join("Fresh.md");
+        fs::write(&note, "#fresh\n").unwrap();
+        // No call walks the vault again; the watcher hands the change over.
+        assert_eq!(fresh(&app), 0);
+        apply_changes(&app.app.state::<VaultStore>(), &spelled(&app.root), &[note]);
+        assert_eq!(fresh(&app), 1);
+    }
+
+    #[test]
+    fn the_commands_answer_over_ipc() {
+        use tauri::test::{get_ipc_response, mock_builder, mock_context, noop_assets, INVOKE_KEY};
+        use tauri::webview::InvokeRequest;
+
+        let root = fixture_vault("assistant_ipc");
+        let app = mock_builder()
+            .invoke_handler(tauri::generate_handler![
+                crate::mcp::assistant::assistant_tools,
+                crate::mcp::assistant::assistant_tool_call
+            ])
+            .build(mock_context(noop_assets()))
+            .unwrap();
+        app.manage(WindowRegistry::new());
+        app.manage(GrantRegistry::default());
+        app.manage(VaultStore::default());
+        let webview = WebviewWindowBuilder::new(&app, "main", Default::default())
+            .build()
+            .unwrap();
+        let index = in_vault(&root, "Index.md");
+        app.state::<GrantRegistry>().grant_workspace(&root).unwrap();
+        let windows = app.state::<WindowRegistry>();
+        windows.set_workspace("main", Some(spelled(&root)));
+        windows.set_files("main", vec![index.clone()]);
+
+        let request = |cmd: &str, body: Value| InvokeRequest {
+            cmd: cmd.into(),
+            callback: tauri::ipc::CallbackFn(0),
+            error: tauri::ipc::CallbackFn(1),
+            url: if cfg!(windows) {
+                "http://tauri.localhost"
+            } else {
+                "tauri://localhost"
+            }
+            .parse()
+            .unwrap(),
+            body: tauri::ipc::InvokeBody::Json(body),
+            headers: Default::default(),
+            invoke_key: INVOKE_KEY.to_string(),
+        };
+        let listed: Vec<Value> = get_ipc_response(&webview, request("assistant_tools", json!({})))
+            .unwrap()
+            .deserialize()
+            .unwrap();
+        assert_eq!(listed.len(), 10);
+
+        let call = json!({ "name": "vault_context", "arguments": {}, "activeNote": index });
+        let answer: String = get_ipc_response(&webview, request("assistant_tool_call", call))
+            .unwrap()
+            .deserialize()
+            .unwrap();
+        let context: Value = serde_json::from_str(&answer).unwrap();
+        assert_eq!(context["activeNote"], json!(index));
+
+        let call = json!({ "name": "export", "arguments": { "ref": "Index", "format": "html" } });
+        let refusal = get_ipc_response(&webview, request("assistant_tool_call", call)).unwrap_err();
+        assert!(
+            refusal.as_str().unwrap().contains("can only read notes"),
+            "{refusal}"
+        );
+        fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn links_resolve_from_the_note_in_front_of_the_user() {
+        let app = App::new("assistant_links");
+        let active = app.path("Archive/Travel.md");
+        app.tabs(&[&active]);
+        let resolve = |target: &str| {
+            let args = json!({ "ref": target, "from": active });
+            let result = app.call("resolve_link", args, Some(&active)).unwrap();
+            let path = result["resolution"]["path"]
+                .as_str()
+                .map(|path| relative(&app.root, path));
+            (path, result["heading"].clone())
+        };
+        // The same folder wins; case, heading and display text do not matter;
+        // a frontmatter alias names its note.
+        assert_eq!(resolve("Travel").0.as_deref(), Some("Archive/Travel.md"));
+        assert_eq!(resolve("COOKING").0.as_deref(), Some("Notes/Cooking.md"));
+        let (path, heading) = resolve("[[Cooking#Recipes|the recipe section]]");
+        assert_eq!(path.as_deref(), Some("Notes/Cooking.md"));
+        assert_eq!(heading, "Recipes");
+        assert_eq!(resolve("Second Name").0.as_deref(), Some("Aliased.md"));
+
+        let section = app.ok("read_note", json!({ "ref": "Cooking#Recipes" }));
+        assert_eq!(
+            relative(&app.root, section["path"].as_str().unwrap()),
+            "Notes/Cooking.md"
+        );
+        assert!(!section["content"].as_str().unwrap().is_empty());
+
+        let cooking = app.path("Notes/Cooking.md");
+        let backlinks = app.ok("backlinks", json!({ "ref": cooking }));
+        let index = Vault::build(&app.root).unwrap();
+        assert_eq!(
+            backlinks["backlinks"]["total"],
+            json!(index.backlinks(&cooking).len())
+        );
+    }
+
+    #[test]
+    fn malformed_and_unknown_calls_are_refused_with_a_reason() {
+        let app = App::new("assistant_malformed");
+        for args in [
+            json!("Index"),
+            json!(["Index"]),
+            json!({ "ref": "Index", "sneaky": true }),
+            json!({ "ref": 42 }),
+            json!({}),
+            json!(null),
+        ] {
+            let refusal = app.refused("read_note", args.clone());
+            assert!(
+                refusal.starts_with("invalid arguments"),
+                "{args}: {refusal}"
+            );
+        }
+        // A tool that takes nothing may be called with nothing.
+        assert_eq!(app.ok("vault_context", json!(null))["appRunning"], true);
+        assert_eq!(
+            app.refused("delete_vault", json!({})),
+            "no tool is named delete_vault"
+        );
+        assert_eq!(app.refused("", json!({})), "no tool is named ");
+    }
+
+    #[test]
+    fn a_vault_deleted_between_calls_is_an_error_not_a_crash() {
+        let app = App::new("assistant_deleted");
+        app.ok("list_tags", json!({}));
+        fs::remove_dir_all(&app.root).unwrap();
+        let refusal = app.refused("list_tags", json!({}));
+        assert!(refusal.contains("no vault is open"), "{refusal}");
+    }
+}

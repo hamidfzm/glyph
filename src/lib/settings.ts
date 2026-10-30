@@ -149,7 +149,21 @@ export interface AISettings {
    *  are the server's: `src-tauri/fixtures/mcp-write-tools.json` holds both
    *  sides to the same list. */
   agentWriteTools: Record<string, boolean>;
+  /** Whether the in-app assistant may read the window's notes through the
+   *  vault tools, per provider, since what it reads goes to that provider.
+   *  `null` until the user chooses, and `ASSISTANT_TOOLS_DEFAULT` decides
+   *  then, so a later change of default reaches them. One key per provider,
+   *  as for `agentWriteTools`. */
+  assistantTools: Record<AIToolProvider, boolean | null>;
 }
+
+export type AIToolProvider = Exclude<AISettings["provider"], "none">;
+
+export const ASSISTANT_TOOLS_DEFAULT: Record<AIToolProvider, boolean> = {
+  claude: false,
+  openai: false,
+  ollama: true,
+};
 
 export interface PrintSettings {
   pageBreakLevel: "none" | "h1" | "h2";
@@ -316,6 +330,7 @@ export const DEFAULT_SETTINGS: Settings = {
       rename_note: false,
       move_note: false,
     },
+    assistantTools: { claude: null, openai: null, ollama: null },
   },
   print: {
     pageBreakLevel: "none",

@@ -289,6 +289,13 @@
           "description": "Eine Notiz in einen anderen Ordner verschieben und die Links anpassen, die auf sie zeigen."
         }
       }
+    },
+    "assistantTools": {
+      "title": "Assistent liest deine Notizen",
+      "description": "Der Assistent kann Notizen im Arbeitsbereich dieses Fensters nachschlagen, um dir zu antworten: Links, Rückverweise, Tags, Überschriften und den Text jeder Notiz. Jede Abfrage wird über der Antwort aufgeführt, mit ihrem Ergebnis. Er liest nur und ändert nie eine Notiz.",
+      "label": "Assistent darf Notizen lesen",
+      "cloud": "Was er liest, wird zusammen mit deiner Frage an {{provider}} gesendet, so wie schon das geöffnete Dokument.",
+      "local": "Was er liest, geht zusammen mit deiner Frage an den oben eingestellten Ollama-Server."
     }
   },
   "print": {

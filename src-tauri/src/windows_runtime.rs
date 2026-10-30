@@ -243,7 +243,8 @@ pub fn take_pending_opens<R: Runtime>(
 }
 
 /// Frontend reports the workspace its window now shows (or `None` when cleared),
-/// keeping the routing registry current. Routing state only: the root is a
+/// keeping the routing registry current. It is also the one root the window's
+/// assistant reads (`mcp::assistant`). A report only: the root is a
 /// renderer-supplied path, so no grant is minted here. Every way a window
 /// comes to show a workspace (pickers, CLI, drag-and-drop, second instance,
 /// session restore seeded in setup) already granted it.
@@ -258,6 +259,7 @@ pub fn set_window_workspace<R: Runtime>(
 
 /// Frontend reports the file tabs its window has open, keeping the routing
 /// registry current so a request for an open file focuses the window showing it.
+/// The window's assistant takes its active note only from among these.
 #[tauri::command]
 pub fn set_window_files<R: Runtime>(
     window: tauri::WebviewWindow<R>,

@@ -11,10 +11,11 @@ vi.mock("@/lib/ai-providers", async (importOriginal) => ({
 }));
 
 const mockCreate = vi.mocked(createAIProvider);
+const REPLY = { text: "reply", toolCalls: [] };
 
 beforeEach(() => {
   mockCreate.mockReset();
-  mockCreate.mockReturnValue({ chat: vi.fn().mockResolvedValue("reply") });
+  mockCreate.mockReturnValue({ chat: vi.fn().mockResolvedValue(REPLY) });
 });
 
 describe("useAIController", () => {
@@ -29,7 +30,7 @@ describe("useAIController", () => {
   });
 
   it("runAction opens the panel and sends the action as a chat turn", async () => {
-    const chat = vi.fn().mockResolvedValue("reply");
+    const chat = vi.fn().mockResolvedValue(REPLY);
     mockCreate.mockReturnValue({ chat });
     const { result } = renderHook(() =>
       useAIController({ ...DEFAULT_SETTINGS.ai, provider: "ollama" }, { content: "# Doc" }),
@@ -37,17 +38,19 @@ describe("useAIController", () => {
 
     await act(async () => {
       result.current.runAction("summarize");
+      // The reply starts once the tool loop has loaded.
+      await vi.waitFor(() => expect(chat).toHaveBeenCalled());
     });
 
     expect(result.current.panelOpen).toBe(true);
     const messages = chat.mock.calls[0][0] as ChatMessage[];
-    expect(messages[0].content).toMatch(/summarize/i);
+    expect(messages[0]).toMatchObject({ content: expect.stringMatching(/summarize/i) });
     // The transcript shows the short localized label, not the raw prompt.
     expect(result.current.chat.turns[0].display).toBe("Summarize the document");
   });
 
   it("runAction embeds the selection when one is passed", async () => {
-    const chat = vi.fn().mockResolvedValue("reply");
+    const chat = vi.fn().mockResolvedValue(REPLY);
     mockCreate.mockReturnValue({ chat });
     const { result } = renderHook(() =>
       useAIController({ ...DEFAULT_SETTINGS.ai, provider: "ollama" }, { content: "# Doc" }),
@@ -55,10 +58,12 @@ describe("useAIController", () => {
 
     await act(async () => {
       result.current.runAction("explain", "selected passage");
+      // The reply starts once the tool loop has loaded.
+      await vi.waitFor(() => expect(chat).toHaveBeenCalled());
     });
 
     const messages = chat.mock.calls[0][0] as ChatMessage[];
-    expect(messages[0].content).toContain("selected passage");
+    expect(messages[0]).toMatchObject({ content: expect.stringContaining("selected passage") });
     expect(result.current.chat.turns[0].display).toBe("Explain the selection");
   });
 
