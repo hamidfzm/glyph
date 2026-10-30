@@ -589,6 +589,40 @@ jobs:
           $installed = (Get-Item $exe).VersionInfo.FileVersion
           if ($installed -notlike "$($env:VERSION)*") { Write-Error "installed $installed"; exit 1 }
 
+  # A tag from before the offline MSI has no script that builds it. Asking the
+  # tag and not the assets keeps a release that lost its asset a failure.
+  offline-msi:
+    needs: resolve
+    if: needs.resolve.outputs.run == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 15
+    outputs:
+      status: ${{ steps.check.outputs.status }}
+    steps:
+      - name: Silent-install the offline MSI and verify
+        id: check
+        shell: pwsh
+        env:
+          TAG: ${{ needs.resolve.outputs.tag }}
+          VERSION: ${{ needs.resolve.outputs.version }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $scripts = gh api "repos/$env:GITHUB_REPOSITORY/contents/scripts?ref=$env:TAG" --jq '.[].name'
+          if ($LASTEXITCODE -ne 0) { Write-Error "could not list the scripts at $env:TAG"; exit 1 }
+          if ($scripts -notcontains 'build-offline-msi.ps1') {
+            "status=not in this release" | Out-File -Append $env:GITHUB_OUTPUT
+            exit 0
+          }
+
+          $msi = "Glyph_$($env:VERSION)_x64_en-US_offline.msi"
+          gh release download $env:TAG --repo $env:GITHUB_REPOSITORY --pattern $msi
+
+          $proc = Start-Process msiexec.exe -ArgumentList "/i `"$PWD\$msi`" /qn /norestart" -Wait -PassThru
+          if ($proc.ExitCode -ne 0) { Write-Error "msiexec exited $($proc.ExitCode)"; exit 1 }
+
+          $installed = (Get-Item "$env:ProgramFiles\Glyph\glyph.exe").VersionInfo.FileVersion
+          if ($installed -notlike "$($env:VERSION)*") { Write-Error "installed $installed"; exit 1 }
+
   summary:
     needs:
       - resolve
@@ -606,6 +640,7 @@ jobs:
       - dmg
       - appimage
       - nsis
+      - offline-msi
     if: ${{ !cancelled() && needs.resolve.outputs.run == 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -633,6 +668,7 @@ jobs:
             dmg direct ${{ needs.dmg.result }}
             appimage direct ${{ needs.appimage.result }}
             nsis direct ${{ needs.nsis.result }}
+            offline-msi direct ${{ needs.offline-msi.result }} ${{ needs.offline-msi.outputs.status }}
         run: |
           {
             echo "## Release Smoke Test: $TAG"
