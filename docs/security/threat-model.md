@@ -356,11 +356,15 @@ control is the page's own:
   them (below); SVG images, posters and CSS `url()` are left to the CSP.
   `no-referrer` keeps the page URL out of `Referer`, DNS prefetch is off, and
   nothing on the page reports telemetry, so the document never leaves the tab.
-- **Images only from a folder the reader picks.** A document with relative
-  images offers **Choose Folder for Images**, a `webkitdirectory` file input.
-  A relative `src` with no `..` maps to the picked image file at that path
-  inside the folder (an exact match, so an encoded `%2E%2E` or a leading `/`
-  finds nothing), and only image types map. Each mapped file loads through a
+- **Images only from a folder the reader picks.** A page never learns where a
+  picked file sits or what is beside it, so a document with relative images
+  offers **Show Images**, a `webkitdirectory` file input. The opened file is
+  recognised in the picked folder by its name, size and time, and a relative
+  `src` with no `..` maps to the image at that path below it (from the top of
+  the folder for a shared link, or a file the folder does not hold). It is an
+  exact match, so an encoded `%2E%2E` or a leading `/` finds nothing, even for
+  an image above the document in the same pick, and only image types map.
+  Each mapped file loads through a
   `blob:` URL the page makes for it, which is all `blob:` in the CSP is for.
   A document cannot name one in an `<img>`, since only relative sources map;
   an SVG image or CSS `url()` would have to guess its random name, and would
@@ -812,7 +816,7 @@ exist on desktop only, like `glyph mcp`.
 - **The web viewer can be framed.** A meta CSP cannot set `frame-ancestors`,
   and GitHub Pages sets no headers, so another site can embed the viewer. Its
   actions are Copy link, which copies what the viewer already shows, and
-  Choose Folder for Images, whose files stay in the viewer's own origin where
+  Show Images, whose picked files stay in the viewer's own origin where
   the framing site cannot read them.
 - **A shared document can look official.** It renders on a Glyph URL with the
   styles it brings (`style` is allowed, see `style-src` below), so a link can

@@ -15,6 +15,8 @@ export interface WebViewerOptions {
 /** A document on screen whose relative images became alt text: `dropped` of them with no folder picked. */
 interface ImageOffer {
   message: PreviewMessage;
+  /** The file the document came from; a shared link has none. */
+  file: File | null;
   dropped: number;
 }
 
@@ -47,7 +49,7 @@ export async function startWebViewer({ root, darkQuery, language }: WebViewerOpt
     return shown;
   }
 
-  async function load(request: () => Promise<PreviewMessage | null>) {
+  async function load(request: () => Promise<PreviewMessage | null>, file: File | null = null) {
     const id = ++latestRequest;
     link = null;
     imageOffer = null;
@@ -60,7 +62,12 @@ export async function startWebViewer({ root, darkQuery, language }: WebViewerOpt
     if (id !== latestRequest) return;
     const shown = present(message);
     if (message?.kind !== "document") return;
-    void offerFolder(id, message, shown);
+    void shown.then((dropped) => {
+      if (!dropped || id !== latestRequest) return;
+      imageOffer = { message, file, dropped };
+      chrome.imagesButton.hidden = false;
+      chrome.status.textContent = i18n.t("preview.imagesNeedFolder");
+    });
     // Encoded now so a click can copy synchronously: Safari refuses a clipboard
     // write that follows an await. A browser without deflate-raw keeps the
     // button disabled.
@@ -70,18 +77,11 @@ export async function startWebViewer({ root, darkQuery, language }: WebViewerOpt
     chrome.copyButton.disabled = false;
   }
 
-  async function offerFolder(id: number, message: PreviewMessage, shown: Promise<number | null>) {
-    const dropped = await shown;
-    if (!dropped || id !== latestRequest) return;
-    imageOffer = { message, dropped };
-    chrome.imagesButton.hidden = false;
-  }
-
   async function showFolderImages(files: File[]) {
     const offer = pickingFor;
     if (!offer || offer !== imageOffer) return;
     folder?.revoke();
-    folder = pickFolderImages(files);
+    folder = pickFolderImages(files, offer.file);
     chrome.status.textContent = "";
     const dropped = await preview.show(offer.message, folder.url);
     // A later pick or another document replaced this one.
@@ -106,7 +106,7 @@ export async function startWebViewer({ root, darkQuery, language }: WebViewerOpt
     // Leave the shared link behind in history, so Back returns to it.
     if (location.hash) history.pushState(null, "", `${location.pathname}${location.search}`);
     handledFragment = "";
-    void load(() => readDocumentFile(file));
+    void load(() => readDocumentFile(file), file);
   }
 
   function copyLink() {

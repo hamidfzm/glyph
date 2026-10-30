@@ -206,33 +206,38 @@ const PNG = Buffer.from(
   "base64",
 );
 
-test("relative images load from a picked folder, and nothing leaves the origin", async ({
+test("images resolve from the opened file in a picked folder, and nothing leaves the origin", async ({
   page,
 }) => {
   const offOrigin = await serveViewer(page);
-  const folder = test.info().outputPath("docs");
-  mkdirSync(join(folder, "assets"), { recursive: true });
-  writeFileSync(join(folder, "shot.png"), PNG);
-  writeFileSync(join(folder, "assets", "nested.png"), PNG);
-  await page.goto(
-    link(
-      [
-        "# Images",
-        "![shot](shot.png)",
-        "![nested](./assets/nested.png)",
-        "![missing](missing.png)",
-        "![escaping](../docs/shot.png)",
-        `![remote](${REMOTE}/image.png)`,
-      ].join("\n\n"),
-    ),
+  const repo = test.info().outputPath("repo");
+  const documentFolder = join(repo, "docs");
+  mkdirSync(join(documentFolder, "assets"), { recursive: true });
+  writeFileSync(join(repo, "outside.png"), PNG);
+  writeFileSync(join(documentFolder, "shot.png"), PNG);
+  writeFileSync(join(documentFolder, "assets", "nested.png"), PNG);
+  const document = join(documentFolder, "README.md");
+  writeFileSync(
+    document,
+    [
+      "# Images",
+      "![shot](shot.png)",
+      "![nested](./assets/nested.png)",
+      "![missing](missing.png)",
+      "![escaping](../outside.png)",
+      `![remote](${REMOTE}/image.png)`,
+    ].join("\n\n"),
   );
+  await page.goto(VIEWER);
+  await page.setInputFiles("header input[type=file]:not([webkitdirectory])", document);
   const article = page.locator("article.markdown-body");
   await expect(article.locator("h1")).toHaveText("Images");
   await expect(article.locator("img")).toHaveCount(0);
 
+  // The parent of the document's folder, which also holds the file above it.
   const chooser = page.waitForEvent("filechooser");
-  await page.getByRole("button", { name: "Choose Folder for Images" }).click();
-  await (await chooser).setFiles(folder);
+  await page.getByRole("button", { name: "Show Images" }).click();
+  await (await chooser).setFiles(repo);
 
   const images = article.locator("img");
   await expect(images).toHaveCount(2);

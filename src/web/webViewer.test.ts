@@ -47,7 +47,7 @@ async function start(hash = "") {
   });
   // By text: a hidden button has no accessible name.
   const imagesButton = screen.getByText<HTMLButtonElement>(
-    i18n.t("preview.chooseImageFolder", { lng: "en" }),
+    i18n.t("preview.showImages", { lng: "en" }),
   );
   const folderInput = document.querySelectorAll<HTMLInputElement>("input[type=file]")[1];
   const status = document.querySelector<HTMLElement>("[role=status]")!;
@@ -372,7 +372,8 @@ describe("startWebViewer", () => {
 });
 
 describe("images from a picked folder", () => {
-  let created: File[] = [];
+  // By path: two files of one name compare equal.
+  let created: string[] = [];
 
   async function link(markdown: string) {
     return `#${await encodeDocument(markdown)}`;
@@ -392,7 +393,7 @@ describe("images from a picked folder", () => {
     // The real pipeline, so the plugin decides which images a folder could hold.
     vi.mocked(renderPreview).mockImplementation(actualRender.renderPreview);
     vi.spyOn(URL, "createObjectURL").mockImplementation((file) => {
-      created.push(file as File);
+      created.push((file as File).webkitRelativePath);
       return `blob:picked/${created.length}`;
     });
     vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
@@ -403,15 +404,35 @@ describe("images from a picked folder", () => {
   });
 
   it("offers a folder only for a document with relative images", async () => {
-    const { root, fileInput, imagesButton } = await start(await link("![shot](shot.png)"));
+    const { root, fileInput, imagesButton, status } = await start(await link("![shot](shot.png)"));
     await vi.waitFor(() => expect(imagesButton.hidden).toBe(false));
+    expect(status.textContent).toBe(t("preview.imagesNeedFolder"));
 
     for (const markdown of ["# No images", "![far](https://example.com/far.png) No images"]) {
       pick(fileInput, new File([markdown], "other.md"));
       await vi.waitFor(() => expect(root.textContent).toContain("No images"));
       await new Promise((resolve) => setTimeout(resolve, 10));
       expect(imagesButton.hidden).toBe(true);
+      expect(status.textContent).toBe("");
     }
+  });
+
+  it("resolves images from where the opened file sits in the picked folder", async () => {
+    const markdown = "![shot](shot.png)";
+    const { root, fileInput, folderInput, imagesButton } = await start();
+    vi.spyOn(folderInput, "click").mockImplementation(() => {});
+    pick(fileInput, new File([markdown], "doc.md", { lastModified: 1 }));
+    await vi.waitFor(() => expect(imagesButton.hidden).toBe(false));
+    imagesButton.click();
+
+    pick(
+      folderInput,
+      pickedFile("repo/shot.png"),
+      pickedFile("repo/docs/doc.md", markdown),
+      pickedFile("repo/docs/shot.png"),
+    );
+    await vi.waitFor(() => expect(root.querySelector("img")).not.toBeNull());
+    expect(created).toEqual(["repo/docs/shot.png"]);
   });
 
   it("shows each image the picked folder holds and leaves the rest as alt text", async () => {
@@ -420,15 +441,18 @@ describe("images from a picked folder", () => {
     );
     expect(folderInput.click).toHaveBeenCalledTimes(1);
     expect(folderInput.webkitdirectory).toBe(true);
-    const shot = pickedFile("docs/shot.png");
-    const nested = pickedFile("docs/assets/nested.png");
-    pick(folderInput, shot, nested, pickedFile("docs/notes.md"));
+    pick(
+      folderInput,
+      pickedFile("docs/shot.png"),
+      pickedFile("docs/assets/nested.png"),
+      pickedFile("docs/notes.md"),
+    );
     expect(folderInput.value).toBe("");
 
     await vi.waitFor(() => expect(root.querySelectorAll("img")).toHaveLength(2));
     const sources = Array.from(root.querySelectorAll("img"), (image) => image.getAttribute("src"));
     expect(sources).toEqual(["blob:picked/1", "blob:picked/2"]);
-    expect(created).toEqual([shot, nested]);
+    expect(created).toEqual(["docs/shot.png", "docs/assets/nested.png"]);
     expect(root.textContent).toContain("gone");
     expect(status.textContent).toBe("");
     // Another folder may hold the rest.
@@ -493,7 +517,7 @@ describe("images from a picked folder", () => {
     await new Promise((resolve) => setTimeout(resolve, 10));
     expect(URL.createObjectURL).not.toHaveBeenCalled();
     expect(root.querySelector("img")).toBeNull();
-    expect(status.textContent).toBe("");
+    expect(status.textContent).toBe(t("preview.imagesNeedFolder"));
   });
 
   it("lets a document opened during a pick's render win, leaking no URL", async () => {
@@ -517,12 +541,11 @@ describe("images from a picked folder", () => {
 
   it("lets a later pick replace one still rendering", async () => {
     const { root, folderInput } = await startOffering("![shot](shot.png)");
-    const later = pickedFile("later/shot.png");
     pick(folderInput, pickedFile("earlier/shot.png"));
-    pick(folderInput, later);
+    pick(folderInput, pickedFile("later/shot.png"));
     await vi.waitFor(() => expect(root.querySelector("img")).not.toBeNull());
     await new Promise((resolve) => setTimeout(resolve, 10));
-    expect(created).toEqual([later]);
+    expect(created).toEqual(["later/shot.png"]);
     expect(root.querySelector("img")?.getAttribute("src")).toBe("blob:picked/1");
   });
 });

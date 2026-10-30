@@ -23,8 +23,7 @@ export function createWebChrome(root: HTMLElement): WebChrome {
   const openButton = button(i18n.t("emptyState.openFile"), TOOLBAR_BUTTON_CLASS);
   const copyButton = button(i18n.t("preview.copyLink"), TOOLBAR_BUTTON_CLASS);
   copyButton.disabled = true;
-  const imagesButton = button(i18n.t("preview.chooseImageFolder"), TOOLBAR_BUTTON_CLASS);
-  imagesButton.title = i18n.t("preview.chooseImageFolderHint");
+  const imagesButton = button(i18n.t("preview.showImages"), TOOLBAR_BUTTON_CLASS);
   imagesButton.hidden = true;
   // A folder input rather than the File System Access API, which Safari and Firefox lack.
   const folderInput = document.createElement("input");
