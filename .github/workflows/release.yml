@@ -46,7 +46,7 @@ jobs:
           - platform: windows-latest
             args: ""
     runs-on: ${{ matrix.platform }}
-    # tauri-action uploads the bundles to the release.
+    # tauri-action and the offline MSI step upload the bundles to the release.
     permissions:
       contents: write
     steps:
@@ -84,6 +84,19 @@ jobs:
         with:
           tagName: ${{ github.ref_name }}
           args: ${{ matrix.args }}
+      # An extra download for a machine with no internet and no WebView2. The
+      # timeout is for the bundler's download, which sets none of its own.
+      - name: Build the offline MSI
+        if: matrix.platform == 'windows-latest'
+        timeout-minutes: 20
+        shell: pwsh
+        run: ./scripts/build-offline-msi.ps1
+      - name: Upload the offline MSI
+        if: matrix.platform == 'windows-latest'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload $env:GITHUB_REF_NAME (Get-Item src-tauri/target/release/bundle/msi-offline/*.msi).FullName --repo $env:GITHUB_REPOSITORY --clobber
       # Gate channel publishing on the built-app smoke: a failure fails this
       # build leg, and every publish-* job needs: build, so nothing is pushed
       # to a package channel (the GitHub release and its assets are already

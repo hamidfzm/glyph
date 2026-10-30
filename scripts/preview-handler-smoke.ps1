@@ -2,7 +2,8 @@
 # handler, then uninstalls and checks that nothing is left behind. Run from CI
 # (or locally in an elevated shell) after `pnpm tauri build --bundles msi`.
 #
-#   powershell -File scripts/preview-handler-smoke.ps1
+#   powershell -File scripts/preview-handler-smoke.ps1 [-Path <msi>]
+param([string]$Path)
 $ErrorActionPreference = 'Stop'
 
 $clsid = '{D0BF6AA3-FB9F-473F-BDEF-ABB364324298}'
@@ -12,7 +13,7 @@ $root = Split-Path $PSScriptRoot -Parent
 $conf = Get-Content "$root\src-tauri\tauri.conf.json" -Raw | ConvertFrom-Json
 $extensions = ($conf.bundle.fileAssociations | Where-Object mimeType -eq 'text/markdown').ext
 
-$msi = Get-ChildItem "$root\src-tauri\target\release\bundle\msi\*.msi" | Select-Object -First 1
+$msi = if ($PSBoundParameters.ContainsKey('Path')) { Get-Item $Path } else { Get-ChildItem "$root\src-tauri\target\release\bundle\msi\*.msi" | Select-Object -First 1 }
 if (-not $msi) { throw 'No MSI found; run pnpm tauri build --bundles msi first.' }
 
 function Invoke-Msi($arguments) {
