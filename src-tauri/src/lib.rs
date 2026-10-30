@@ -351,6 +351,10 @@ pub fn run() {
             vault::commands::vault_resolve,
             vault::commands::vault_query,
             vault::commands::vault_paths_with_tag,
+            #[cfg(desktop)]
+            mcp::assistant::assistant_tools,
+            #[cfg(desktop)]
+            mcp::assistant::assistant_tool_call,
             commands::search::search_workspace,
             commands::plugins::list_plugins,
             commands::plugins::inspect_plugin,

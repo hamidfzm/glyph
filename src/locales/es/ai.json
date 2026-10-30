@@ -37,5 +37,30 @@
   "readAloud": "Leer en voz alta",
   "error": {
     "notConfigured": "No hay ningún proveedor de IA configurado. Abre Ajustes para configurar un proveedor de IA."
+  },
+  "tools": {
+    "label": "Consultas del asistente",
+    "names": {
+      "vault_context": "Resumen del espacio de trabajo",
+      "resolve_link": "Resolver enlace",
+      "read_note": "Leer nota",
+      "note_info": "Detalles de la nota",
+      "backlinks": "Enlaces entrantes",
+      "graph_neighbors": "Notas enlazadas",
+      "vault_report": "Estado del espacio de trabajo",
+      "list_tags": "Etiquetas",
+      "notes_by_tag": "Notas con etiqueta",
+      "read_canvas": "Leer lienzo"
+    },
+    "status": {
+      "running": "Leyendo…",
+      "failed": "Falló",
+      "stopped": "Detenida"
+    },
+    "arguments": "Solicitado",
+    "result": "Resultado",
+    "resultCut": "Se muestran los primeros {{shown}} de {{total}} caracteres. El asistente los recibió todos.",
+    "budget": "Se detuvo tras {{limit}} consultas, el máximo para una pregunta, así que a esta respuesta puede faltarle algo.",
+    "unsupported": "Este modelo no puede usar herramientas, así que el asistente respondió a partir del documento abierto y la lista de archivos."
   }
 }
