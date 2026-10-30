@@ -824,7 +824,13 @@ exist on desktop only, like `glyph mcp`.
   lowercase name, or under `.localhost`. A stylesheet or color scheme a
   sandboxed plugin adds is dropped when it would make requests (`url()`,
   `image-set()`, `@import`: with a selector on an attribute, each one reports
-  what the page holds), and a plugin of either kind may not register translations
+  what the page holds), however the name is spelled: the check reads the text
+  with its CSS escapes decoded, since `\75rl(` is still `url(`. Exports carry
+  every plugin's styles, so the HTML export, and the styles handed to a
+  plugin's exporter, write `</` as `<\/`. CSS reads both the same, and a
+  stylesheet cannot end the `<style>` element it is placed in and add a
+  script to the exported page (EPUB and the website export write the
+  styles to a separate `style.css`). A plugin of either kind may not register translations
   under one of the app's own namespaces, which the consent dialog and the
   external-link prompt read; any other namespace is its to fill. A plugin
   that declares

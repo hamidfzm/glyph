@@ -155,12 +155,13 @@ describe("sandboxed plugins", () => {
     const scheme = (id: string, css: string) =>
       worker.emit({ type: "register-color-scheme", id, label: "Scheme", css });
     scheme("leaky", ':root{background:url("https://attacker.example/l")}');
+    scheme("escaped", ':root{background:\\75rl("https://attacker.example/e")}');
     scheme("imported", '@import "https://attacker.example/x.css";');
     scheme("", ":root{}");
     scheme("ocean", ":root{--color-bg:#012}");
 
     expect(host.colorSchemes.list().map((s) => s.key)).toEqual(["com.x.demo:ocean"]);
-    expect(errors).toHaveBeenCalledTimes(3);
+    expect(errors).toHaveBeenCalledTimes(4);
     errors.mockRestore();
   });
 
