@@ -8,6 +8,8 @@ export interface WebChrome {
   emptyState: HTMLElement;
   fileInput: HTMLInputElement;
   copyButton: HTMLButtonElement;
+  imagesButton: HTMLButtonElement;
+  folderInput: HTMLInputElement;
   status: HTMLElement;
 }
 
@@ -21,10 +23,17 @@ export function createWebChrome(root: HTMLElement): WebChrome {
   const openButton = button(i18n.t("emptyState.openFile"), TOOLBAR_BUTTON_CLASS);
   const copyButton = button(i18n.t("preview.copyLink"), TOOLBAR_BUTTON_CLASS);
   copyButton.disabled = true;
+  const imagesButton = button(i18n.t("preview.showImages"), TOOLBAR_BUTTON_CLASS);
+  imagesButton.hidden = true;
+  // A folder input rather than the File System Access API, which Safari and Firefox lack.
+  const folderInput = document.createElement("input");
+  folderInput.type = "file";
+  folderInput.hidden = true;
+  folderInput.webkitdirectory = true;
   const status = document.createElement("p");
   status.setAttribute("role", "status");
   const header = document.createElement("header");
-  header.append(openButton, copyButton, status, fileInput);
+  header.append(openButton, copyButton, imagesButton, status, fileInput, folderInput);
 
   const heading = document.createElement("h1");
   heading.textContent = i18n.t("emptyState.openHeading");
@@ -43,7 +52,7 @@ export function createWebChrome(root: HTMLElement): WebChrome {
   root.tabIndex = 0;
   root.hidden = true;
   root.before(header, emptyState);
-  return { emptyState, fileInput, copyButton, status };
+  return { emptyState, fileInput, copyButton, imagesButton, folderInput, status };
 }
 
 function button(label: string, className: string): HTMLButtonElement {

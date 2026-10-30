@@ -199,7 +199,8 @@ While it is registered, the test install previews every markdown file you press 
 
 `src/web/` runs the same standalone page in an ordinary browser: a document
 comes from a picked or dropped file, or from the URL fragment (`#v1.` and the
-document, deflate-compressed and base64url-encoded). `pnpm build:web` builds it
+document, deflate-compressed and base64url-encoded), and its relative images
+from a folder the reader picks. `pnpm build:web` builds it
 into `dist-web/`. The [glyph-md/view](https://github.com/glyph-md/view) repo
 deploys it to GitHub Pages: the highest release's `dispatch-satellites` job
 starts that repo's workflow, which builds this repo at the release tag. The

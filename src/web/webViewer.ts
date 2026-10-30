@@ -2,6 +2,7 @@ import { i18n } from "@/lib/i18n";
 import { decodeDocument, encodeDocument, MAX_LINK_LENGTH } from "@/lib/linkCodec";
 import { type PreviewMessage, startPreview } from "@/preview/startPreview";
 import { readDocumentFile } from "./documentText";
+import { type FolderImages, pickFolderImages } from "./folderImages";
 import { handleDocumentClick } from "./linkClicks";
 import { createWebChrome } from "./webChrome";
 
@@ -9,6 +10,14 @@ export interface WebViewerOptions {
   root: HTMLElement;
   darkQuery: MediaQueryList;
   language: string;
+}
+
+/** A document on screen whose relative images became alt text: `dropped` of them with no folder picked. */
+interface ImageOffer {
+  message: PreviewMessage;
+  /** The file the document came from; a shared link has none. */
+  file: File | null;
+  dropped: number;
 }
 
 /** The preview page in a browser: documents come from a picked or dropped file, or from the URL fragment. */
@@ -22,25 +31,43 @@ export async function startWebViewer({ root, darkQuery, language }: WebViewerOpt
   // Only a fragment not already handled loads anything, so a repeated
   // hashchange cannot replace a file opened since.
   let handledFragment: string | null = null;
+  let imageOffer: ImageOffer | null = null;
+  // The offer the folder picker was opened for, so a pick that lands after the
+  // document changed is dropped (INV-3).
+  let pickingFor: ImageOffer | null = null;
+  let folder: FolderImages | null = null;
 
   function present(message: PreviewMessage | null) {
+    folder?.revoke();
+    folder = null;
     const emptyStateHadFocus = chrome.emptyState.contains(document.activeElement);
-    preview.show(message);
+    const shown = preview.show(message);
     chrome.emptyState.hidden = message !== null;
     root.hidden = message === null;
     // Hiding the focused Open File button would drop focus to the body.
     if (emptyStateHadFocus && message) root.focus({ preventScroll: true });
+    return shown;
   }
 
-  async function load(request: () => Promise<PreviewMessage | null>) {
+  async function load(request: () => Promise<PreviewMessage | null>, file: File | null = null) {
     const id = ++latestRequest;
     link = null;
+    imageOffer = null;
     chrome.copyButton.disabled = true;
+    // Hiding the focused button would drop focus to the body.
+    if (document.activeElement === chrome.imagesButton) root.focus({ preventScroll: true });
+    chrome.imagesButton.hidden = true;
     chrome.status.textContent = "";
     const message = await request();
     if (id !== latestRequest) return;
-    present(message);
+    const shown = present(message);
     if (message?.kind !== "document") return;
+    void shown.then((dropped) => {
+      if (!dropped || id !== latestRequest) return;
+      imageOffer = { message, file, dropped };
+      chrome.imagesButton.hidden = false;
+      chrome.status.textContent = i18n.t("preview.imagesNeedFolder");
+    });
     // Encoded now so a click can copy synchronously: Safari refuses a clipboard
     // write that follows an await. A browser without deflate-raw keeps the
     // button disabled.
@@ -48,6 +75,19 @@ export async function startWebViewer({ root, darkQuery, language }: WebViewerOpt
     if (id !== latestRequest || fragment === null) return;
     link = `${location.origin}${location.pathname}${location.search}#${fragment}`;
     chrome.copyButton.disabled = false;
+  }
+
+  async function showFolderImages(files: File[]) {
+    const offer = pickingFor;
+    if (!offer || offer !== imageOffer) return;
+    folder?.revoke();
+    folder = pickFolderImages(files, offer.file);
+    chrome.status.textContent = "";
+    const dropped = await preview.show(offer.message, folder.url);
+    // A later pick or another document replaced this one.
+    if (dropped === null || offer !== imageOffer) return;
+    const noneFound = dropped === offer.dropped;
+    if (noneFound) chrome.status.textContent = i18n.t("preview.noFolderImages");
   }
 
   function showFragment() {
@@ -66,7 +106,7 @@ export async function startWebViewer({ root, darkQuery, language }: WebViewerOpt
     // Leave the shared link behind in history, so Back returns to it.
     if (location.hash) history.pushState(null, "", `${location.pathname}${location.search}`);
     handledFragment = "";
-    void load(() => readDocumentFile(file));
+    void load(() => readDocumentFile(file), file);
   }
 
   function copyLink() {
@@ -95,6 +135,15 @@ export async function startWebViewer({ root, darkQuery, language }: WebViewerOpt
     // Cleared so picking the same file again still fires a change.
     chrome.fileInput.value = "";
     if (file) showFile(file);
+  });
+  chrome.imagesButton.addEventListener("click", () => {
+    pickingFor = imageOffer;
+    chrome.folderInput.click();
+  });
+  chrome.folderInput.addEventListener("change", () => {
+    const files = Array.from(chrome.folderInput.files ?? []);
+    chrome.folderInput.value = "";
+    void showFolderImages(files);
   });
   chrome.copyButton.addEventListener("click", copyLink);
   root.addEventListener("click", (event) => handleDocumentClick(event, root));

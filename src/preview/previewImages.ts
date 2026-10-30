@@ -15,12 +15,22 @@ interface HastElement extends HastNode {
 
 type VisitTree = Parameters<typeof visit>[0];
 
+/** The URL of the image a relative `src` names in the folder the reader picked, or null when it holds none. */
+export type PickedImages = (src: string) => string | null;
+
+/**
+ * Where relative images load from: the URL a host serves the document's folder
+ * at, a folder the reader picked in the web viewer, or nowhere.
+ */
+export type ImageSource = string | PickedImages | null;
+
 // Rehype plugin for the Explorer, Quick Look and web previews. Relative images
-// load from the previewed file's folder, which the host serves read-only at
-// `baseUrl` (the web viewer serves none: null). Every other image becomes its
-// alt text: a remote image would need the network, and a path outside that
-// folder is not served.
-export function rehypePreviewImages(baseUrl: string | null) {
+// load from the previewed file's folder, which an OS host serves read-only at
+// a base URL; the web viewer has no folder until the reader picks one. Every
+// other image becomes its alt text: a remote image would need the network,
+// and a path outside that folder is not served. `onDrop` hears of each
+// relative image left as alt text, so the web viewer knows to offer a folder.
+export function rehypePreviewImages(images: ImageSource, onDrop: () => void) {
   return (tree: HastNode) => {
     visit(
       tree as unknown as VisitTree,
@@ -30,15 +40,25 @@ export function rehypePreviewImages(baseUrl: string | null) {
         const props = node.properties;
         // Raw `<img>` in the document can reach here with neither attribute.
         const src = typeof props.src === "string" ? props.src : "";
-        if (baseUrl && isInFolder(src)) {
-          props.src = new URL(src, baseUrl).href;
-          return;
+        if (isInFolder(src)) {
+          const url = resolveInFolder(images, src);
+          if (url) {
+            props.src = url;
+            return;
+          }
+          onDrop();
         }
         const alt = typeof props.alt === "string" ? props.alt : "";
         parent.children[index] = { type: "text", value: alt };
       },
     );
   };
+}
+
+function resolveInFolder(images: ImageSource, src: string): string | null {
+  if (!images) return null;
+  if (typeof images === "string") return new URL(src, images).href;
+  return images(src);
 }
 
 // URL resolution clamps `..` at the host root, so an escaping path would load
