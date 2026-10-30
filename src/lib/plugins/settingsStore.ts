@@ -3,7 +3,8 @@ import { readPluginsKey, writePluginsKey } from "./pluginsFile";
 // Per-plugin persisted settings under one "settings" key:
 // { [pluginId]: { [key]: value } }. The host hydrates a plugin's map before
 // activate() so ctx.settings.get is synchronous for authors; set() persists
-// fire-and-forget.
+// fire-and-forget, one key at a time: a settings sync may have rewritten the
+// plugin's other keys since it hydrated, and its copy of them is stale.
 const KEY = "settings";
 
 // Each save rewrites the whole key, so saves run one at a time in call order:
@@ -26,12 +27,10 @@ export async function loadPluginSettings(pluginId: string): Promise<Record<strin
   return own && typeof own === "object" ? own : {};
 }
 
-/** Persist one plugin's settings map (replaces that plugin's entry only). */
-export function savePluginSettings(
-  pluginId: string,
-  settings: Record<string, unknown>,
-): Promise<void> {
-  const save = saveAfter(lastSave, pluginId, settings);
+/** Persist one key of a plugin's settings, leaving its other keys, and every
+ *  other plugin's, as the store holds them now. */
+export function savePluginSetting(pluginId: string, key: string, value: unknown): Promise<void> {
+  const save = saveAfter(lastSave, pluginId, key, value);
   lastSave = save;
   return save;
 }
@@ -39,10 +38,12 @@ export function savePluginSettings(
 async function saveAfter(
   previous: Promise<void>,
   pluginId: string,
-  settings: Record<string, unknown>,
+  key: string,
+  value: unknown,
 ): Promise<void> {
   // A failed save rejects only its own caller; this save still runs.
   await previous.catch(() => {});
   const all = await readAll();
-  await writePluginsKey(KEY, { ...all, [pluginId]: settings });
+  const own = all[pluginId] && typeof all[pluginId] === "object" ? all[pluginId] : {};
+  await writePluginsKey(KEY, { ...all, [pluginId]: { ...own, [key]: value } });
 }

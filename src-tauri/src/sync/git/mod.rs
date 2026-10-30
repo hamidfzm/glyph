@@ -29,7 +29,8 @@
 //! `GitBackend` type and its `SyncBackend` impl, [`message`] the GitHub-style
 //! auto-commit subject, [`credentials`] the libgit2 credential callback, and
 //! [`repo`] the repository-lifecycle helpers (`init` / `set_origin`),
-//! and [`plumbing`] the low-level git operations `backend` orchestrates.
+//! [`plumbing`] the low-level git operations `backend` orchestrates, and
+//! [`resolve`] the finish of a merge that stopped on a conflict.
 //! `pointers` is the check a repository's own files pass before any of these
 //! opens it.
 
@@ -41,13 +42,15 @@ mod plumbing;
 #[cfg(windows)]
 mod pointers;
 mod repo;
+mod resolve;
 
 pub use backend::GitBackend;
 pub use credentials::{https_authority, make_credentials_callback, select_credentials, BoundToken};
 pub use message::auto_commit_message;
 #[cfg(windows)]
 pub use pointers::{refuse_remote_pointers, refuse_remote_pointers_with_submodules, Judge};
-pub use repo::{init_repo, set_origin};
+pub use repo::{init_repo, pin_checkout_config, set_origin};
+pub use resolve::{ConflictPick, ConflictSide};
 
 use std::time::{SystemTime, UNIX_EPOCH};
 

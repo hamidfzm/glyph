@@ -289,6 +289,7 @@ pub fn run() {
         )
         .on_menu_event(menu::handle_menu_event)
         .manage(sync::SyncState::new())
+        .manage(sync::settings_repo::SettingsSyncState::new())
         .manage(telemetry::TelemetryState(Mutex::new(None)));
 
     let app = manage_state(builder)
@@ -409,6 +410,30 @@ pub fn run() {
             sync::commands::sync_default_author,
             #[cfg(desktop)]
             sync::commands::sync_repo_present,
+            #[cfg(desktop)]
+            sync::settings_repo::commands::settings_sync_get_config,
+            #[cfg(desktop)]
+            sync::settings_repo::commands::settings_sync_connect,
+            #[cfg(desktop)]
+            sync::settings_repo::commands::settings_sync_set_token,
+            #[cfg(desktop)]
+            sync::settings_repo::commands::settings_sync_has_token,
+            #[cfg(desktop)]
+            sync::settings_repo::commands::settings_sync_clear_token,
+            #[cfg(desktop)]
+            sync::settings_repo::commands::settings_sync_default_author,
+            #[cfg(desktop)]
+            sync::settings_repo::commands::settings_sync_status,
+            #[cfg(desktop)]
+            sync::settings_repo::commands::settings_sync_run,
+            #[cfg(desktop)]
+            sync::settings_repo::commands::settings_sync_choose,
+            #[cfg(desktop)]
+            sync::settings_repo::commands::settings_sync_resolve,
+            #[cfg(desktop)]
+            sync::settings_repo::commands::settings_sync_plugin_plan,
+            #[cfg(desktop)]
+            sync::settings_repo::commands::settings_sync_disconnect,
             workspace::commands::workspace_resolve,
             workspace::commands::workspace_get_last_file,
             workspace::commands::workspace_set_last_file,

@@ -35,8 +35,8 @@ function memoryBackend(
 ): PluginSettingsBackend {
   return {
     load: async (pluginId) => ({ ...stored[pluginId] }),
-    save: (pluginId, settings) => {
-      stored[pluginId] = { ...settings };
+    save: (pluginId, key, value) => {
+      stored[pluginId] = { ...stored[pluginId], [key]: value };
     },
   };
 }

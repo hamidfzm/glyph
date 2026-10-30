@@ -234,7 +234,7 @@ export function buildPluginContext({
       get: (key) => settings[key] as never,
       set(key, value) {
         settings[key] = value;
-        settingsBackend.save(plugin.id, settings);
+        settingsBackend.save(plugin.id, key, value);
       },
     },
     i18n: {

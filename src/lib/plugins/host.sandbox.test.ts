@@ -57,7 +57,7 @@ describe("sandboxed plugins", () => {
     expect(worker.terminated).toBe(true);
   });
 
-  it("persists settings-set through the backend, merged over hydrated values", async () => {
+  it("persists settings-set through the backend one key at a time", async () => {
     const worker = new FakeWorker();
     const backend = { load: vi.fn().mockResolvedValue({ size: 12 }), save: vi.fn() };
     const host = createPluginHost(vi.fn(), undefined, undefined, backend, spawnerFor(worker));
@@ -67,7 +67,7 @@ describe("sandboxed plugins", () => {
     expect((worker.posted[0] as { settings: unknown }).settings).toEqual({ size: 12 });
 
     worker.emit({ type: "settings-set", key: "theme", value: "dark" });
-    expect(backend.save).toHaveBeenCalledWith("com.x.demo", { size: 12, theme: "dark" });
+    expect(backend.save).toHaveBeenCalledWith("com.x.demo", "theme", "dark");
   });
 
   it("routes translations and answers workspace calls with permission gating", async () => {

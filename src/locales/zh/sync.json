@@ -81,6 +81,70 @@
     "backend": "同步后端错误。",
     "backendDetail": "同步后端错误：{{message}}",
     "invalidRemoteUrl": "远程地址必须以 https:// 或 ssh:// 开头（或使用 user@host:path 形式）。访问令牌请填写在令牌字段中，不要放在地址里。",
-    "unknown": "未知同步错误。"
+    "unknown": "未知同步错误。",
+    "pushRejected": "远程拒绝了推送。",
+    "pushRejectedDetail": "远程拒绝了推送：{{message}}",
+    "busy": "已有同步正在进行。请在其完成后重试。"
+  },
+  "settingsRepo": {
+    "description": "将你的 Glyph 配置保存在单独的 git 仓库中，并在你连接的每台设备上使用：设置、快捷键以及你安装的插件和它们的设置。在一台设备上移除或关闭的插件，也会在其他设备上被移除或关闭。API 密钥、最近打开的文件、插件权限和错误报告授权会保留在各台设备上。",
+    "remotePlaceholder": "https://github.com/you/glyph-setup.git",
+    "tokenNote": "保存在系统钥匙串中，仅用于设置仓库。",
+    "connect": "连接",
+    "connectedTo": "正在与 <strong>{{remote}}</strong> 的 <strong>{{branch}}</strong> 分支同步。",
+    "saveToken": "保存令牌",
+    "disconnect": "断开连接",
+    "choice": {
+      "title": "此仓库已包含一份 Glyph 配置",
+      "message": "选择这台设备从哪份配置开始。在你选择之前不会有任何更改。",
+      "useSynced": "使用同步的配置",
+      "useSyncedHint": "使用同步的配置：替换这台设备的设置。仅在这台设备上的插件会保留，并加入同步的配置。",
+      "replaceSynced": "用这台设备的配置替换",
+      "replaceSyncedHint": "用这台设备的配置替换：仓库保留其历史记录，同步的配置将变为这台设备的配置。这台设备没有的插件会离开同步的配置，并在其他设备下次同步时从中移除。"
+    },
+    "conflicts": {
+      "title": "两台设备上都有更改",
+      "message": "为每个文件选择要保留的版本，然后解决。在此之前不会同步任何内容。",
+      "keepLocal": "保留这台设备的版本",
+      "takeRemote": "采用同步的版本",
+      "legend": "{{file}} 要保留的版本",
+      "resolve": "解决"
+    },
+    "files": {
+      "settings": "{{group}}设置",
+      "plugin": "插件 {{id}}"
+    },
+    "plugins": {
+      "title": "同步配置中的插件",
+      "missing": "未在这台设备上安装",
+      "install": "安装",
+      "installAll": "全部安装",
+      "installName": "安装 {{name}}",
+      "version": "版本 {{version}}",
+      "toEnable": "在同步配置中已开启",
+      "offHere": "在这台设备上已关闭",
+      "enable": "开启",
+      "enableName": "开启 {{name}}",
+      "manual": "需要手动安装",
+      "reason": {
+        "local": "版本 {{version}}，在另一台设备上从文件夹安装",
+        "unlisted": "版本 {{version}}，已不在可用插件中"
+      }
+    },
+    "skipped": {
+      "title": "上次同步时略过：",
+      "item": "{{file}}：{{reason}}",
+      "reason": {
+        "notAFile": "不是普通文件",
+        "notAFolder": "不是文件夹",
+        "tooLarge": "过大",
+        "notJson": "不是有效的 JSON",
+        "notAnObject": "不是 JSON 对象",
+        "unknownName": "不是 Glyph 同步的文件",
+        "duplicateName": "同名但大小写不同",
+        "tooMany": "插件文件数量超过 Glyph 读取的上限",
+        "badEntry": "不是插件条目"
+      }
+    }
   }
 }

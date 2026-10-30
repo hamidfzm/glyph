@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import type { WorkspaceSyncConfig } from "@/lib/sync";
-import { commitSaveConfig, type FormState, resolveSaveConfig } from "./syncSettingsForm";
+import {
+  commitSaveConfig,
+  connectRequestFromForm,
+  type FormState,
+  resolveSaveConfig,
+} from "./syncSettingsForm";
 
 function makeForm(overrides: Partial<FormState> = {}): FormState {
   return {
@@ -34,6 +39,34 @@ describe("resolveSaveConfig", () => {
       workspacePath: "/w",
       backend: "git",
       remoteUrl: "https://example.com/r.git",
+    });
+  });
+});
+
+describe("connectRequestFromForm", () => {
+  it("trims the fields and leaves blanks to the defaults", () => {
+    expect(
+      connectRequestFromForm(
+        makeForm({ remoteUrl: " https://example.com/s.git ", remoteBranch: " ", token: "  " }),
+      ),
+    ).toEqual({
+      remoteUrl: "https://example.com/s.git",
+      branch: "main",
+      author: null,
+      token: null,
+    });
+  });
+
+  it("carries the author and the token when they are given", () => {
+    expect(
+      connectRequestFromForm(
+        makeForm({ remoteBranch: "trunk", authorName: " Ada ", token: " t " }),
+      ),
+    ).toEqual({
+      remoteUrl: "https://example.com/r.git",
+      branch: "trunk",
+      author: { name: "Ada", email: "" },
+      token: "t",
     });
   });
 });
