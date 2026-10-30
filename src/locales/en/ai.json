@@ -37,5 +37,30 @@
   "readAloud": "Read Aloud",
   "error": {
     "notConfigured": "No AI provider configured. Open Settings to set up an AI provider."
+  },
+  "tools": {
+    "label": "Lookups the assistant made",
+    "names": {
+      "vault_context": "Workspace overview",
+      "resolve_link": "Resolve link",
+      "read_note": "Read note",
+      "note_info": "Note details",
+      "backlinks": "Backlinks",
+      "graph_neighbors": "Linked notes",
+      "vault_report": "Workspace health",
+      "list_tags": "Tags",
+      "notes_by_tag": "Notes with tag",
+      "read_canvas": "Read canvas"
+    },
+    "status": {
+      "running": "Reading…",
+      "failed": "Failed",
+      "stopped": "Stopped"
+    },
+    "arguments": "Asked for",
+    "result": "Returned",
+    "resultCut": "Showing the first {{shown}} of {{total}} characters. The assistant received all of them.",
+    "budget": "Stopped after {{limit}} lookups, the most one question may make, so this answer may be missing something.",
+    "unsupported": "This model cannot use tools, so the assistant answered from the open document and the list of files."
   }
 }

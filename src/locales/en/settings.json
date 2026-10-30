@@ -303,6 +303,13 @@
           "description": "Move a note to another folder and rewrite the links that point to it."
         }
       }
+    },
+    "assistantTools": {
+      "title": "Assistant reading your notes",
+      "description": "The assistant can look up notes in this window's workspace to answer you: links, backlinks, tags, headings, and the text of any note. Each lookup is listed above the reply, with what it returned. It only reads: it never changes a note.",
+      "label": "Let the assistant read notes",
+      "cloud": "What it reads is sent to {{provider}} along with your question, as the open document already is.",
+      "local": "What it reads goes to the Ollama server set above, along with your question."
     }
   },
   "print": {

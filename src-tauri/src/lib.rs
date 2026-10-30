@@ -314,6 +314,8 @@ pub fn run() {
             #[cfg(desktop)]
             commands::pick::pick_save,
             #[cfg(desktop)]
+            commands::pick::pick_save_document,
+            #[cfg(desktop)]
             commands::pick::pick_export_dir,
             #[cfg(desktop)]
             commands::pick::pick_plugin_dir,
@@ -349,6 +351,10 @@ pub fn run() {
             vault::commands::vault_resolve,
             vault::commands::vault_query,
             vault::commands::vault_paths_with_tag,
+            #[cfg(desktop)]
+            mcp::assistant::assistant_tools,
+            #[cfg(desktop)]
+            mcp::assistant::assistant_tool_call,
             commands::search::search_workspace,
             commands::plugins::list_plugins,
             commands::plugins::inspect_plugin,

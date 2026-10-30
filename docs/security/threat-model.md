@@ -22,9 +22,9 @@ files the user never opened or exported to in this app.
 `src-tauri/src/grants.rs` holds a `GrantRegistry` (Tauri managed state) with
 four grant kinds. Every path is canonicalized on both sides (grant time and
 check time), so `..` traversal and symlinks inside a granted tree cannot
-escape it. For paths that do not exist yet (export targets), the nearest
-existing ancestor is canonicalized and the remainder re-appended; a `..` in
-the missing remainder is rejected. So is a link in it: each name is
+escape it. For paths that do not exist yet (export and Save As targets), the
+nearest existing ancestor is canonicalized and the remainder re-appended; a
+`..` in the missing remainder is rejected. So is a link in it: each name is
 re-appended only when the path it makes is not a symbolic link or, on
 Windows, a junction. A path that does not canonicalize can still lead through
 one, in two ways. The link's target is missing, so a write would create the
@@ -66,7 +66,8 @@ webview-supplied path:
 - macOS `RunEvent::Opened` and second-instance launches, under the same
   per-path rules as a cold start
 - Native pick dialogs run in Rust (`src-tauri/src/commands/pick.rs`): Open
-  Folder, Open File(s), export Save As, website export destination
+  Folder, Open File(s), a new document's Save As, export Save As, website
+  export destination
 - Session restore: at startup the backend reads the persisted settings store
   itself and grants the previously open tabs and recent files
 - `glyph mcp`'s `--vault` roots, or without them the same settings seed,
@@ -107,13 +108,14 @@ page can read what it serves: the asset scope is read access.
 
 A loose file's relative images and media sit outside its exact-path grant
 (#670), so there the asset scope reaches one step past the read rule.
-Granting a loose file (opened, or restored at launch from open tabs and recent
-files) records its folder, and `allow_document_asset` mirrors one path at a
-time into the asset scope when, after symlinks resolve, it is an existing
-image, audio, or video file (the `image` and `media` lists in
-`extensions.json`) inside that folder or below it. Tauri's scope matches
-escaped paths only, so the extension rule cannot be a scope pattern; media the
-lists do not name still loads inside a workspace, but not beside a loose file.
+Granting a loose file (opened, saved under a new name, or restored at launch
+from open tabs and recent files) records its folder, and
+`allow_document_asset` mirrors one path at a time into the asset scope when,
+after symlinks resolve, it is an existing image, audio, or video file (the
+`image` and `media` lists in `extensions.json`) inside that folder or below
+it. Tauri's scope matches escaped paths only, so the extension rule cannot be
+a scope pattern; media the lists do not name still loads inside a workspace,
+but not beside a loose file.
 The registry itself gains nothing: `read_file` and every other gated command
 keep the exact-path rule for the file's neighbours. The folder is recorded
 where the grant is minted, so the command checks a rule rather than minting
@@ -142,20 +144,21 @@ looked up (see "Network paths" below).
 | ------- | ----- |
 | `read_file`, `check_path_exists`, `read_directory`, `list_markdown_files` | readable. `read_file` also refuses a document over 64 MiB, judged from its metadata before any of it is read: the whole document crosses IPC and sits in the renderer's editor, so this is the bound on what one file can make the app hold. `read_directory` also takes the window's plugin file type extensions, judged after the grant and refused unless each is lowercase ASCII letters and digits. They only add entries of the readable directory to its listing. That lets a renderer list, in one call, every file there with a plain extension, where before it could only probe names with `check_path_exists`; each such file was already readable through `read_file`, and nothing is granted |
 | `search_workspace` | readable. The walk below it skips hidden names and follows no link, like every workspace walk |
-| `allow_document_asset` | an existing image, audio, or video file, judged after symlinks resolve, inside the folder of an opened loose file; mirrored into the asset scope only |
+| `allow_document_asset` | an existing image, audio, or video file, judged after symlinks resolve, inside the folder of a loose file (opened or saved under a new name); mirrored into the asset scope only |
 | `vault_snapshot`, `vault_refresh`, `vault_backlinks`, `vault_resolve`, `vault_query`, `vault_paths_with_tag` | granted workspace, not merely readable: the index is per workspace, and a readable check would also accept every directory inside one, letting a caller cache an index per subdirectory. The second path argument is answered from the index in memory, never read from disk, so an ungranted one returns nothing rather than content |
 | `vault_forget` | none, because nothing is looked up: the path is compared with the roots the store holds, as their indexes were built with them. It hands nothing back and only drops an index the process already built, so the worst a renderer can do with it is make the next snapshot rebuild from disk. A closing window releases its index the same way, from the paths it reported, and a workspace whose folder is gone is still forgotten |
 | `write_file`, `write_binary_file`, `create_dir_all` | writable. No grant covers a write into a `.git` directory: git reads its hooks and the `origin` URL from there, so a write into it is code the user's next commit runs, or a remote the sync token would be sent to. The name is judged without regard to case, as git finds the directory on a volume that ignores case. An exact-file grant is held to it as well as a recursive one: `open_in_new_window` mints one for any file a workspace grant reads, and the settings seed mints one for every `recentFiles` and `openTabs` entry, both of which a renderer can name |
 | `copy_file` | source readable and destination writable |
 | `prune_export_dir` | the output directory must be writable, and each entry read back from its manifest must be plain path segments, none of them `.git` in any case, whose parent still canonicalizes inside that directory (so a hand-edited manifest cannot delete outside the export, and cannot delete the repository files of an export folder that is a checkout of the site). A `written` list naming `.git` fails the command before anything is removed or recorded: nothing below `.git` is ever written, so the claim is not the export's, and the manifest never carries it. The manifest is neither read nor replaced when it, or the `.glyph` folder holding it, is a link: the output directory is checked, but a link below it leads anywhere. A manifest that cannot be read or parsed is left as it is and nothing is pruned. A new one is written to a staging file of its own beside it, opened only if nothing holds that name, and moved over the old one in one step. The list of files the export failed to replace, like the list of files it wrote, can only spare a manifest entry, never name something else to remove. An entry that differs from a listed name only in case, Unicode normalization form or separators is opened beside that name to see whether the two are one file (the volume decides, not the fold); both paths are confined as above, and nothing but that yes or no comes of it. The reason handed back names the first entry that could not be removed, quoted and escaped, because that name comes from the manifest and ends up in the app's notice and on stderr |
 | `pick_export_dir` | `root` must be a granted workspace, checked before the dialog opens. It only decides whether the folder the user then picks is refused for resolving inside that workspace; the grant is for the picked folder alone, so naming another root gains a renderer nothing it could not already write |
-| `pick_save`, `pick_move_dir` | `default_dir`, the folder the dialog opens in, must be a granted workspace when one is given, checked before the dialog opens. A native dialog resolves that folder as it opens, before the user chooses anything, and on Windows resolving a network path connects to the host it names. A folder that passes is handed on as the renderer spelled it rather than canonicalized, since the dialog cannot open a `\\?\UNC\` path. The grant `pick_save` mints is for the file the user picks, and `pick_move_dir` mints none |
+| `pick_save_document`, `pick_move_dir` | `default_dir`, the folder the dialog opens in, must be a granted workspace when one is given, checked before the dialog opens. A native dialog resolves that folder as it opens, before the user chooses anything, and on Windows resolving a network path connects to the host it names. A folder that passes is handed on as the renderer spelled it rather than canonicalized, since the dialog cannot open a `\\?\UNC\` path. `pick_save_document`, a new document's Save As, grants the file the user picks as Open File grants one (exact read, write and watch, and the media in its folder as assets), though it may not exist yet; a folder, a link to nothing, or a name inside a `.git` directory is refused. The grant is minted when the user picks, not when the document is written, so a file picked to be replaced stays readable even if the save then fails or the tab was closed while the dialog was open. `pick_move_dir` mints none |
+| `pick_save` | no starting folder: an export's dialog opens wherever the platform opens it. The grant it mints is for the file the user picks, to write only |
 | `watch_file`, `watch_directory` | readable (unwatch stays open; it only drops a watcher). A directory watch does not follow symbolic links, so a link to `/` or to the home folder inside a workspace puts no watch on the tree behind it; followed, it would take one watch per directory there and exhaust the user's quota. The `glyph serve` watch keeps the same rule |
 | `create_note`, `create_canvas`, `create_folder` | `root` must be a granted workspace and the target directory canonicalizes inside it; a network or device path is refused before that lookup. The entry takes the first default name nothing holds, and a link holds its name even when its target is missing, so creating never writes through one |
 | `rename_path`, `duplicate_path`, `move_path`, `delete_path` | `root` must be a granted workspace and the entry itself canonicalizes strictly inside it (a network or device path is refused before that lookup, for a move's destination too; a trailing `..`, the root itself, or a symlink resolving outside is refused; `duplicate_path` refuses a folder containing a symlink rather than copying its target). `rename_path` and `move_path` also rewrite links in the workspace's own indexed notes and canvases, each write passing `ensure_writable`; a link or canvas card target that resolves outside the workspace is never rewritten or probed on disk, a file changed since the plan read it is left as it is, and `dryRun` reads without writing. The name a copy, a rename, or a move lands on is picked the way a new entry's is, so it is never one a link holds. Neither the entry nor its destination may sit inside the workspace's `.git` directory, and the name a rename lands on may not be `.git` itself, in any case: a folder built with ordinary writes and renamed `.git` would make its `hooks` git's own, and a file so named is a gitfile that sends git to whatever directory it names (a note keeps its extension, so `.git.md` is what it lands on). `relink::plan` refuses both ends of a move that name `.git` as well, so no caller of `relocate` lands there. `rename_path` also takes the window's plugin file type extensions, judged after the grant and before the entry is looked up, and refused unless each is lowercase ASCII letters and digits. A typed name ending in one splits there like a document's, so a note renamed `drawing.excalidraw` lands on that name. The list widens nothing: the entry stays in its folder under the checks above, and every name it can land on is one `write_file` could already write there |
 | `request_open` | folders only; the path must already be a granted workspace root |
 | `open_in_new_window` | readable |
-| `reveal_path` | any grant, readable or writable, checked before the file manager is asked to show the path. Nothing is handed back, and a document just saved under a new name holds only a grant to write. It stands in for the opener plugin's `reveal_item_in_dir`, which the capability does not grant (see [Plugin permissions](#plugin-permissions)) |
+| `reveal_path` | readable, checked before the file manager is asked to show the path. A file just exported holds only a grant to write, so it is not revealed. It stands in for the opener plugin's `reveal_item_in_dir`, which the capability does not grant (see [Plugin permissions](#plugin-permissions)) |
 | `workspace_resolve` | a network or device path is refused before anything is looked up; a local folder needs no grant. The probe behind the one-folder-one-workspace rule reads no content and writes nothing: it reports whether the folder sits in a git repository and whether an ancestor holds `.glyph`. It does look the folder and each ancestor up, and on Windows looking a network path up connects to its host |
 | `workspace_get_last_file`, `workspace_set_last_file` | granted workspace. `.glyph/state.json`, `.glyph/config.json` (the Cloud Sync settings and the plugin settings below), and the `.gitignore` written beside them are read and written only when neither `.glyph` nor the file itself is a symbolic link, a dangling one included: a cloned workspace can ship either one pointing outside itself. A JSON object behind such a link would parse as a config or a state, and so be replaced, unless a key those formats define holds a value of another type (unknown keys are ignored, and a file that fails to parse is left as it is). `.glyph/site.json` (the Website tab) is not one of these: it is read and written through `read_file` and `write_file`, so the grant check decides |
 | `workspace_get_plugin_settings`, `workspace_set_plugin_settings` | granted workspace, and a well-formed plugin id (it becomes a key in the committed `.glyph/config.json`). The settings are an opaque JSON object capped at 64 KiB per plugin; nothing in the backend treats a value as a path. The symbolic-link refusal in the row above applies |
@@ -164,6 +167,7 @@ looked up (see "Network paths" below).
 | `install_plugin` | consumes the pending picked folder; no path argument |
 | `install_plugin_from_registry` | takes a plugin id and nothing else. The backend fetches the registry index from its fixed URL, finds the entry, downloads the package the entry names (the marketplace hosts alone, a redirect included, 50 MiB at most), and verifies the sha256 and the manifest id before anything is written, so a package that lies about itself never lands on another installed plugin |
 | `finish_cli_export` | ends the process, so it is refused unless a CLI export is in progress: the command is registered in every session, and a renderer could otherwise end an interactive one |
+| `assistant_tools`, `assistant_tool_call` | the roots and tabs are the calling window's own report, kept only where `ensure_workspace` and `ensure_readable` pass; the active note is compared with those tabs and never looked up; the tool arguments get the same checks as in `glyph mcp`, so a `vault` must be one of those roots and a note or canvas path must be readable and inside it; only read-only tools are dispatched (see [In-app assistant tools](#in-app-assistant-tools)) |
 
 Reading no content does not exempt a command. Looking a path up is itself an
 effect on Windows, where it connects to the host a network path names, so a
@@ -224,8 +228,9 @@ feature:
   be a channel for its contents, while a quoted one carries nothing the
   document view would not already fetch. The URLs are read from the
   document when the reply is requested and kept on the reply, since the
-  chat outlives a switch to another document. Any other image is shown as
-  its alt text and URL. Mermaid's on-screen SVG goes through DOMPurify
+  chat outlives a switch to another document. A note the assistant read
+  through a tool adds none (see [In-app assistant tools](#in-app-assistant-tools)).
+  Any other image is shown as its alt text and URL. Mermaid's on-screen SVG goes through DOMPurify
   before it is put in the document, as the page renders already did.
 - `object-src 'none'`, `frame-src 'none'`, `base-uri 'self'`, and
   `form-action 'none'` close the remaining injection sinks.
@@ -612,6 +617,70 @@ the way a renderer-supplied path is.
   admit, and nothing at all while the app is closed, which it learns from an
   OS lock the interactive app holds on `instance.lock` in its data directory.
 
+## In-app assistant tools
+
+Two commands give the in-app AI assistant the server's read-only tools,
+dispatched in-process through the same registry: `assistant_tools` lists
+them, and `assistant_tool_call` runs one call. The call's name and arguments
+come from a model that reads note content, by way of the renderer, so they
+are treated as both: untrusted model output and renderer input. The commands
+exist on desktop only, like `glyph mcp`.
+
+- **Read-only at dispatch.** `assistant_tool_call` goes through
+  `dispatch_read`, which refuses every tool that is not read-only before its
+  handler runs: `open_in_glyph` starts a process, `export` writes a file, and
+  the five edit tools change notes. The refusal holds whatever the agent-tool
+  switches in `settings.json` say, and the session it builds turns no edit
+  tool on. Listing only the read tools is not the control, since a model can
+  call a name it was never offered.
+- **The calling window's workspace only.** The roots are the workspace the
+  calling window reported with `set_window_workspace`, kept only when it
+  passes `ensure_workspace`. Grants are app-wide, so another window's
+  workspace is granted too: the scoping comes from the session's roots, among
+  which a tool's `vault` argument can only pick, and from the vault a call
+  reads through, which refuses an absolute or `..` path into another vault
+  before it asks the disk anything, so the refusal is the same whether a file
+  is there or not.
+  No folder can be added. A `vault` naming any other folder passes the
+  network-path check, is resolved once to match it against the roots, and is
+  refused, since the session has no way to ask the user for more.
+- **The active note.** The renderer names the note in front of the user. It
+  is compared with the window's reported file tabs that pass
+  `ensure_readable`, never looked up, and dropped when it is not one of them.
+  It only picks the default vault and is reported back to the model.
+- **Bounds.** The same as for `glyph mcp`: a result over 1 MiB is refused, a
+  listing stops at 200 rows and note text at 50,000 characters and says so,
+  and a handler that panics is a refusal, not a crash. The call runs on a
+  blocking worker, off the main thread. It reads the index the app's watcher
+  keeps current, the one the UI reads, so it never walks the vault while
+  holding the store's lock the UI's queries wait on; only a first call for a
+  vault builds its index, outside that lock.
+- **What leaves the machine.** Without tools a question sends the open
+  document and a listing of the workspace's files to the configured provider.
+  With them the model can pull any note of the window's workspace into the
+  conversation, and with a cloud provider that note goes to the provider; the
+  latest reply's calls and results go again with the next question, older
+  ones only as the reply's text. The AI settings say so, and the switch that
+  offers the tools is kept per provider: it is off for the Anthropic provider
+  and OpenAI and on for Ollama, whose server the user names, until the user
+  sets it. The tools are offered only while the window has a workspace open,
+  and a call to a tool the reply was not offered is not run. The switch lives
+  in `settings.json`, which the renderer writes; it gates nothing the renderer
+  could not already send, since the renderer reads every granted file and
+  holds the provider's key. Each call and its result are listed with the
+  reply, so the basis of an answer can be checked.
+- **Note content is untrusted model input.** A note read through a tool can
+  carry text written to steer the model. The tools only read, so the harm left
+  is in the reply. The system prompt says that tool results are the user's
+  notes and not instructions, which a model may ignore, so nothing depends on
+  it. A reply image still loads only when the open document already named its
+  URL (see [Content Security Policy](#content-security-policy)); a URL in a
+  note the model read through a tool does not count, since the user never
+  opened that note, and loading it would let a planted note send what the
+  model read to its own host. A link in a reply opens in the system browser,
+  never in the app's webview, behind the external-link prompt when that
+  setting is on, as before.
+
 ## Residual risks
 
 - **An MCP client reads everything in the vaults it is given.** Whatever a
@@ -649,6 +718,16 @@ the way a renderer-supplied path is.
 - **A replaced destination.** A rename or a move checks that nothing is at
   the destination and renames afterwards, as a rename made in the app does. A
   file created there in between is replaced.
+- **A note the assistant reads can steer its reply.** Read-only tools keep a
+  planted note from changing anything, but not from shaping what the reply
+  says, a link included. A link whose URL carries what the model read opens
+  on one click when the external-link prompt is off; with it on, the prompt
+  shows the URL first.
+- **The assistant's window scope holds against the model, not the
+  renderer.** The workspace a window reports is the renderer's word, so a
+  compromised renderer can report another granted workspace and have the
+  tools read it. That gives it nothing it lacks: `read_file` and the vault
+  commands already read every granted workspace.
 - **The caps bound the index; they do not make it small.** A workspace at
   the file cap with every note at the link cap is still hundreds of megabytes
   of index, and a search over it reads every file under 5 MiB. Each cap says
@@ -681,12 +760,13 @@ the way a renderer-supplied path is.
   only matters after the renderer is already compromised.
 - **Media beside a loose file.** A compromised renderer can load, and so
   read, every image, audio, and video file under the folder of any loose file
-  the session granted, including files restored at launch from open tabs and
-  recent files, not only the ones the document references. A note in the home
-  folder or at a drive root exposes the media beneath it, and a staged file
-  grant (above) stages its folder too. Accepted so a document opened on its
-  own renders its relative images (#670); every other file there stays
-  denied, and a reference that climbs above the folder (`../`) does not load.
+  the session granted, including files saved under a new name and files
+  restored at launch from open tabs and recent files, not only the ones the
+  document references. A note in the home folder or at a drive root exposes
+  the media beneath it, and a staged file grant (above) stages its folder too.
+  Accepted so a document opened or saved on its own renders its relative
+  images (#670); every other file there stays denied, and a reference that
+  climbs above the folder (`../`) does not load.
 - **`glyph serve` is an inbound listener.** The one place Glyph accepts
   connections rather than making them. It binds `127.0.0.1` unless `--host`
   says otherwise, answers only to `Host` headers naming itself (so a web page

@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { SettingsContext } from "@/contexts/SettingsContext";
-import type { ChatTurn } from "@/hooks/useAIChat";
+import type { ChatTurn } from "@/lib/ai/chatTurn";
 import { DEFAULT_SETTINGS } from "@/lib/settings";
 import { AIChatPanel } from "./AIChatPanel";
 

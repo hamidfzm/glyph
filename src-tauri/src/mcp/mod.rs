@@ -1,9 +1,12 @@
-//! `glyph mcp`: the vault index served to an MCP client over stdio.
+//! The vault index as tools: served to an MCP client over stdio by
+//! `glyph mcp`, and to the in-app assistant.
 //!
 //! [`registry`] is the transport-agnostic half, a tool list and a dispatch any
-//! caller can drive in-process. [`stdio`] is the adapter that exists today,
-//! and the only code on this path that writes to stdout.
+//! caller can drive in-process. [`stdio`] is the adapter for external clients,
+//! and the only code on this path that writes to stdout. [`assistant`] is the
+//! in-app caller, limited to the read-only tools.
 
+pub mod assistant;
 mod edits;
 mod launch;
 mod link_tools;
@@ -28,7 +31,7 @@ use std::path::{Path, PathBuf};
 use crate::data_dir;
 use crate::grants::GrantRegistry;
 use crate::vault::VaultStore;
-use registry::Session;
+use registry::{Caller, Session};
 
 /// Serve until the client closes `input`, and return the exit code. `vaults`
 /// are the `--vault` roots, already checked to be folders, and all the server
@@ -90,6 +93,7 @@ pub fn run(
             editing: &editing,
             exe: &exe,
             allow_vault: can_ask.then_some(&allow_vault),
+            caller: Caller::Stdio,
         };
         let result = registry::dispatch(name, args, &session);
         allowed.extend(added.take());

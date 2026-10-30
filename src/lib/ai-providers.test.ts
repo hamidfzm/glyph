@@ -14,6 +14,7 @@ describe("createAIProvider", () => {
     ttsVoice: "",
     ttsSpeed: 1.0,
     agentWriteTools: {},
+    assistantTools: { claude: false, openai: false, ollama: false },
   };
 
   it("returns null for none provider", () => {

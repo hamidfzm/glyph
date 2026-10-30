@@ -4,7 +4,7 @@ import { act, waitFor } from "@testing-library/react";
 import { expect, vi } from "vitest";
 import type { DirectoryChanged } from "@/hooks/useTabEvents";
 import type { useTabs } from "@/hooks/useTabs";
-import { pickFiles, pickFolder, pickNewWorkspace, pickSave } from "@/lib/pickers";
+import { pickFiles, pickFolder, pickNewWorkspace, pickSaveDocument } from "@/lib/pickers";
 import { EMPTY_SNAPSHOT, type VaultSnapshot } from "@/lib/vault";
 import { COMPLETE_SCAN } from "@/lib/workspaceScan";
 import { resetWorkspaceSessions } from "@/lib/workspaceSession";
@@ -182,7 +182,7 @@ export function resetTabsMocks(): void {
   vi.mocked(listen).mockResolvedValue(() => {});
   vi.mocked(pickFolder).mockReset();
   vi.mocked(pickFiles).mockReset();
-  vi.mocked(pickSave).mockReset();
+  vi.mocked(pickSaveDocument).mockReset();
   vi.mocked(pickNewWorkspace).mockReset();
 }
 
