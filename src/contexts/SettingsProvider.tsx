@@ -8,6 +8,7 @@ import { setNestedValue } from "@/lib/settingsObject";
 import { loadSecrets } from "@/lib/settingsSecrets";
 import { mergeChangedPaths, SETTINGS_STORE_KEY, settingsFromStored } from "@/lib/settingsWrite";
 import { openStore } from "@/lib/store";
+import { carriedOverColorScheme, removeLegacyPresetOnceWritten } from "@/lib/themePresetMigration";
 import { SettingsContext } from "./SettingsContext";
 
 const SAVE_DEBOUNCE = 500;
@@ -27,40 +28,6 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const changedPathsRef = useRef<Set<string>>(new Set());
   // A reset replaces every key on purpose, so it skips the merge.
   const replaceAllRef = useRef(false);
-
-  // Load settings from store on mount
-  useEffect(() => {
-    let cancelled = false;
-
-    async function init() {
-      try {
-        const store = await openStore("settings.json");
-        storeRef.current = store;
-        const saved = await store.get<Partial<Settings>>(SETTINGS_STORE_KEY);
-        const base = settingsFromStored(saved);
-        // API keys live in the OS keychain, not the store: migrate any legacy
-        // plaintext keys out of settings.json and load the stored ones.
-        const merged = await loadSecrets(store, SETTINGS_STORE_KEY, base);
-        if (!cancelled) {
-          setSettings(merged);
-          applyTheme(merged.appearance.theme);
-          applyCSSVariables(merged);
-        }
-      } catch (err) {
-        console.error("Failed to load settings:", err);
-        applyTheme(DEFAULT_SETTINGS.appearance.theme);
-        applyCSSVariables(DEFAULT_SETTINGS);
-      }
-      if (!cancelled) setLoaded(true);
-    }
-
-    init();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  useSettingsSyncedReload({ loaded, storeRef, changedPathsRef, setSettings });
 
   // Listen for system theme changes when theme is "system". Chromium reports a light
   // scheme while a print is open, so obeying it then turns the app light behind the dialog.
@@ -156,6 +123,52 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     },
     [writePending],
   );
+
+  // Load settings from store on mount. Declared after writePending, which
+  // persists a color scheme carried over from the theme presets plugin.
+  useEffect(() => {
+    let cancelled = false;
+
+    async function init() {
+      try {
+        const store = await openStore("settings.json");
+        storeRef.current = store;
+        const saved = await store.get<Partial<Settings>>(SETTINGS_STORE_KEY);
+        const base = settingsFromStored(saved);
+        const carried = await carriedOverColorScheme(saved);
+        const migrated = carried
+          ? { ...base, appearance: { ...base.appearance, colorScheme: carried } }
+          : base;
+        // API keys live in the OS keychain, not the store: migrate any legacy
+        // plaintext keys out of settings.json and load the stored ones.
+        const merged = await loadSecrets(store, SETTINGS_STORE_KEY, migrated);
+        if (!cancelled) {
+          setSettings(merged);
+          applyTheme(merged.appearance.theme);
+          applyCSSVariables(merged);
+        }
+        if (!cancelled && carried) {
+          // Merged like any write, so another window's edits survive, and the
+          // plugin's copy goes only once the new one is on disk.
+          pendingRef.current = merged;
+          changedPathsRef.current.add("appearance.colorScheme");
+          void removeLegacyPresetOnceWritten(writePending());
+        }
+      } catch (err) {
+        console.error("Failed to load settings:", err);
+        applyTheme(DEFAULT_SETTINGS.appearance.theme);
+        applyCSSVariables(DEFAULT_SETTINGS);
+      }
+      if (!cancelled) setLoaded(true);
+    }
+
+    init();
+    return () => {
+      cancelled = true;
+    };
+  }, [writePending]);
+
+  useSettingsSyncedReload({ loaded, storeRef, changedPathsRef, setSettings });
 
   // Persist any update still inside the debounce window; called before the
   // window is allowed to close so a just-changed setting is not lost.

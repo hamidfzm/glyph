@@ -1,5 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { escapeXml } from "./escape";
+import { escapeStyleText, escapeXml } from "./escape";
+
+describe("escapeStyleText", () => {
+  it("escapes every closing-tag opener, whatever the case", () => {
+    expect(escapeStyleText('a{content:"</style></STYLE>"}')).toBe(
+      String.raw`a{content:"<\/style><\/STYLE>"}`,
+    );
+  });
+
+  it("leaves other CSS untouched", () => {
+    expect(escapeStyleText("a>b{width:calc(1px / 2)}")).toBe("a>b{width:calc(1px / 2)}");
+  });
+});
 
 describe("escapeXml", () => {
   it("escapes the five reserved markup characters", () => {

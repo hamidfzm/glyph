@@ -26,10 +26,24 @@
   "appearance": {
     "theme": {
       "title": "Theme",
-      "label": "Color Theme",
+      "label": "Mode",
       "system": "System",
       "light": "Light",
       "dark": "Dark"
+    },
+    "colorScheme": {
+      "label": "Color Scheme",
+      "default": "Default",
+      "unavailable": "{{name}} (unavailable)",
+      "more": "More color schemes come from plugins.",
+      "manage": "Manage",
+      "note": {
+        "off": "{{scheme}} comes from {{plugin}}, which is turned off. Glyph is using the default colors.",
+        "notInstalled": "{{scheme}} comes from {{plugin}}, which isn't installed. Glyph is using the default colors.",
+        "unavailable": "{{plugin}} isn't offering {{scheme}} right now. Glyph is using the default colors."
+      },
+      "turnOn": "Turn on",
+      "openPlugins": "Open Plugins"
     },
     "typography": {
       "title": "Typography"

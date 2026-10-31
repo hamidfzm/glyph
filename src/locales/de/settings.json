@@ -26,10 +26,24 @@
   "appearance": {
     "theme": {
       "title": "Theme",
-      "label": "Farb-Theme",
+      "label": "Modus",
       "system": "System",
       "light": "Hell",
       "dark": "Dunkel"
+    },
+    "colorScheme": {
+      "label": "Farbschema",
+      "default": "Standard",
+      "unavailable": "{{name}} (nicht verfügbar)",
+      "more": "Weitere Farbschemata kommen aus Plugins.",
+      "manage": "Verwalten",
+      "note": {
+        "off": "{{scheme}} stammt aus {{plugin}}, das ausgeschaltet ist. Glyph verwendet die Standardfarben.",
+        "notInstalled": "{{scheme}} stammt aus {{plugin}}, das nicht installiert ist. Glyph verwendet die Standardfarben.",
+        "unavailable": "{{plugin}} bietet {{scheme}} derzeit nicht an. Glyph verwendet die Standardfarben."
+      },
+      "turnOn": "Einschalten",
+      "openPlugins": "Plugins öffnen"
     },
     "typography": {
       "title": "Typografie"

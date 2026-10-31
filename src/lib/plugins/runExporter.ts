@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { collectStyles } from "@/lib/export/collectStyles";
+import { escapeStyleText } from "@/lib/export/escape";
 import { pickSave } from "@/lib/pickers";
 import { prepareRenderedHtml } from "./renderedHtml";
 import type { ExporterContribution } from "./types";
@@ -35,9 +36,10 @@ export async function runExporter({
   if (!path) return; // user cancelled
 
   onDestinationPicked?.();
+  // Exporters inline it in a <style>, and the styles may be another plugin's.
   const output = await exporter.build(html, {
     title: meta.title,
-    css: collectStyles(),
+    css: escapeStyleText(collectStyles()),
     dark: document.documentElement.classList.contains("dark"),
   });
   if (typeof output === "string") {

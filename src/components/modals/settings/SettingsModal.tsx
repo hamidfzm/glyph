@@ -116,7 +116,7 @@ export function SettingsModal({ open, onClose, tab, onTabChange }: SettingsModal
           </nav>
 
           <div className="settings-body">
-            {tab === "appearance" && <AppearanceTab />}
+            {tab === "appearance" && <AppearanceTab onOpenPlugins={() => onTabChange("plugins")} />}
             {tab === "layout" && <LayoutTab />}
             {tab === "behavior" && <BehaviorTab />}
             {tab === "markdown" && <MarkdownTab />}

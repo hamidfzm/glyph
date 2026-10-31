@@ -39,6 +39,7 @@ describe("sandboxed plugins", () => {
     worker.emit({ type: "add-styles", css: ".x{}" });
     worker.emit({ type: "register-exporter", id: "e1", label: "E", extension: "txt" });
     worker.emit({ type: "register-site-theme", id: "t1", label: "T", css: "body{}" });
+    worker.emit({ type: "register-color-scheme", id: "ocean", label: "Ocean", css: ":root{}" });
     worker.emit({ type: "notify", message: "hi from box" });
 
     expect(host.commands.list().map((c) => c.id)).toEqual(["c1"]);
@@ -47,6 +48,7 @@ describe("sandboxed plugins", () => {
     expect(host.exporters.list().map((e) => e.id)).toEqual(["e1"]);
     expect(host.exporters.list().map((e) => e.pluginId)).toEqual(["com.x.demo"]);
     expect(host.siteThemes.list().map((t) => t.id)).toEqual(["t1"]);
+    expect(host.colorSchemes.list().map((s) => s.key)).toEqual(["com.x.demo:ocean"]);
     expect(notify).toHaveBeenCalledWith("hi from box");
 
     host.unload("com.x.demo");
@@ -54,6 +56,7 @@ describe("sandboxed plugins", () => {
     expect(host.styles.list()).toHaveLength(0);
     expect(host.exporters.list()).toHaveLength(0);
     expect(host.siteThemes.list()).toHaveLength(0);
+    expect(host.colorSchemes.list()).toHaveLength(0);
     expect(worker.terminated).toBe(true);
   });
 
@@ -140,6 +143,25 @@ describe("sandboxed plugins", () => {
 
     expect(host.styles.list().map((s) => s.css)).toEqual([".x{color:red}"]);
     expect(errors).toHaveBeenCalledTimes(2);
+    errors.mockRestore();
+  });
+
+  it("drops a sandboxed color scheme that would make requests or is malformed", async () => {
+    const worker = new FakeWorker();
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    const host = createPluginHost(vi.fn(), undefined, undefined, undefined, spawnerFor(worker));
+
+    await host.load(boxed());
+    const scheme = (id: string, css: string) =>
+      worker.emit({ type: "register-color-scheme", id, label: "Scheme", css });
+    scheme("leaky", ':root{background:url("https://attacker.example/l")}');
+    scheme("escaped", ':root{background:\\75rl("https://attacker.example/e")}');
+    scheme("imported", '@import "https://attacker.example/x.css";');
+    scheme("", ":root{}");
+    scheme("ocean", ":root{--color-bg:#012}");
+
+    expect(host.colorSchemes.list().map((s) => s.key)).toEqual(["com.x.demo:ocean"]);
+    expect(errors).toHaveBeenCalledTimes(4);
     errors.mockRestore();
   });
 

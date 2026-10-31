@@ -10,6 +10,16 @@ export interface AppearanceSettings {
   contentWidth: "narrow" | "medium" | "wide" | "full";
   codeFont: string;
   codeTheme: "glyph" | "github" | "monokai" | "nord" | "solarized-light" | "solarized-dark";
+  colorScheme: ColorSchemeChoice;
+}
+
+// A plugin's color scheme, or the app's own palette ("default"). The label is
+// kept so the picker can name the scheme while its plugin is off. Read it
+// through readColorSchemeChoice: loading checks its types, not the id's form.
+export interface ColorSchemeChoice {
+  /** "default", or `<pluginId>:<schemeId>`. */
+  id: string;
+  label: string;
 }
 
 // How Files and Outline panels are arranged in folder tabs.
@@ -259,7 +269,7 @@ export interface CorePluginSettings {
   backlinks: boolean;
   /** Open Today's Note, with its per-workspace folder, file name pattern, and template. */
   dailyNotes: boolean;
-  /** Ready-made color schemes (Sepia, Solarized, High contrast), picked under its Settings row. */
+  /** Ready-made color schemes (Sepia, Solarized, High contrast), picked in Settings > Appearance. */
   themePresets: boolean;
 }
 
@@ -293,6 +303,7 @@ export const DEFAULT_SETTINGS: Settings = {
     contentWidth: "medium",
     codeFont: "",
     codeTheme: "glyph",
+    colorScheme: { id: "default", label: "" },
   },
   layout: {
     filesSidebarVisible: true,

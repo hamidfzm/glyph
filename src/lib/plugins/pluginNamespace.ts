@@ -15,6 +15,20 @@ export function isAppNamespace(namespace: string): boolean {
 
 const EXTERNAL_REFERENCE = /\burl\s*\(|\bimage-set\s*\(|@import\b/i;
 
+// A hex escape eats one whitespace after it, read once newlines are normalized.
+const CSS_ESCAPE = /\\([0-9a-f]{1,6})[ \t\n]?|\\([^\n])/gi;
+
+/** In one pass, as the tokenizer reads them: `\75rl(` is `url(`, `\\75rl(` is not. */
+function decodeCssEscapes(css: string): string {
+  return css
+    .replace(/\r\n?|\f/g, "\n")
+    .replace(CSS_ESCAPE, (_, hex: string | undefined, char: string) => {
+      if (hex === undefined) return char;
+      const codePoint = Number.parseInt(hex, 16);
+      return codePoint > 0x10ffff ? "\uFFFD" : String.fromCodePoint(codePoint);
+    });
+}
+
 /**
  * Whether a stylesheet reaches outside the document: `url()`, `image-set()`
  * and `@import` make requests, and a selector on an attribute (`a[href^=…]`,
@@ -22,5 +36,5 @@ const EXTERNAL_REFERENCE = /\burl\s*\(|\bimage-set\s*\(|@import\b/i;
  * holds. A sandboxed plugin's fetch is fenced, so its CSS must be too.
  */
 export function cssReachesOutside(css: string): boolean {
-  return EXTERNAL_REFERENCE.test(css);
+  return EXTERNAL_REFERENCE.test(decodeCssEscapes(css));
 }

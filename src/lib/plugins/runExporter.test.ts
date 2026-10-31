@@ -90,6 +90,24 @@ describe("runExporter", () => {
     });
   });
 
+  it("hands the exporter styles it can inline in a <style> element", async () => {
+    setBody();
+    const style = document.createElement("style");
+    style.textContent = '.x::after{content:"</style><script>alert(1)</script>"}';
+    document.head.append(style);
+    vi.mocked(pickSave).mockResolvedValue("/out.html");
+    const build = vi.fn<ExporterContribution["build"]>(async () => "deck");
+    try {
+      await runExporter({ exporter: exporter({ build }), content: null });
+    } finally {
+      style.remove();
+    }
+
+    const { css } = build.mock.calls[0][1];
+    expect(css).toContain(String.raw`<\/style><script>alert(1)<\/script>`);
+    expect(css).not.toContain("</");
+  });
+
   it("writes binary output via write_binary_file", async () => {
     setBody();
     vi.mocked(pickSave).mockResolvedValue("/out.bin");

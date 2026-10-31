@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { ColorSchemeStyle } from "@/components/plugins/ColorSchemeStyle";
 import { PluginStyles } from "@/components/plugins/PluginStyles";
 import { PluginsContext } from "@/contexts/PluginsContext";
 import { TabsContext, type TabsContextValue } from "@/contexts/TabsContext";
@@ -21,6 +22,7 @@ import { clearGraphView, loadGraphView } from "@/lib/graphViewStore";
 import { createRegistry } from "@/lib/plugins/registry";
 import type { StyleContribution } from "@/lib/plugins/types";
 import type { VaultSnapshot } from "@/lib/vault";
+import { colorSchemeHarness } from "@/test/colorSchemeHarness";
 import { graphOf } from "@/test/fixtures/graph";
 import { pluginsContextValue } from "@/test/fixtures/pluginsContext";
 import { restoreMatchMedia, stubMatchMedia } from "@/test/matchMedia";
@@ -190,7 +192,7 @@ describe("GraphView", () => {
     expect(ctx.arc).toHaveBeenCalledTimes(2);
   });
 
-  it("redraws in the colors a plugin stylesheet sets, such as a theme preset", () => {
+  it("redraws in the colors a plugin stylesheet sets", () => {
     const styles = createRegistry<StyleContribution>();
     const fills: string[] = [];
     Object.defineProperty(ctx, "fillStyle", { set: (value: string) => fills.push(value) });
@@ -206,6 +208,25 @@ describe("GraphView", () => {
       styles.register({ css: ":root { --color-text-primary: #123456; }" });
     });
     expect(fills).toContain("#123456");
+  });
+
+  it("redraws in the colors of the picked color scheme once its plugin offers it", () => {
+    const { wrapper, offer } = colorSchemeHarness({ saved: { id: "p:ink", label: "Ink" } });
+    const fills: string[] = [];
+    Object.defineProperty(ctx, "fillStyle", { set: (value: string) => fills.push(value) });
+    render(
+      <>
+        <GraphView graph={GRAPH} onOpenFile={vi.fn()} />
+        <ColorSchemeStyle />
+      </>,
+      { wrapper },
+    );
+    expect(fills).not.toContain("#654321");
+
+    act(() => {
+      offer("p", "ink", "Ink", ":root { --color-text-primary: #654321; }");
+    });
+    expect(fills).toContain("#654321");
   });
 
   it("hides itself from print output", () => {

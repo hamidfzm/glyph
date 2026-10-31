@@ -144,6 +144,40 @@ describe("createPluginHost plugin context", () => {
     expect(host.siteThemes.list()).toHaveLength(0);
   });
 
+  it("namespaces color schemes by plugin and removes them on unload", async () => {
+    const host = createPluginHost(vi.fn());
+    const offersOcean: PluginModule = {
+      activate(ctx) {
+        ctx.ui.addColorScheme({ id: "ocean", label: "Ocean", css: ":root{}" });
+      },
+    };
+
+    await host.load(installed(), importerFor(offersOcean));
+    await host.load(installed({ id: "com.y.other" }), importerFor(offersOcean));
+    expect(host.colorSchemes.list().map((s) => [s.key, s.pluginId, s.id, s.label])).toEqual([
+      ["com.x.demo:ocean", "com.x.demo", "ocean", "Ocean"],
+      ["com.y.other:ocean", "com.y.other", "ocean", "Ocean"],
+    ]);
+
+    host.unload("com.x.demo");
+    expect(host.colorSchemes.list().map((s) => s.key)).toEqual(["com.y.other:ocean"]);
+  });
+
+  it("refuses a malformed color scheme and rolls the activation back", async () => {
+    const host = createPluginHost(vi.fn());
+    const module: PluginModule = {
+      activate(ctx) {
+        ctx.ui.addColorScheme({ id: "ocean", label: "Ocean", css: ":root{}" });
+        ctx.ui.addColorScheme({ id: "reef", label: "", css: ":root{}" });
+      },
+    };
+
+    await expect(host.load(installed(), importerFor(module))).rejects.toThrow(
+      "a color scheme needs a non-empty id and label",
+    );
+    expect(host.colorSchemes.list()).toHaveLength(0);
+  });
+
   it("hydrates ctx.settings before activate and persists set() through the backend", async () => {
     const save = vi.fn();
     const backend = {

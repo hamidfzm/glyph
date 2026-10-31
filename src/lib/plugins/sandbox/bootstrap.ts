@@ -160,6 +160,17 @@ function buildContext(init) {
         postMessage({ type: "add-styles", css });
         return () => {};
       },
+      addColorScheme(scheme) {
+        // Pure data, like site themes: the host registry owns it, and the host
+        // drops a malformed one, so a missing scheme is relayed rather than thrown.
+        postMessage({
+          type: "register-color-scheme",
+          id: scheme?.id,
+          label: scheme?.label,
+          css: scheme?.css,
+        });
+        return () => {};
+      },
       // The other UiRegistryApi methods hand the plugin a live DOM
       // element to mount into, which a worker does not have and cannot be
       // given. So they are refused by name rather than left undefined, where

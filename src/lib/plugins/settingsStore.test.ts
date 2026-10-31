@@ -1,6 +1,6 @@
 import { getStore } from "@tauri-apps/plugin-store";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { loadPluginSettings, savePluginSetting } from "./settingsStore";
+import { loadPluginSettings, removePluginSetting, savePluginSetting } from "./settingsStore";
 
 const get = vi.fn();
 const set = vi.fn();
@@ -74,5 +74,17 @@ describe("savePluginSetting", () => {
     await expect(failed).rejects.toThrow("disk full");
     await next;
     expect(stored()).toEqual({ "c.d": { on: true } });
+  });
+
+  it("removes one key and nothing else", async () => {
+    const stored = memoryStore({ other: { keep: true }, "a.b": { old: 1, size: 12 } });
+    await removePluginSetting("a.b", "old");
+    expect(stored()).toEqual({ other: { keep: true }, "a.b": { size: 12 } });
+  });
+
+  it("takes a removal in turn with a save that overlaps it", async () => {
+    const stored = memoryStore({ "a.b": { old: 1, size: 12 } });
+    await Promise.all([savePluginSetting("a.b", "size", 14), removePluginSetting("a.b", "old")]);
+    expect(stored()).toEqual({ "a.b": { size: 14 } });
   });
 });

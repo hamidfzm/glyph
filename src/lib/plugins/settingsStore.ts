@@ -11,7 +11,8 @@ const KEY = "settings";
 // a save reads the key only after the previous save has finished.
 let lastSave: Promise<void> = Promise.resolve();
 
-type AllSettings = Record<string, Record<string, unknown>>;
+type OwnSettings = Record<string, unknown>;
+type AllSettings = Record<string, OwnSettings>;
 
 const isSettingsMap = (value: unknown): value is AllSettings =>
   value !== null && typeof value === "object";
@@ -30,20 +31,28 @@ export async function loadPluginSettings(pluginId: string): Promise<Record<strin
 /** Persist one key of a plugin's settings, leaving its other keys, and every
  *  other plugin's, as the store holds them now. */
 export function savePluginSetting(pluginId: string, key: string, value: unknown): Promise<void> {
-  const save = saveAfter(lastSave, pluginId, key, value);
+  return editInTurn(pluginId, (own) => ({ ...own, [key]: value }));
+}
+
+/** Drop one key of a plugin's settings, leaving the rest as the store holds them now. */
+export function removePluginSetting(pluginId: string, key: string): Promise<void> {
+  return editInTurn(pluginId, ({ [key]: _removed, ...rest }) => rest);
+}
+
+function editInTurn(pluginId: string, edit: (own: OwnSettings) => OwnSettings): Promise<void> {
+  const save = editAfter(lastSave, pluginId, edit);
   lastSave = save;
   return save;
 }
 
-async function saveAfter(
+async function editAfter(
   previous: Promise<void>,
   pluginId: string,
-  key: string,
-  value: unknown,
+  edit: (own: OwnSettings) => OwnSettings,
 ): Promise<void> {
   // A failed save rejects only its own caller; this save still runs.
   await previous.catch(() => {});
   const all = await readAll();
   const own = all[pluginId] && typeof all[pluginId] === "object" ? all[pluginId] : {};
-  await writePluginsKey(KEY, { ...all, [pluginId]: { ...own, [key]: value } });
+  await writePluginsKey(KEY, { ...all, [pluginId]: edit(own) });
 }

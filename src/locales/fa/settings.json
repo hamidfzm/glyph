@@ -26,10 +26,24 @@
   "appearance": {
     "theme": {
       "title": "پوسته",
-      "label": "پوسته رنگی",
+      "label": "حالت",
       "system": "سیستم",
       "light": "روشن",
       "dark": "تیره"
+    },
+    "colorScheme": {
+      "label": "طرح رنگ",
+      "default": "پیش‌فرض",
+      "unavailable": "{{name}} (در دسترس نیست)",
+      "more": "طرح‌های رنگ بیشتر از افزونه‌ها می‌آیند.",
+      "manage": "مدیریت",
+      "note": {
+        "off": "{{scheme}} از {{plugin}} می‌آید که خاموش است. Glyph از رنگ‌های پیش‌فرض استفاده می‌کند.",
+        "notInstalled": "{{scheme}} از {{plugin}} می‌آید که نصب نیست. Glyph از رنگ‌های پیش‌فرض استفاده می‌کند.",
+        "unavailable": "{{plugin}} اکنون {{scheme}} را ارائه نمی‌دهد. Glyph از رنگ‌های پیش‌فرض استفاده می‌کند."
+      },
+      "turnOn": "روشن کردن",
+      "openPlugins": "باز کردن افزونه‌ها"
     },
     "typography": {
       "title": "تایپوگرافی"

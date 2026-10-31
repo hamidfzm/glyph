@@ -11,7 +11,7 @@ import { getCliServeRequest } from "@/lib/cliServe";
  * The window is created hidden (`visible: false` in tauri.conf.json) so the
  * user never sees the blank white native window before the webview paints, nor
  * the geometry jump from the window-state plugin restoring size/position. We
- * wait until the persisted settings and the plugins (a theme preset or another
+ * wait until the persisted settings and the plugins (a color scheme or another
  * plugin stylesheet restyles the app) are loaded, let the browser paint one
  * themed frame, then show and focus the window.
  *

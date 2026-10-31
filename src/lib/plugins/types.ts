@@ -116,8 +116,9 @@ export interface PluginManifest {
   /**
    * Run in a dedicated worker instead of the app context. Sandboxed plugins
    * get no DOM and network fenced to their `network:` permissions, but only
-   * the non-UI API subset: commands, styles, exporters, file types, workspace,
-   * assets, spellcheck, settings, notify, and registering translations. No
+   * the non-UI API subset: commands, styles, color schemes, exporters, file
+   * types, workspace, assets, spellcheck, settings, notify, and registering
+   * translations. No
    * markdown pipeline, panel or overlay mounts, reading the rendered
    * document, app state (the active document, the vault, navigation), or
    * reading translations.
@@ -218,6 +219,25 @@ export interface StyleContribution {
   css: string;
 }
 
+/**
+ * 0.28.0: a color scheme for the picker in Settings > Appearance. Its CSS sets
+ * the app's color tokens on `:root` and `:root.dark`.
+ */
+export interface ColorSchemeContribution {
+  /** Unique within the plugin; two plugins may use the same id. */
+  id: string;
+  /** The scheme's name in the picker. */
+  label: string;
+  css: string;
+}
+
+/** A color scheme as the host holds it, stamped with the plugin that added it. */
+export interface ColorSchemeEntry extends ColorSchemeContribution {
+  pluginId: string;
+  /** `<pluginId>:<id>`, the value the Appearance setting stores. */
+  key: string;
+}
+
 /** A titled sidebar section contribution. */
 export interface SidebarPanelContribution extends MountContribution {
   /** Section heading shown above the panel in the sidebar. */
@@ -284,7 +304,10 @@ export interface WorkspaceSettingsPanelEntry extends WorkspaceSettingsPanelContr
 export interface ExportDocument {
   /** Plain text; escape it before putting it in markup. */
   title: string;
-  /** Every style rule the app applies, so the body HTML renders as it does in the app. */
+  /**
+   * Every style rule the app applies, so the body HTML renders as it does in
+   * the app. Safe to place inside a `<style>` element: `</` arrives as `<\/`.
+   */
   css: string;
   dark: boolean;
 }
@@ -352,8 +375,18 @@ export interface UiRegistryApi {
    */
   filterFileTree(filter: FileTreeFilter): Disposer;
   /**
-   * Inject a stylesheet after the app styles (theme plugins, custom CSS).
+   * 0.28.0: offer a color scheme in the Settings > Appearance picker. Only the
+   * scheme the user picks is injected, after the app styles and before
+   * {@link addStyles} sheets. Throws when the id or label is not a non-empty
+   * string or the css is not a string. In the sandbox such a scheme, or one
+   * whose CSS references a URL, is dropped with a console error instead.
    * Removed automatically when the plugin unloads.
+   */
+  addColorScheme(scheme: ColorSchemeContribution): Disposer;
+  /**
+   * Inject a stylesheet after the app styles (custom CSS; a scheme the user
+   * should be able to pick goes through {@link addColorScheme}). Removed
+   * automatically when the plugin unloads.
    */
   addStyles(css: string): Disposer;
 }
