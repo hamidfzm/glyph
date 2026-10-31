@@ -1,9 +1,14 @@
 import { useTranslation } from "react-i18next";
 import { useSettings } from "@/hooks/useSettings";
+import { ColorSchemeSetting } from "./ColorSchemeSetting";
 import { LanguageSetting } from "./LanguageSetting";
 import { Segmented } from "./Segmented";
 
-export function AppearanceTab() {
+interface AppearanceTabProps {
+  onOpenPlugins: () => void;
+}
+
+export function AppearanceTab({ onOpenPlugins }: AppearanceTabProps) {
   const { t } = useTranslation("settings");
   const { settings, updateSettings } = useSettings();
   const { appearance } = settings;
@@ -26,6 +31,7 @@ export function AppearanceTab() {
             onChange={(v) => updateSettings("appearance.theme", v)}
           />
         </div>
+        <ColorSchemeSetting onOpenPlugins={onOpenPlugins} />
       </div>
 
       <div className="settings-section">

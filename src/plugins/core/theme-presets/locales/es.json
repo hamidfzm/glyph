@@ -1,7 +1,5 @@
 {
-  "label": "Esquema",
   "presets": {
-    "none": "Ninguno",
     "sepia": "Sepia",
     "solarized": "Solarized",
     "high-contrast": "Alto contraste"

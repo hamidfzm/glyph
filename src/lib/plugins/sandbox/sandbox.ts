@@ -1,6 +1,7 @@
 import { PLUGIN_API_VERSION } from "@/lib/plugins/apiVersion";
 import type { Disposer } from "@/lib/plugins/disposer";
 import type {
+  ColorSchemeContribution,
   CommandContribution,
   ExporterContribution,
   FileTypeContribution,
@@ -26,6 +27,7 @@ export type WorkerSpawner = (bootstrapSource: string) => WorkerLike;
 export interface SandboxHostApi {
   registerCommand(command: CommandContribution): void;
   addStyles(css: string): void;
+  addColorScheme(scheme: ColorSchemeContribution): void;
   registerExporter(exporter: ExporterContribution): void;
   registerSiteTheme(theme: SiteThemeContribution): void;
   registerFileType(fileType: FileTypeContribution): void;
@@ -108,6 +110,15 @@ export function startSandbox(
           break;
         case "add-styles":
           api.addStyles(data.css);
+          break;
+        case "register-color-scheme":
+          // Worker data is untrusted: a malformed scheme is refused, not
+          // thrown out of the message handler.
+          try {
+            api.addColorScheme({ id: data.id, label: data.label, css: data.css });
+          } catch (err) {
+            console.error(`Sandboxed plugin ${plugin.id} registered a bad color scheme:`, err);
+          }
           break;
         case "register-translations":
           api.registerTranslations(data.locale, data.namespace, data.resources);

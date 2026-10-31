@@ -3,6 +3,7 @@ import { registerDictionarySource } from "@/lib/spellcheck/dictionarySources";
 import { PLUGIN_API_VERSION } from "./apiVersion";
 import { onPluginAppStateChange, pluginAppState } from "./appState";
 import { createAssetsApi } from "./assetsApi";
+import { colorSchemeEntry } from "./colorSchemes";
 import type { Disposer, DisposerBag } from "./disposer";
 import { registerFileType } from "./fileTypes";
 import type { PluginSettingsBackend } from "./host";
@@ -12,6 +13,7 @@ import type { Registry } from "./registry";
 import { prepareRenderedHtml } from "./renderedHtml";
 import { staticRenderers } from "./staticRenderers";
 import type {
+  ColorSchemeEntry,
   CommandEntry,
   ExporterEntry,
   FencedRendererContribution,
@@ -44,6 +46,7 @@ export interface ContextRegistries {
   settingsPanels: Registry<SettingsPanelContribution>;
   workspaceSettingsPanels: Registry<WorkspaceSettingsPanelEntry>;
   styles: Registry<StyleContribution>;
+  colorSchemes: Registry<ColorSchemeEntry>;
   exporters: Registry<ExporterEntry>;
   siteThemes: Registry<SiteThemeContribution>;
 }
@@ -137,6 +140,7 @@ export function buildPluginContext({
     settingsPanels,
     workspaceSettingsPanels,
     styles,
+    colorSchemes,
     exporters,
     siteThemes,
   } = registries;
@@ -166,6 +170,9 @@ export function buildPluginContext({
       addWorkspaceSettingsPanel(panel) {
         const entry = { ...panel, pluginId: plugin.id };
         return tracked(workspaceSettingsPanels.register, bag)(entry);
+      },
+      addColorScheme(scheme) {
+        return tracked(colorSchemes.register, bag)(colorSchemeEntry(plugin.id, scheme));
       },
       addStyles(css) {
         return tracked(styles.register, bag)({ css });

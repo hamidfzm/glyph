@@ -34,6 +34,7 @@ export type WorkerMessage =
       when?: "workspace";
     }
   | { type: "add-styles"; css: string }
+  | { type: "register-color-scheme"; id: string; label: string; css: string }
   | {
       type: "register-translations";
       locale: string;

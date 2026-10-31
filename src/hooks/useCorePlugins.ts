@@ -8,13 +8,13 @@ import type { PluginHost } from "@/lib/plugins/host";
 /**
  * Keeps the host's core plugins in line with their Settings toggles: loads the
  * enabled ones and unloads the rest, at startup and on every toggle, with no
- * restart. Returns whether the first pass has settled; community plugins load
- * after it.
+ * restart. Returns whether the first pass has settled (community plugins load
+ * after it) and the core plugins that are on but failed their last load.
  */
 export function useCorePlugins(
   host: PluginHost,
   pushToast: (message: string, tone?: "error") => void,
-): boolean {
+): { ready: boolean; failed: readonly string[] } {
   const { t } = useTranslation("plugins");
   // A ref, so a language switch does not re-run the load pass (and retry a
   // failed load with another toast).
@@ -23,21 +23,30 @@ export function useCorePlugins(
   const { settings, loaded } = useSettings();
   const enabled = settings.corePlugins;
   const [ready, setReady] = useState(false);
+  const [failed, setFailed] = useState<readonly string[]>([]);
 
   useEffect(() => {
     if (!loaded) return;
     let cancelled = false;
+    const markFailed = (id: string) => setFailed((ids) => (ids.includes(id) ? ids : [...ids, id]));
+    const clearFailed = (id: string) =>
+      setFailed((ids) => (ids.includes(id) ? ids.filter((other) => other !== id) : ids));
     const active = new Set(host.listLoaded().map((plugin) => plugin.id));
     void Promise.all(
       CORE_PLUGINS.map(async (core) => {
-        // unload also cancels a load still in flight from an earlier toggle.
-        if (!enabled[core.settingsKey]) return host.unload(core.id);
+        if (!enabled[core.settingsKey]) {
+          clearFailed(core.id);
+          // unload also cancels a load still in flight from an earlier toggle.
+          return host.unload(core.id);
+        }
         if (active.has(core.id)) return;
         try {
           await host.load(coreInstalledPlugin(core), core.load);
+          if (!cancelled) clearFailed(core.id);
         } catch (err) {
           console.error(`Failed to load core plugin ${core.id}:`, err);
           pushToast(tRef.current("toast.error", { message: errorMessage(err) }), "error");
+          if (!cancelled) markFailed(core.id);
         }
       }),
     ).then(() => {
@@ -58,5 +67,5 @@ export function useCorePlugins(
     [host],
   );
 
-  return ready;
+  return { ready, failed };
 }

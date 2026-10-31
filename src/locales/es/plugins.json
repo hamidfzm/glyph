@@ -69,7 +69,7 @@
     },
     "themePresets": {
       "name": "Esquemas de color",
-      "description": "Esquemas de color listos para usar, más allá de claro y oscuro: Sepia, Solarized y Alto contraste, cada uno con una variante clara y otra oscura."
+      "description": "Esquemas de color listos para usar, más allá de claro y oscuro: Sepia, Solarized y Alto contraste, cada uno con una variante clara y otra oscura. Elige uno en Ajustes > Apariencia."
     }
   }
 }
