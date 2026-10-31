@@ -27,6 +27,7 @@ function registries(): ContextRegistries {
     settingsPanels: createRegistry(),
     workspaceSettingsPanels: createRegistry(),
     styles: createRegistry(),
+    colorSchemes: createRegistry(),
     exporters: createRegistry(),
     siteThemes: createRegistry(),
   };

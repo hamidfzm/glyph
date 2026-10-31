@@ -60,7 +60,7 @@ describe("daily notes core plugin lifecycle", () => {
     const load = vi.spyOn(daily, "load");
     const { result, contributions } = renderCore(settingsValue(false));
 
-    await waitFor(() => expect(result.current).toBe(true));
+    await waitFor(() => expect(result.current.ready).toBe(true));
     expect(load).not.toHaveBeenCalled();
     expect(contributions()).toEqual(OFF);
   });

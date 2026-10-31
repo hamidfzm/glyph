@@ -25,10 +25,24 @@
   "appearance": {
     "theme": {
       "title": "Tema",
-      "label": "Tema de color",
+      "label": "Modo",
       "system": "Sistema",
       "light": "Claro",
       "dark": "Oscuro"
+    },
+    "colorScheme": {
+      "label": "Esquema de color",
+      "default": "Predeterminado",
+      "unavailable": "{{name}} (no disponible)",
+      "more": "Hay más esquemas de color en los complementos.",
+      "manage": "Gestionar",
+      "note": {
+        "off": "{{scheme}} viene de {{plugin}}, que está desactivado. Glyph usa los colores predeterminados.",
+        "notInstalled": "{{scheme}} viene de {{plugin}}, que no está instalado. Glyph usa los colores predeterminados.",
+        "unavailable": "{{plugin}} no ofrece {{scheme}} en este momento. Glyph usa los colores predeterminados."
+      },
+      "turnOn": "Activar",
+      "openPlugins": "Abrir complementos"
     },
     "typography": {
       "title": "Tipografía"

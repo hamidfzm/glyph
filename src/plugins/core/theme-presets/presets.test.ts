@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { PRESET_CSS, PRESET_IDS, readPreset } from "./presets";
+import { PRESET_CSS } from "./presets";
 
 // Vitest does not process CSS, so the stylesheets are read from disk.
 const read = (file: string) => readFileSync(path.join(process.cwd(), file), "utf-8");
@@ -21,10 +21,6 @@ function rules(css: string): Map<string, string[]> {
 const appRules = rules(read("src/styles/app.css"));
 
 describe("theme presets", () => {
-  it("lists None first, then every preset it ships", () => {
-    expect(PRESET_IDS).toEqual(["none", "sepia", "solarized", "high-contrast"]);
-  });
-
   it.each(Object.keys(PRESET_CSS))(
     "%s sets every token the app's light and dark themes set, and nothing else",
     (preset) => {
@@ -41,16 +37,4 @@ describe("theme presets", () => {
       );
     },
   );
-
-  it("reads a stored preset it ships", () => {
-    expect(readPreset("sepia")).toBe("sepia");
-    expect(readPreset("high-contrast")).toBe("high-contrast");
-    expect(readPreset("none")).toBe("none");
-  });
-
-  it("falls back to None for anything else", () => {
-    for (const stored of [undefined, null, 42, "", "neon", "Sepia", "toString", ["sepia"]]) {
-      expect(readPreset(stored)).toBe("none");
-    }
-  });
 });
