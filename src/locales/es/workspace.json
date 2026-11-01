@@ -7,6 +7,7 @@
     "nestedUnderGit": "Esta carpeta está dentro del repositorio git en \"{{path}}\". Glyph trata un repositorio como un espacio de trabajo, por lo que algunas funciones del espacio de trabajo pueden afectar a todo el repositorio.",
     "saveFailed": "No se pudo guardar \"{{name}}\". Tus cambios siguen aquí; edita de nuevo para reintentar.",
     "saveTargetOpen": "\"{{name}}\" ya está abierto en otra pestaña. Guarda este documento con otro nombre o cambia a esa pestaña.",
+    "saveTargetOpenElsewhere": "\"{{name}}\" ya está abierto en otra ventana. Guarda este documento con otro nombre o cambia a esa ventana.",
     "indexIncompleteFiles": "El índice del espacio de trabajo está incompleto: solo se indexaron los primeros {{limit}} documentos, por lo que la lista de archivos, el grafo, los enlaces entrantes y los wikilinks pueden estar incompletos.",
     "indexIncompleteDepth": "El índice del espacio de trabajo está incompleto: las carpetas anidadas a más de {{limit}} niveles no se indexaron, por lo que la lista de archivos, el grafo, los enlaces entrantes y los wikilinks pueden estar incompletos.",
     "indexIncompleteLinks": "El índice del espacio de trabajo está incompleto: una nota contiene más de {{limit}} enlaces, por lo que solo se indexaron los primeros {{limit}} y el grafo, los enlaces entrantes y los wikilinks pueden estar incompletos.",

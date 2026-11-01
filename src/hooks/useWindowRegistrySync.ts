@@ -10,8 +10,9 @@ import { type Tab, tabPathOf, type Workspace } from "@/lib/tabs";
  * Routing uses both to keep a path in at most one window. A request for a note
  * another window already shows focuses that window instead of opening a second
  * live buffer over it, which would give the file two independent autosave
- * chains and let the later write discard the other window's edits. The AI
- * assistant's tools read only the workspace and tabs reported here.
+ * chains and let the later write discard the other window's edits. A Save As
+ * onto such a note is refused for the same reason. The AI assistant's tools
+ * read only the workspace and tabs reported here.
  *
  * Reports are suppressed until the window has finished initializing. A spawned
  * window is pre-registered against the path it was created for, and its first
