@@ -4,7 +4,6 @@ import { ColorSchemeStyle } from "@/components/plugins/ColorSchemeStyle";
 import { PluginStyles } from "@/components/plugins/PluginStyles";
 import { PluginsContext } from "@/contexts/PluginsContext";
 import { TabsContext, type TabsContextValue } from "@/contexts/TabsContext";
-import { useZoomApi } from "@/contexts/ZoomContext";
 import { ZoomProvider } from "@/contexts/ZoomProvider";
 import { DOUBLE_CLICK_MS } from "@/hooks/useGraphFocus";
 import {
@@ -27,6 +26,7 @@ import { graphOf } from "@/test/fixtures/graph";
 import { pluginsContextValue } from "@/test/fixtures/pluginsContext";
 import { restoreMatchMedia, stubMatchMedia } from "@/test/matchMedia";
 import { restoreRaf, stubRaf } from "@/test/raf";
+import { ZoomButtons } from "@/test/ZoomButtons";
 import { GraphView } from "./GraphView";
 
 // Shared spies/captures between the test and the hoisted mock factory.
@@ -404,22 +404,6 @@ describe("GraphView", () => {
   });
 
   it("zooms the camera from the Zoom In/Out/Actual-Size commands", () => {
-    const ZoomButtons = () => {
-      const api = useZoomApi();
-      return (
-        <>
-          <button type="button" onClick={() => api?.actions.zoomIn()}>
-            cmd-zoom-in
-          </button>
-          <button type="button" onClick={() => api?.actions.zoomOut()}>
-            cmd-zoom-out
-          </button>
-          <button type="button" onClick={() => api?.actions.zoomReset()}>
-            cmd-zoom-reset
-          </button>
-        </>
-      );
-    };
     render(
       <ZoomProvider>
         <GraphView graph={GRAPH} onOpenFile={vi.fn()} />

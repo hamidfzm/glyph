@@ -19,8 +19,9 @@ function wheelEvent(init: WheelEventInit, modifier?: "ctrlKey" | "metaKey"): Whe
  * Wrapper that binds the hook's stageRef to a real element (so the native wheel
  * listener attaches) and renders the live viewport into the DOM for assertions.
  */
-function Harness() {
+function Harness({ onRender }: { onRender?: (vp: ReturnType<typeof useCanvasViewport>) => void }) {
   const vp = useCanvasViewport();
+  onRender?.(vp);
   return (
     <div data-testid="stage" ref={vp.stageRef}>
       <span data-testid="zoom">{vp.viewport.zoom}</span>
@@ -29,6 +30,18 @@ function Harness() {
       </span>
     </div>
   );
+}
+
+function renderBoundStage() {
+  let current!: ReturnType<typeof useCanvasViewport>;
+  render(
+    <Harness
+      onRender={(vp) => {
+        current = vp;
+      }}
+    />,
+  );
+  return () => current;
 }
 
 describe("useCanvasViewport", () => {
@@ -70,14 +83,9 @@ describe("useCanvasViewport", () => {
   it("zoomBy pivots on the stage centre when a stage is bound", () => {
     // Stage bound: getBoundingClientRect() returns an object (zeroed in
     // happy-dom), so the rect-present branch runs and the pivot is (0,0) too.
-    let captured!: ReturnType<typeof useCanvasViewport>;
-    function ZoomHarness() {
-      captured = useCanvasViewport();
-      return <div ref={captured.stageRef} />;
-    }
-    render(<ZoomHarness />);
-    act(() => captured.zoomBy(2));
-    expect(captured.viewport).toEqual({ x: 0, y: 0, zoom: 2 });
+    const captured = renderBoundStage();
+    act(() => captured().zoomBy(2));
+    expect(captured().viewport).toEqual({ x: 0, y: 0, zoom: 2 });
   });
 
   it("toStagePoint returns client coords unchanged when the rect is zero/absent", () => {
@@ -98,19 +106,14 @@ describe("useCanvasViewport", () => {
   });
 
   it("fitTo on a bound stage with zero clientWidth/Height yields a neutral viewport", () => {
-    let captured!: ReturnType<typeof useCanvasViewport>;
-    function FitHarness() {
-      captured = useCanvasViewport();
-      return <div data-testid="stage" ref={captured.stageRef} />;
-    }
-    render(<FitHarness />);
+    const captured = renderBoundStage();
 
     const rect: Rect = { minX: 0, minY: 0, maxX: 200, maxY: 200 };
-    expect(() => act(() => captured.fitTo(rect))).not.toThrow();
-    expect(captured.viewport).toEqual({ x: 0, y: 0, zoom: 1 });
+    expect(() => act(() => captured().fitTo(rect))).not.toThrow();
+    expect(captured().viewport).toEqual({ x: 0, y: 0, zoom: 1 });
 
-    act(() => captured.fitTo(null));
-    expect(captured.viewport).toEqual({ x: 0, y: 0, zoom: 1 });
+    act(() => captured().fitTo(null));
+    expect(captured().viewport).toEqual({ x: 0, y: 0, zoom: 1 });
   });
 
   it("ctrl+wheel zooms via the native non-passive listener", () => {

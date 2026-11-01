@@ -3,6 +3,11 @@ import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useIsDarkMode } from "./useIsDarkMode";
 
+function Probe({ onRender }: { onRender: (isDark: boolean) => void }) {
+  onRender(useIsDarkMode());
+  return null;
+}
+
 describe("useIsDarkMode", () => {
   beforeEach(() => {
     document.documentElement.classList.remove("dark");
@@ -56,14 +61,18 @@ describe("useIsDarkMode", () => {
   it("returns false and skips observer setup when document is undefined", () => {
     const container = document.createElement("div");
     let captured: boolean | null = null;
-    function Probe() {
-      captured = useIsDarkMode();
-      return null;
-    }
     const root = createRoot(container);
     vi.stubGlobal("document", undefined);
     try {
-      act(() => root.render(<Probe />));
+      act(() =>
+        root.render(
+          <Probe
+            onRender={(isDark) => {
+              captured = isDark;
+            }}
+          />,
+        ),
+      );
     } finally {
       vi.unstubAllGlobals();
     }

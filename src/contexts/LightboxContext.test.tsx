@@ -23,6 +23,15 @@ function renderDoc() {
   );
 }
 
+function Probe({ onClick }: { onClick: (lightbox: ReturnType<typeof useLightbox>) => void }) {
+  const lightbox = useLightbox();
+  return (
+    <button type="button" onClick={() => onClick(lightbox)}>
+      probe
+    </button>
+  );
+}
+
 describe("LightboxProvider", () => {
   it("marks images as zoomable and opens the lightbox on click", () => {
     renderDoc();
@@ -67,20 +76,9 @@ describe("LightboxProvider", () => {
   });
 
   it("opens a single source directly via openSrc (for rendered diagrams)", () => {
-    function Probe() {
-      const lightbox = useLightbox();
-      return (
-        <button
-          type="button"
-          onClick={() => lightbox?.openSrc("data:image/svg+xml,<svg/>", "diagram")}
-        >
-          probe
-        </button>
-      );
-    }
     render(
       <LightboxProvider>
-        <Probe />
+        <Probe onClick={(lightbox) => lightbox?.openSrc("data:image/svg+xml,<svg/>", "diagram")} />
       </LightboxProvider>,
     );
     fireEvent.click(screen.getByText("probe"));
@@ -88,17 +86,9 @@ describe("LightboxProvider", () => {
   });
 
   it("does nothing when opening an image that isn't in the document", () => {
-    function Probe() {
-      const lightbox = useLightbox();
-      return (
-        <button type="button" onClick={() => lightbox?.open(document.createElement("img"))}>
-          probe
-        </button>
-      );
-    }
     render(
       <LightboxProvider>
-        <Probe />
+        <Probe onClick={(lightbox) => lightbox?.open(document.createElement("img"))} />
       </LightboxProvider>,
     );
     fireEvent.click(screen.getByText("probe"));

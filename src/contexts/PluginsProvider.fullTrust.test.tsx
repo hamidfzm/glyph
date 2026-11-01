@@ -3,10 +3,15 @@ import { ask } from "@tauri-apps/plugin-dialog";
 import { getStore } from "@tauri-apps/plugin-store";
 import { render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { usePluginsOptional } from "@/contexts/PluginsContext";
 import { PluginsProvider } from "@/contexts/PluginsProvider";
 import { PLUGIN_API_VERSION } from "@/lib/plugins/apiVersion";
-import { installedPlugin, Probe, resetPluginsMocks } from "@/test/pluginsHarness";
+import {
+  InstallProbe,
+  installedPlugin,
+  ManageProbe,
+  Probe,
+  resetPluginsMocks,
+} from "@/test/pluginsHarness";
 
 vi.mock("@/lib/pickers", () => ({
   pickPluginDir: vi.fn(),
@@ -33,20 +38,6 @@ describe("PluginsProvider full-trust plugins", () => {
       Promise.resolve(cmd === "list_plugins" ? [installedPlugin()] : undefined),
     );
     vi.mocked(ask).mockClear();
-
-    function ManageProbe() {
-      const p = usePluginsOptional();
-      if (!p) return null;
-      return (
-        <div>
-          <span data-testid="loaded">{p.loaded.map((x) => x.id).join(",")}</span>
-          <span data-testid="disabled">{p.disabled.join(",")}</span>
-          <button type="button" onClick={() => void p.setEnabled("com.x.demo", true)}>
-            on
-          </button>
-        </div>
-      );
-    }
 
     render(
       <PluginsProvider>
@@ -85,20 +76,6 @@ describe("PluginsProvider full-trust plugins", () => {
     vi.mocked(ask).mockClear();
     vi.mocked(ask).mockResolvedValueOnce(false);
 
-    function ManageProbe() {
-      const p = usePluginsOptional();
-      if (!p) return null;
-      return (
-        <div>
-          <span data-testid="loaded">{p.loaded.map((x) => x.id).join(",")}</span>
-          <span data-testid="disabled">{p.disabled.join(",")}</span>
-          <button type="button" onClick={() => void p.setEnabled("com.x.demo", true)}>
-            on
-          </button>
-        </div>
-      );
-    }
-
     render(
       <PluginsProvider>
         <ManageProbe />
@@ -130,18 +107,9 @@ describe("PluginsProvider full-trust plugins", () => {
       sha256: "a".repeat(64),
     };
 
-    function InstallProbe() {
-      const plugins = usePluginsOptional();
-      return (
-        <button type="button" onClick={() => void plugins?.installFromRegistry(entry)}>
-          market
-        </button>
-      );
-    }
-
     render(
       <PluginsProvider>
-        <InstallProbe />
+        <InstallProbe entry={entry} />
         <Probe />
       </PluginsProvider>,
     );
@@ -169,20 +137,6 @@ describe("PluginsProvider full-trust plugins", () => {
     vi.mocked(invoke).mockImplementation((cmd) =>
       Promise.resolve(cmd === "list_plugins" ? [installedPlugin({ sandbox: true })] : undefined),
     );
-
-    function ManageProbe() {
-      const p = usePluginsOptional();
-      if (!p) return null;
-      return (
-        <div>
-          <span data-testid="installed">{p.installed.map((x) => x.id).join(",")}</span>
-          <span data-testid="disabled">{p.disabled.join(",")}</span>
-          <button type="button" onClick={() => void p.uninstall("com.x.demo")}>
-            rm
-          </button>
-        </div>
-      );
-    }
 
     render(
       <PluginsProvider>
