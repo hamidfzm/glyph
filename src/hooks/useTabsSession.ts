@@ -34,7 +34,7 @@ interface UseTabsSessionParams {
   workspaceRef: RefObject<Workspace | null>;
   openFile: (path: string) => Promise<unknown>;
   openFolder: (root?: string, options?: OpenFolderOptions) => Promise<void>;
-  activateTabByPath: (path: string) => void;
+  activateTabByPath: (path: string) => Promise<void>;
   /** Opens what reached this window before it could listen, and reports
    *  whether there was anything (see `useOpenRequests`). */
   openStartupRequests: (injected: PendingOpen | null) => Promise<boolean>;
@@ -176,7 +176,7 @@ export function useTabsSession({
             await openFile(persisted.path);
           }
           if (options.activeTabPath) {
-            activateTabByPath(options.activeTabPath);
+            await activateTabByPath(options.activeTabPath);
           }
         } else if (options.reopenLastFile && options.recentFiles[0]) {
           await openFile(options.recentFiles[0]);

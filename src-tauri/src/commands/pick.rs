@@ -163,8 +163,8 @@ pub async fn pick_save_document<R: Runtime>(
 
 /// Website export: pick an output directory and grant it write-only, unless it
 /// is inside `root`, the workspace being exported. Decided here on resolved
-/// paths: the renderer can hold the two spelled differently (a verbatim
-/// prefix, a symlink, a short name), so it cannot compare them.
+/// paths: the renderer can hold the two spelled differently (a symlink, a
+/// mapped drive, a short name), so it cannot compare them.
 #[tauri::command]
 pub async fn pick_export_dir<R: Runtime>(
     app: AppHandle<R>,

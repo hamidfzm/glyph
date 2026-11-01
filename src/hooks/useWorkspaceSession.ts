@@ -30,7 +30,7 @@ interface UseWorkspaceSessionOptions {
   getScrollPosition: (id: string) => number | undefined;
   openFile: (path: string, options?: OpenFileOptions) => Promise<string | undefined>;
   openGraph: (root?: string) => void;
-  activateTabByPath: (path: string) => void;
+  activateTabByPath: (path: string) => Promise<void>;
 }
 
 /**
@@ -116,7 +116,7 @@ export function useWorkspaceSession({
       // A snapshot without sidebar state resyncs the panels to the global
       // setting, so the previous workspace's visibility never leaks in.
       sessionSidebarBridge()?.applyVisibility(session.sidebar ?? null);
-      if (session.activeTabPath) activateTabByPath(session.activeTabPath);
+      if (session.activeTabPath) await activateTabByPath(session.activeTabPath);
     },
     [activateTabByPath, openFile, openGraph, workspaceRef],
   );

@@ -10,6 +10,9 @@ import {
 } from "./TabsContext";
 import { TabsProvider } from "./TabsProvider";
 
+// These backends answer by command alone, and each path here is its file's one spelling.
+vi.mock("@/lib/documentPath", () => ({ documentPath: async (path: string) => path }));
+
 // Mock invoke so opening a file resolves with `content`.
 function mockInvokeOpening(content: string) {
   vi.mocked(invoke).mockImplementation(((cmd: string) => {

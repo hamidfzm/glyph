@@ -6,6 +6,7 @@ import { isCanvasFile } from "@/lib/canvasExtensions";
 import { isCliExportProcess } from "@/lib/cliExport";
 import { D2_EXTENSIONS } from "@/lib/d2Extensions";
 import { loadFileContent } from "@/lib/documentContent";
+import { documentPath } from "@/lib/documentPath";
 import { isImageFile } from "@/lib/imageExtensions";
 import { MARKDOWN_EXTENSIONS } from "@/lib/markdownExtensions";
 import { isNotebookFile, isSupportedFile, NOTEBOOK_EXTENSIONS } from "@/lib/notebookExtensions";
@@ -77,7 +78,7 @@ export function useOpenDocument({
   // undefined when nothing opened, so an implicit caller can tell "opened"
   // from "lives in another window".
   const openFile = useCallback(
-    async (path: string, options?: OpenFileOptions): Promise<string | undefined> => {
+    async (requested: string, options?: OpenFileOptions): Promise<string | undefined> => {
       // Defensive gate: never load an unsupported file. Glyph rendering treats
       // content as markdown (HTML included via the sanitizer), so opening a
       // random `.txt` / `.html` / etc. is a code-injection vector. Notebooks
@@ -91,14 +92,19 @@ export function useOpenDocument({
       // picker's own type filters already restricted selection to supported
       // files, so trust them here. (iOS returns `file://` URLs that keep the
       // extension and take the normal path.)
-      const isAndroidContentUri = path.startsWith("content://");
-      if (!isAndroidContentUri && !isSupportedFile(path) && !isImageFile(path)) {
-        console.warn(`Refusing to open unsupported file: ${path}`);
+      const isAndroidContentUri = requested.startsWith("content://");
+      if (!isAndroidContentUri && !isSupportedFile(requested) && !isImageFile(requested)) {
+        console.warn(`Refusing to open unsupported file: ${requested}`);
         return undefined;
       }
-      const existing = stateRef.current.tabs.find(
-        (tab) => tab.kind === "file" && tab.file.path === path,
-      );
+      const tabOn = (path: string) =>
+        stateRef.current.tabs.find((tab) => tab.kind === "file" && tab.file.path === path);
+      // Every guard below compares paths as strings, so the file takes its one
+      // spelling first: a second tab on it would break INV-1 and INV-3. A tab's
+      // own path already is that spelling, and a search hit jumps within it
+      // straight after this call, so that open activates in this tick.
+      const path = tabOn(requested) ? requested : await documentPath(requested);
+      const existing = tabOn(path);
       if (existing) {
         setState((prev) => withActiveTab(prev, existing.id));
         return existing.id;
@@ -146,10 +152,7 @@ export function useOpenDocument({
         // tab's; the registry is not refcounted, so removing it would kill
         // the live tab's auto-reload.
         if (options?.stillWanted && !options.stillWanted()) {
-          const nowOwned = stateRef.current.tabs.some(
-            (tab) => tab.kind === "file" && tab.file.path === path,
-          );
-          if (!nowOwned) invoke("unwatch_file", { path }).catch(() => {});
+          if (!tabOn(path)) invoke("unwatch_file", { path }).catch(() => {});
           return;
         }
         // Notebooks, canvases, images, and source documents open straight into
@@ -171,11 +174,10 @@ export function useOpenDocument({
             scrollTop: options?.initialScrollTop ?? 0,
           },
         };
-        setState((prev) => {
-          const match = prev.tabs.find((tab) => tab.kind === "file" && tab.file.path === path);
-          if (match) return withActiveTab(prev, match.id);
-          return withActiveTab({ ...prev, tabs: [...prev.tabs, newTab] }, id);
-        });
+        // Another open, or a Save As, can have put a tab on this path during the load.
+        const landed = tabOn(path);
+        if (landed) setState((prev) => withActiveTab(prev, landed.id));
+        else setState((prev) => withActiveTab({ ...prev, tabs: [...prev.tabs, newTab] }, id));
         if (!options?.silent) {
           addToRecent(path);
           // Remember workspace notes in `.glyph/state.json` (git-ignored) so
@@ -186,7 +188,7 @@ export function useOpenDocument({
             setWorkspaceLastFile(root, path).catch(() => {});
           }
         }
-        return id;
+        return landed?.id ?? id;
       } catch (err) {
         console.error("Failed to open file:", err);
       }
