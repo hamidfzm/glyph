@@ -1,109 +1,57 @@
-import { fireEvent, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import type { GlyphPluginContext, MountContribution } from "@/lib/plugins/types";
-import { PRESET_IDS, type PresetId } from "./presets";
+import type { ColorSchemeContribution, GlyphPluginContext } from "@/lib/plugins/types";
+import { PRESET_CSS } from "./presets";
 import plugin from "./themePresetsPlugin";
 
 // Vitest does not process CSS, so each preset gets a stand-in stylesheet.
-vi.mock("./presets", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("./presets")>()),
+vi.mock("./presets", () => ({
   PRESET_CSS: { sepia: "sepia-css", solarized: "solarized-css", "high-contrast": "contrast-css" },
 }));
 
-function fakeContext(stored: Record<string, unknown>) {
-  const values = { ...stored };
-  const sheets: string[] = [];
-  const panels: MountContribution[] = [];
+function fakeContext() {
+  const schemes: ColorSchemeContribution[] = [];
   return {
-    sheets,
-    panels,
+    schemes,
     registerTranslations: vi.fn(),
-    i18n: { t: (key: string) => key, onLanguageChange: vi.fn() },
-    settings: {
-      get: (key: string) => values[key],
-      set: vi.fn((key: string, value: unknown) => {
-        values[key] = value;
-      }),
-    },
+    i18n: { t: (key: string) => `[${key}]`, onLanguageChange: vi.fn() },
     ui: {
-      addStyles: vi.fn((css: string) => {
-        sheets.push(css);
+      addColorScheme: vi.fn((scheme: ColorSchemeContribution) => {
+        schemes.push(scheme);
         return () => {
-          sheets.splice(sheets.indexOf(css), 1);
+          schemes.splice(schemes.indexOf(scheme), 1);
         };
       }),
-      addSettingsPanel: vi.fn((panel: MountContribution) => {
-        panels.push(panel);
-        return () => {};
-      }),
     },
   };
 }
 
-async function activate(stored: Record<string, unknown> = {}) {
-  const ctx = fakeContext(stored);
+async function activate() {
+  const ctx = fakeContext();
   await plugin.activate(ctx as unknown as GlyphPluginContext);
-  const openPicker = () => {
-    const el = document.createElement("div");
-    ctx.panels[0].mount(el, () => {});
-    return within(el).getByRole<HTMLSelectElement>("combobox", {
-      name: /glyph\.core\.theme-presets:label/,
-    });
-  };
-  return { ctx, openPicker };
+  return ctx;
 }
 
-const pick = (select: HTMLSelectElement, preset: PresetId) =>
-  fireEvent.change(select, { target: { value: preset } });
-
 describe("Theme presets core plugin", () => {
-  it("leaves the app's look alone until a preset is picked", async () => {
-    const { ctx, openPicker } = await activate();
+  it("offers each preset as a color scheme, named in the current language", async () => {
+    const ctx = await activate();
 
-    expect(ctx.sheets).toEqual([]);
-    expect(ctx.panels).toHaveLength(1);
-    expect(openPicker().value).toBe("none");
-  });
-
-  it("applies the stored preset when it loads", async () => {
-    const { ctx, openPicker } = await activate({ preset: "solarized" });
-
-    expect(ctx.sheets).toEqual(["solarized-css"]);
-    expect(openPicker().value).toBe("solarized");
-  });
-
-  it("switches presets live, one stylesheet at a time, and stores the choice", async () => {
-    const { ctx, openPicker } = await activate();
-    const picker = openPicker();
-
-    pick(picker, "sepia");
-    expect(ctx.sheets).toEqual(["sepia-css"]);
-    expect(ctx.settings.set).toHaveBeenLastCalledWith("preset", "sepia");
-
-    pick(picker, "high-contrast");
-    expect(ctx.sheets).toEqual(["contrast-css"]);
-
-    pick(picker, "none");
-    expect(ctx.sheets).toEqual([]);
-    expect(ctx.settings.set).toHaveBeenLastCalledWith("preset", "none");
-  });
-
-  it("opens the picker on the preset picked since it loaded", async () => {
-    const { openPicker } = await activate();
-    pick(openPicker(), "sepia");
-
-    expect(openPicker().value).toBe("sepia");
-  });
-
-  it("treats a stored preset it does not ship as None", async () => {
-    const { ctx, openPicker } = await activate({ preset: "neon" });
-
-    expect(ctx.sheets).toEqual([]);
-    expect(openPicker().value).toBe("none");
+    expect(ctx.schemes).toEqual([
+      { id: "sepia", label: "[glyph.core.theme-presets:presets.sepia]", css: "sepia-css" },
+      {
+        id: "solarized",
+        label: "[glyph.core.theme-presets:presets.solarized]",
+        css: "solarized-css",
+      },
+      {
+        id: "high-contrast",
+        label: "[glyph.core.theme-presets:presets.high-contrast]",
+        css: "contrast-css",
+      },
+    ]);
   });
 
   it("names every preset in all five locales", async () => {
-    const { ctx } = await activate();
+    const ctx = await activate();
     const calls = ctx.registerTranslations.mock.calls;
 
     expect(calls.map(([locale, namespace]) => [locale, namespace])).toEqual([
@@ -114,8 +62,8 @@ describe("Theme presets core plugin", () => {
       ["zh", "glyph.core.theme-presets"],
     ]);
     for (const [, , resources] of calls) {
-      expect(Object.keys(resources).sort()).toEqual(["label", "presets"]);
-      expect(Object.keys(resources.presets).sort()).toEqual([...PRESET_IDS].sort());
+      expect(Object.keys(resources)).toEqual(["presets"]);
+      expect(Object.keys(resources.presets).sort()).toEqual(Object.keys(PRESET_CSS).sort());
     }
   });
 });

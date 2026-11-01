@@ -22,6 +22,7 @@ function apiStub(): SandboxHostApi {
   return {
     registerCommand: vi.fn(),
     addStyles: vi.fn(),
+    addColorScheme: vi.fn(),
     registerExporter: vi.fn(),
     registerSiteTheme: vi.fn(),
     registerFileType: vi.fn(),
@@ -193,6 +194,28 @@ describe("startSandbox", () => {
         extensions: "md" as unknown as string[],
         language: "x",
       }),
+    ).not.toThrow();
+  });
+
+  it("bridges a color scheme as pure data", async () => {
+    const { worker, api } = await startActivated();
+    worker.emit({ type: "register-color-scheme", id: "ocean", label: "Ocean", css: ":root{}" });
+    expect(api.addColorScheme).toHaveBeenCalledWith({
+      id: "ocean",
+      label: "Ocean",
+      css: ":root{}",
+    });
+  });
+
+  it("logs and drops a malformed color scheme instead of throwing out of the bridge", async () => {
+    expectConsole(/registered a bad color scheme/);
+    const api = apiStub();
+    vi.mocked(api.addColorScheme).mockImplementation(() => {
+      throw new Error("invalid");
+    });
+    const { worker } = await startActivated(api);
+    expect(() =>
+      worker.emit({ type: "register-color-scheme", id: "", label: "Ocean", css: "" }),
     ).not.toThrow();
   });
 
