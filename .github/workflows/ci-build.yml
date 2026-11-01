@@ -90,6 +90,20 @@ jobs:
         if: matrix.platform == 'windows-latest'
         shell: pwsh
         run: ./scripts/preview-handler-smoke.ps1
+      # Its unsigned fixture is the glyph.exe this leg just built.
+      - name: WebView2 signature check test
+        if: matrix.platform == 'windows-latest'
+        shell: pwsh
+        run: ./scripts/webview2-signature-check.test.ps1
+      # The release builds this MSI too, so a push to main proves it first. A
+      # pull request skips it: it downloads the 200 MB WebView2 installer.
+      - name: Offline MSI build and preview handler smoke test
+        if: matrix.platform == 'windows-latest' && github.event_name != 'pull_request'
+        timeout-minutes: 20
+        shell: pwsh
+        run: |
+          ./scripts/build-offline-msi.ps1
+          ./scripts/preview-handler-smoke.ps1 -Path (Get-Item src-tauri/target/release/bundle/msi-offline/*.msi).FullName
       # Checks the .app embeds the Quick Look extension signed and sandboxed,
       # and that PlugInKit accepts its ad-hoc signature.
       - name: Quick Look smoke test
