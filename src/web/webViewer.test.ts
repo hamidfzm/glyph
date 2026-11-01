@@ -2,13 +2,22 @@ import { screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { i18n } from "@/lib/i18n";
 import { decodeDocument, encodeDocument } from "@/lib/linkCodec";
+import { deferred } from "@/test/deferred";
+import { pickedFile } from "@/test/pickedFile";
 import { startWebViewer } from "./webViewer";
 
 vi.mock("@/preview/renderPreview", () => ({
   renderPreview: vi.fn((content: string) =>
-    Promise.resolve(`<p>${content.replaceAll("&", "&amp;").replaceAll("<", "&lt;")}</p>`),
+    Promise.resolve({
+      html: `<p>${content.replaceAll("&", "&amp;").replaceAll("<", "&lt;")}</p>`,
+      droppedImages: 0,
+    }),
   ),
 }));
+
+const { renderPreview } = await import("@/preview/renderPreview");
+const actualRender =
+  await vi.importActual<typeof import("@/preview/renderPreview")>("@/preview/renderPreview");
 
 vi.mock("@/lib/linkCodec", async (importOriginal) => {
   const original = await importOriginal<typeof import("@/lib/linkCodec")>();
@@ -36,12 +45,17 @@ async function start(hash = "") {
   const copyButton = screen.getByRole<HTMLButtonElement>("button", {
     name: i18n.t("preview.copyLink", { lng: "en" }),
   });
+  // By text: a hidden button has no accessible name.
+  const imagesButton = screen.getByText<HTMLButtonElement>(
+    i18n.t("preview.showImages", { lng: "en" }),
+  );
+  const folderInput = document.querySelectorAll<HTMLInputElement>("input[type=file]")[1];
   const status = document.querySelector<HTMLElement>("[role=status]")!;
-  return { root, emptyState, fileInput, copyButton, status };
+  return { root, emptyState, fileInput, copyButton, imagesButton, folderInput, status };
 }
 
-function pick(input: HTMLInputElement, file: File) {
-  Object.defineProperty(input, "files", { value: [file], configurable: true });
+function pick(input: HTMLInputElement, ...files: File[]) {
+  Object.defineProperty(input, "files", { value: files, configurable: true });
   input.dispatchEvent(new Event("change"));
 }
 
@@ -354,5 +368,184 @@ describe("startWebViewer", () => {
     await vi.waitFor(() => expect(root.textContent).toBe("# Still not"));
     expect(setItem).not.toHaveBeenCalled();
     expect(document.cookie).toBe("");
+  });
+});
+
+describe("images from a picked folder", () => {
+  // By path: two files of one name compare equal.
+  let created: string[] = [];
+
+  async function link(markdown: string) {
+    return `#${await encodeDocument(markdown)}`;
+  }
+
+  // Opens a document whose relative images need a folder, and opens the picker for it.
+  async function startOffering(markdown: string) {
+    const viewer = await start(await link(markdown));
+    await vi.waitFor(() => expect(viewer.imagesButton.hidden).toBe(false));
+    vi.spyOn(viewer.folderInput, "click").mockImplementation(() => {});
+    viewer.imagesButton.click();
+    return viewer;
+  }
+
+  beforeEach(() => {
+    created = [];
+    // The real pipeline, so the plugin decides which images a folder could hold.
+    vi.mocked(renderPreview).mockImplementation(actualRender.renderPreview);
+    vi.spyOn(URL, "createObjectURL").mockImplementation((file) => {
+      created.push((file as File).webkitRelativePath);
+      return `blob:picked/${created.length}`;
+    });
+    vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.mocked(renderPreview).mockReset();
+  });
+
+  it("offers a folder only for a document with relative images", async () => {
+    const { root, fileInput, imagesButton, status } = await start(await link("![shot](shot.png)"));
+    await vi.waitFor(() => expect(imagesButton.hidden).toBe(false));
+    expect(status.textContent).toBe(t("preview.imagesNeedFolder"));
+
+    for (const markdown of ["# No images", "![far](https://example.com/far.png) No images"]) {
+      pick(fileInput, new File([markdown], "other.md"));
+      await vi.waitFor(() => expect(root.textContent).toContain("No images"));
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      expect(imagesButton.hidden).toBe(true);
+      expect(status.textContent).toBe("");
+    }
+  });
+
+  it("resolves images from where the opened file sits in the picked folder", async () => {
+    const markdown = "![shot](shot.png)";
+    const { root, fileInput, folderInput, imagesButton } = await start();
+    vi.spyOn(folderInput, "click").mockImplementation(() => {});
+    pick(fileInput, new File([markdown], "doc.md", { lastModified: 1 }));
+    await vi.waitFor(() => expect(imagesButton.hidden).toBe(false));
+    imagesButton.click();
+
+    pick(
+      folderInput,
+      pickedFile("repo/shot.png"),
+      pickedFile("repo/docs/doc.md", markdown),
+      pickedFile("repo/docs/shot.png"),
+    );
+    await vi.waitFor(() => expect(root.querySelector("img")).not.toBeNull());
+    expect(created).toEqual(["repo/docs/shot.png"]);
+  });
+
+  it("shows each image the picked folder holds and leaves the rest as alt text", async () => {
+    const { root, folderInput, imagesButton, status } = await startOffering(
+      "![shot](shot.png) ![nested](assets/nested.png) ![gone](gone.png)",
+    );
+    expect(folderInput.click).toHaveBeenCalledTimes(1);
+    expect(folderInput.webkitdirectory).toBe(true);
+    pick(
+      folderInput,
+      pickedFile("docs/shot.png"),
+      pickedFile("docs/assets/nested.png"),
+      pickedFile("docs/notes.md"),
+    );
+    expect(folderInput.value).toBe("");
+
+    await vi.waitFor(() => expect(root.querySelectorAll("img")).toHaveLength(2));
+    const sources = Array.from(root.querySelectorAll("img"), (image) => image.getAttribute("src"));
+    expect(sources).toEqual(["blob:picked/1", "blob:picked/2"]);
+    expect(created).toEqual(["docs/shot.png", "docs/assets/nested.png"]);
+    expect(root.textContent).toContain("gone");
+    expect(status.textContent).toBe("");
+    // Another folder may hold the rest.
+    expect(imagesButton.hidden).toBe(false);
+  });
+
+  it("ignores a folder the button did not ask for", async () => {
+    const { root, folderInput, imagesButton } = await start(await link("![shot](shot.png)"));
+    await vi.waitFor(() => expect(imagesButton.hidden).toBe(false));
+    pick(folderInput, pickedFile("docs/shot.png"));
+    Object.defineProperty(folderInput, "files", { value: null, configurable: true });
+    folderInput.dispatchEvent(new Event("change"));
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(URL.createObjectURL).not.toHaveBeenCalled();
+    expect(root.querySelector("img")).toBeNull();
+  });
+
+  it("hands focus to the document when the next one hides the focused button", async () => {
+    const { root, folderInput, imagesButton } = await startOffering("![shot](shot.png)");
+    pick(folderInput, pickedFile("docs/shot.png"));
+    imagesButton.focus();
+    navigateTo(await link("# Next"));
+    expect(imagesButton.hidden).toBe(true);
+    expect(document.activeElement).toBe(root);
+  });
+
+  it("says so when the picked folder holds none of the document's images", async () => {
+    const { root, folderInput, status } = await startOffering("![shot](shot.png)");
+    pick(folderInput, pickedFile("docs/other.png"));
+    await vi.waitFor(() => expect(status.textContent).toBe(t("preview.noFolderImages")));
+    expect(root.querySelector("img")).toBeNull();
+  });
+
+  it("revokes the picked images when another document or the empty state opens", async () => {
+    const { root, emptyState, folderInput, imagesButton } = await startOffering("![a](a.png)");
+    pick(folderInput, pickedFile("docs/a.png"));
+    await vi.waitFor(() => expect(root.querySelector("img")).not.toBeNull());
+
+    navigateTo(await link("![b](b.png) Second"));
+    await vi.waitFor(() => expect(root.textContent).toContain("Second"));
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:picked/1");
+
+    await vi.waitFor(() => expect(imagesButton.hidden).toBe(false));
+    imagesButton.click();
+    pick(folderInput, pickedFile("docs/b.png"));
+    await vi.waitFor(() =>
+      expect(root.querySelector("img")?.getAttribute("src")).toBe("blob:picked/2"),
+    );
+    navigateTo("");
+    await vi.waitFor(() => expect(emptyState.hidden).toBe(false));
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:picked/2");
+    expect(imagesButton.hidden).toBe(true);
+  });
+
+  it("drops a folder picked for a document that has since changed", async () => {
+    const { root, folderInput, imagesButton, status } = await startOffering("![shot](shot.png)");
+    navigateTo(await link("![shot](shot.png) Newer"));
+    await vi.waitFor(() => expect(root.textContent).toContain("Newer"));
+    await vi.waitFor(() => expect(imagesButton.hidden).toBe(false));
+
+    pick(folderInput, pickedFile("docs/shot.png"));
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(URL.createObjectURL).not.toHaveBeenCalled();
+    expect(root.querySelector("img")).toBeNull();
+    expect(status.textContent).toBe(t("preview.imagesNeedFolder"));
+  });
+
+  it("lets a document opened during a pick's render win, leaking no URL", async () => {
+    const { root, folderInput, status } = await startOffering("![shot](shot.png)");
+    const gate = deferred();
+    vi.mocked(renderPreview).mockImplementationOnce(async (...args) => {
+      await gate.promise;
+      return actualRender.renderPreview(...args);
+    });
+    pick(folderInput, pickedFile("docs/shot.png"));
+    await vi.waitFor(() => expect(renderPreview).toHaveBeenCalledTimes(2));
+
+    navigateTo(await link("# Newer"));
+    await vi.waitFor(() => expect(root.textContent).toBe("Newer"));
+    gate.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(root.textContent).toBe("Newer");
+    expect(URL.createObjectURL).not.toHaveBeenCalled();
+    expect(status.textContent).toBe("");
+  });
+
+  it("lets a later pick replace one still rendering", async () => {
+    const { root, folderInput } = await startOffering("![shot](shot.png)");
+    pick(folderInput, pickedFile("earlier/shot.png"));
+    pick(folderInput, pickedFile("later/shot.png"));
+    await vi.waitFor(() => expect(root.querySelector("img")).not.toBeNull());
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(created).toEqual(["later/shot.png"]);
+    expect(root.querySelector("img")?.getAttribute("src")).toBe("blob:picked/1");
   });
 });

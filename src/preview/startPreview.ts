@@ -1,6 +1,7 @@
 import { i18n } from "@/lib/i18n";
 import { localeDir, resolveLocale } from "@/lib/locales";
 import { type HostMessage, parseHostMessage } from "./hostMessage";
+import type { PickedImages } from "./previewImages";
 import { renderPreview } from "./renderPreview";
 
 /** How the host (WebView2 on Windows, Quick Look on macOS) reaches the page: previewHost.ts. */
@@ -23,8 +24,13 @@ export interface StartPreviewOptions {
 }
 
 export interface Preview {
-  /** Render a message; null clears the root. */
-  show(message: PreviewMessage | null): void;
+  /**
+   * Render a message, taking the relative images of a document with no folder
+   * from `picked`; null clears the root. Settles once it is on screen with how
+   * many relative images became alt text, or with null if another `show`
+   * replaced it first.
+   */
+  show(message: PreviewMessage | null, picked?: PickedImages): Promise<number | null>;
   /** Settles once the page's translations have loaded. */
   ready: Promise<unknown>;
 }
@@ -38,59 +44,88 @@ export function startPreview({ root, host, darkQuery, language }: StartPreviewOp
   applyTheme(darkQuery);
 
   let current: PreviewMessage | null = null;
+  let currentPicked: PickedImages | null = null;
   let latestRender = 0;
+  let settleShown: (droppedImages: number | null) => void = () => {};
 
   async function render() {
     const render = ++latestRender;
     const message = current;
+    const picked = currentPicked;
     const dark = applyTheme(darkQuery);
     if (!message) {
       root.replaceChildren();
+      settleShown(0);
       return;
     }
     await ready;
-    const node = await renderMessage(message, dark, locale).catch(() =>
-      notice(i18n.t("preview.failed")),
-    );
+    const rendered = await renderMessage(message, dark, locale, picked).catch(() => ({
+      node: notice(i18n.t("preview.failed")),
+      droppedImages: 0,
+    }));
     // A theme switch mid-render starts a newer one; the older result is stale.
-    if (render === latestRender) root.replaceChildren(node);
+    if (render !== latestRender) return;
+    root.replaceChildren(rendered.node);
+    settleShown(rendered.droppedImages);
   }
 
-  function show(message: PreviewMessage | null) {
+  function show(message: PreviewMessage | null, picked?: PickedImages) {
+    settleShown(null);
     current = message;
+    currentPicked = picked ?? null;
+    const shown = new Promise<number | null>((resolve) => {
+      settleShown = resolve;
+    });
     void render();
+    return shown;
   }
 
   host?.addEventListener("message", (event) => {
     const message = parseHostMessage(event.data);
-    if (message) show(message);
+    if (message) void show(message);
   });
   // Mermaid bakes the theme into its SVG, so a theme switch re-renders.
   darkQuery.addEventListener("change", () => void render());
   return { show, ready };
 }
 
-async function renderMessage(message: PreviewMessage, dark: boolean, locale: string) {
+async function renderMessage(
+  message: PreviewMessage,
+  dark: boolean,
+  locale: string,
+  picked: PickedImages | null,
+) {
+  if (message.kind !== "document") {
+    return { node: notice(noticeText(message, locale)), droppedImages: 0 };
+  }
+  const article = document.createElement("article");
+  article.className = "markdown-body";
+  article.dir = "auto";
+  const { html, droppedImages } = await renderPreview(message.content, {
+    dark,
+    images: message.baseUrl ?? picked,
+  });
+  article.innerHTML = html;
+  return { node: article, droppedImages };
+}
+
+function noticeText(
+  message: Exclude<PreviewMessage, { kind: "document" }>,
+  locale: string,
+): string {
   switch (message.kind) {
-    case "document": {
-      const article = document.createElement("article");
-      article.className = "markdown-body";
-      article.dir = "auto";
-      article.innerHTML = await renderPreview(message.content, { dark, baseUrl: message.baseUrl });
-      return article;
-    }
     case "tooLarge": {
       const size = new Intl.NumberFormat(locale, {
         style: "unit",
         unit: "megabyte",
         maximumFractionDigits: 1,
       }).format(message.bytes / (1024 * 1024));
-      return notice(i18n.t("preview.tooLarge", { size }));
+      return i18n.t("preview.tooLarge", { size });
     }
     case "unreadable":
-      return notice(i18n.t("preview.unreadable"));
+      return i18n.t("preview.unreadable");
     case "invalidLink":
-      return notice(i18n.t("preview.invalidLink"));
+      return i18n.t("preview.invalidLink");
   }
 }
 

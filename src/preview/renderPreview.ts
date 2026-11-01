@@ -9,12 +9,18 @@ import type { LazyMarkdownPlugin, MarkdownPlugin } from "@/lib/plugins/types";
 import { hasMath } from "@/plugins/core/math/mathPattern";
 import { loadRehypeMath } from "@/plugins/core/math/rehypeMath";
 import { renderMermaidPreview } from "@/plugins/core/mermaid/mermaidRender";
-import { rehypePreviewImages } from "./previewImages";
+import { type ImageSource, rehypePreviewImages } from "./previewImages";
 
 export interface PreviewOptions {
   dark: boolean;
-  /** Where the previewed file's folder is served, for relative images; null when nothing is. */
-  baseUrl: string | null;
+  /** Where relative images in the previewed file's folder load from. */
+  images: ImageSource;
+}
+
+export interface RenderedPreview {
+  html: string;
+  /** How many relative images became their alt text, for want of a folder holding them. */
+  droppedImages: number;
 }
 
 // KaTeX and its stylesheet load only for a file containing math, as in the app.
@@ -32,18 +38,22 @@ const math: LazyMarkdownPlugin = {
 // plugins directly, whatever their toggles in the app.
 export async function renderPreview(
   content: string,
-  { dark, baseUrl }: PreviewOptions,
-): Promise<string> {
+  { dark, images }: PreviewOptions,
+): Promise<RenderedPreview> {
   const frontmatter = parseFrontmatter(content);
   const header = frontmatter
     ? renderToStaticMarkup(createElement(FrontmatterBlock, { data: frontmatter }))
     : "";
+  let droppedImages = 0;
+  const countDrop = () => {
+    droppedImages += 1;
+  };
   const body = await renderPageHtml({
     content,
     // No workspace index in a preview: wikilinks render unresolved.
     resolutions: new Map(),
     extraRemark: [remarkMath],
-    extraRehype: [[rehypePreviewImages, baseUrl] as MarkdownPlugin, math],
+    extraRehype: [[rehypePreviewImages, images, countDrop] as MarkdownPlugin, math],
   });
   const withDiagrams = await inlineStaticRenders(body, (language) =>
     language === "mermaid"
@@ -51,5 +61,5 @@ export async function renderPreview(
           `<div class="mermaid-diagram">${await renderMermaidPreview(code, dark)}</div>`
       : undefined,
   );
-  return header + withDiagrams;
+  return { html: header + withDiagrams, droppedImages };
 }
