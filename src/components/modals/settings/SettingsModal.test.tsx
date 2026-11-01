@@ -79,6 +79,14 @@ describe("SettingsModal", () => {
     expect(screen.queryByText("Reset to Defaults")).not.toBeInTheDocument();
   });
 
+  it("goes to the Plugins tab from the Appearance color scheme's Manage link", () => {
+    const { wrapper } = withSettings();
+    render(<Controlled onClose={vi.fn()} />, { wrapper });
+
+    fireEvent.click(screen.getByRole("button", { name: "Manage" }));
+    expect(screen.getByText("plugins tab")).toBeInTheDocument();
+  });
+
   it("renders each tab's content when selected", async () => {
     const { wrapper } = withSettings();
     render(<Controlled onClose={vi.fn()} />, { wrapper });

@@ -17,7 +17,7 @@ function setup(settings: Settings = DEFAULT_SETTINGS) {
   const wrapper = ({ children }: { children: ReactNode }) => (
     <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>
   );
-  render(<AppearanceTab />, { wrapper });
+  render(<AppearanceTab onOpenPlugins={vi.fn()} />, { wrapper });
   return { updateSettings };
 }
 
@@ -25,11 +25,13 @@ describe("AppearanceTab", () => {
   it("updates theme, typography, and code settings", () => {
     const { updateSettings } = setup();
 
+    expect(screen.getByText("Mode")).toBeInTheDocument();
     fireEvent.click(screen.getByText("Light"));
     expect(updateSettings).toHaveBeenCalledWith("appearance.theme", "light");
 
-    // First combobox is the language picker; font family and code theme follow.
-    const [, fontFamily, codeTheme] = screen.getAllByRole("combobox");
+    // The language picker and the color scheme picker come first; font family
+    // and code theme follow.
+    const [, , fontFamily, codeTheme] = screen.getAllByRole("combobox");
     fireEvent.change(fontFamily, { target: { value: "serif" } });
     expect(updateSettings).toHaveBeenCalledWith("appearance.fontFamily", "serif");
 

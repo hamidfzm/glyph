@@ -31,7 +31,7 @@ vi.mock("@/lib/pickers", () => ({
 }));
 
 // Core plugins follow app settings and have their own suite (useCorePlugins.test).
-vi.mock("@/hooks/useCorePlugins", () => ({ useCorePlugins: () => true }));
+vi.mock("@/hooks/useCorePlugins", () => ({ useCorePlugins: () => ({ ready: true, failed: [] }) }));
 
 vi.mock("@/lib/plugins/settingsStore", () => ({
   loadPluginSettings: vi.fn(() => Promise.resolve({})),
