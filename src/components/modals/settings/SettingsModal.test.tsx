@@ -10,6 +10,12 @@ import { SettingsModal, type SettingsTabId } from "./SettingsModal";
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn().mockResolvedValue(false) }));
 // The Plugins tab has its own suite; here it only needs to mount.
 vi.mock("@/components/plugins/PluginsTab", () => ({ PluginsTab: () => <div>plugins tab</div> }));
+vi.mock("./SettingsSyncTab", () => ({ SettingsSyncTab: () => <div>sync tab</div> }));
+const mobile = vi.hoisted(() => ({ value: false }));
+vi.mock("@/lib/platform", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/platform")>()),
+  isMobilePlatform: () => mobile.value,
+}));
 
 // The tab is controlled by the opener in production (useAppModals), so the
 // tab-switch cases drive it through that same shape.
@@ -64,6 +70,24 @@ describe("SettingsModal", () => {
     expect(screen.getByText("Print")).toBeInTheDocument();
     expect(screen.getByText("Privacy")).toBeInTheDocument();
     expect(screen.getByText("Plugins")).toBeInTheDocument();
+    expect(screen.getByText("Sync")).toBeInTheDocument();
+  });
+
+  it("shows the settings repo on the Sync tab, without the Reset footer", () => {
+    const { wrapper } = withSettings();
+    render(<Controlled onClose={vi.fn()} />, { wrapper });
+    expect(screen.getByRole("button", { name: "Reset to Defaults" })).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Sync"));
+    expect(screen.getByText("sync tab")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Reset to Defaults" })).not.toBeInTheDocument();
+  });
+
+  it("leaves out the Sync tab on mobile, where the git engine is not built", () => {
+    mobile.value = true;
+    const { wrapper } = withSettings();
+    render(<Controlled onClose={vi.fn()} />, { wrapper });
+    expect(screen.queryByText("Sync")).not.toBeInTheDocument();
+    mobile.value = false;
   });
 
   it("opens on the tab the opener picked, so Manage Plugins lands on Plugins", () => {

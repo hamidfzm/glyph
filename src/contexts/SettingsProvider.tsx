@@ -1,16 +1,16 @@
 import type { Store } from "@tauri-apps/plugin-store";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import { useSettingsSyncedReload } from "@/hooks/useSettingsSyncedReload";
 import { KEYED_PROVIDERS, setAiKey } from "@/lib/aiKeys";
 import { applyCSSVariables, applyTheme } from "@/lib/applySettingsToDom";
 import { DEFAULT_SETTINGS, type Settings, stripSecrets } from "@/lib/settings";
 import { setNestedValue } from "@/lib/settingsObject";
 import { loadSecrets } from "@/lib/settingsSecrets";
-import { mergeChangedPaths, settingsFromStored } from "@/lib/settingsWrite";
+import { mergeChangedPaths, SETTINGS_STORE_KEY, settingsFromStored } from "@/lib/settingsWrite";
 import { openStore } from "@/lib/store";
 import { carriedOverColorScheme, removeLegacyPresetOnceWritten } from "@/lib/themePresetMigration";
 import { SettingsContext } from "./SettingsContext";
 
-const STORE_KEY = "settings";
 const SAVE_DEBOUNCE = 500;
 
 export function SettingsProvider({ children }: { children: ReactNode }) {
@@ -80,9 +80,13 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       try {
         let next = pending;
         if (!replaceAll) {
-          next = mergeChangedPaths(await store.get<Partial<Settings>>(STORE_KEY), pending, changed);
+          next = mergeChangedPaths(
+            await store.get<Partial<Settings>>(SETTINGS_STORE_KEY),
+            pending,
+            changed,
+          );
         }
-        await store.set(STORE_KEY, stripSecrets(next));
+        await store.set(SETTINGS_STORE_KEY, stripSecrets(next));
         // save() awaits the disk write; the store plugin's own autosave
         // debounce could still be pending when the process exits.
         await store.save();
@@ -129,7 +133,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       try {
         const store = await openStore("settings.json");
         storeRef.current = store;
-        const saved = await store.get<Partial<Settings>>(STORE_KEY);
+        const saved = await store.get<Partial<Settings>>(SETTINGS_STORE_KEY);
         const base = settingsFromStored(saved);
         const carried = await carriedOverColorScheme(saved);
         const migrated = carried
@@ -137,7 +141,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
           : base;
         // API keys live in the OS keychain, not the store: migrate any legacy
         // plaintext keys out of settings.json and load the stored ones.
-        const merged = await loadSecrets(store, STORE_KEY, migrated);
+        const merged = await loadSecrets(store, SETTINGS_STORE_KEY, migrated);
         if (!cancelled) {
           setSettings(merged);
           applyTheme(merged.appearance.theme);
@@ -163,6 +167,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       cancelled = true;
     };
   }, [writePending]);
+
+  useSettingsSyncedReload({ loaded, storeRef, changedPathsRef, setSettings });
 
   // Persist any update still inside the debounce window; called before the
   // window is allowed to close so a just-changed setting is not lost.

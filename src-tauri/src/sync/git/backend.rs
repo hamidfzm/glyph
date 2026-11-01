@@ -45,7 +45,7 @@ impl GitBackend {
     /// route that into the "set up sync" flow instead of treating it
     /// as a generic failure. Any other libgit2 error (corrupt `.git`,
     /// permission issues, etc.) falls through to `Backend`.
-    fn open_repo(&self) -> Result<Repository, SyncError> {
+    pub(crate) fn open_repo(&self) -> Result<Repository, SyncError> {
         Repository::open(self.workspace()).map_err(|e| match e.code() {
             git2::ErrorCode::NotFound => SyncError::NotConfigured,
             _ => SyncError::Backend(e.message().to_string()),

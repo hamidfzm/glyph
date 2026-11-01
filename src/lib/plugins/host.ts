@@ -35,7 +35,7 @@ import { createWorkspaceApi } from "./workspaceApi";
  */
 export interface PluginSettingsBackend {
   load(pluginId: string): Promise<Record<string, unknown>>;
-  save(pluginId: string, settings: Record<string, unknown>): void;
+  save(pluginId: string, key: string, value: unknown): void;
 }
 
 const noopSettingsBackend: PluginSettingsBackend = {
@@ -88,6 +88,9 @@ export interface PluginHost {
   unload(id: string): void;
   /** Tear down every loaded plugin (app shutdown / provider unmount). */
   unloadAll(): void;
+  /** Load these plugins again if they are loaded, so they read settings a
+   *  settings sync rewrote. A plugin that fails to come back is reported. */
+  reload(ids: readonly string[]): Promise<void>;
   listLoaded(): LoadedPluginInfo[];
 }
 
@@ -95,6 +98,11 @@ interface LoadedPlugin {
   info: LoadedPluginInfo;
   module: PluginModule;
   bag: DisposerBag;
+  /** What it was loaded from, for a reload. */
+  source: InstalledPlugin;
+  importer?: ModuleImporter;
+  /** The load generation that committed it. */
+  generation: number | undefined;
 }
 
 /**
@@ -173,7 +181,7 @@ export function createPluginHost(
     teardown(id);
   };
 
-  return {
+  const host: PluginHost = {
     commands,
     statusBarItems,
     remarkPlugins,
@@ -248,7 +256,7 @@ export function createPluginHost(
             registerTranslations: registerOwnTranslations,
             settingsSet(key, value) {
               settings[key] = value;
-              settingsBackend.save(plugin.id, settings);
+              settingsBackend.save(plugin.id, key, value);
             },
             workspaceRead: workspace.readFile,
             workspaceList: workspace.listFiles,
@@ -271,6 +279,8 @@ export function createPluginHost(
           },
           module: { activate: () => {} },
           bag,
+          source: plugin,
+          generation,
         });
         return true;
       }
@@ -320,6 +330,9 @@ export function createPluginHost(
         },
         module,
         bag,
+        source: plugin,
+        importer,
+        generation,
       });
       return true;
     },
@@ -332,5 +345,19 @@ export function createPluginHost(
     listLoaded() {
       return [...loaded.values()].map((p) => p.info);
     },
+    async reload(ids) {
+      for (const id of ids) {
+        const current = loaded.get(id);
+        // A newer load in flight (an update, an enable) reads the settings
+        // itself; reloading the committed instance would cancel it.
+        if (!current || loadGeneration.get(id) !== current.generation) continue;
+        try {
+          await host.load(current.source, current.importer);
+        } catch (err) {
+          console.error(`Plugin ${id} failed to reload:`, err);
+        }
+      }
+    },
   };
+  return host;
 }

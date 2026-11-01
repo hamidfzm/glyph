@@ -81,6 +81,70 @@
     "backend": "Sync backend error.",
     "backendDetail": "Sync backend error: {{message}}",
     "invalidRemoteUrl": "Remote URL must start with https:// or ssh:// (or use user@host:path). Put access tokens in the token field, not in the URL.",
-    "unknown": "Unknown sync error."
+    "unknown": "Unknown sync error.",
+    "pushRejected": "The remote refused the push.",
+    "pushRejectedDetail": "The remote refused the push: {{message}}",
+    "busy": "A sync is already running. Try again when it finishes."
+  },
+  "settingsRepo": {
+    "description": "Keep your Glyph setup in a git repository of its own and use it on every machine you connect: settings, hotkeys, and the plugins you installed, with their settings. A plugin removed or turned off on one machine is removed or turned off on the others. API keys, recent files, plugin permissions, and error reporting consent stay on each machine.",
+    "remotePlaceholder": "https://github.com/you/glyph-setup.git",
+    "tokenNote": "Stored in your OS keychain, for the settings repository only.",
+    "connect": "Connect",
+    "connectedTo": "Syncing with <strong>{{remote}}</strong> on <strong>{{branch}}</strong>.",
+    "saveToken": "Save token",
+    "disconnect": "Disconnect",
+    "choice": {
+      "title": "This repository already holds a Glyph setup",
+      "message": "Pick which setup this machine starts from. Nothing changes until you pick.",
+      "useSynced": "Use the synced setup",
+      "useSyncedHint": "Use the synced setup: replaces this machine's settings. Plugins only on this machine stay and join the synced setup.",
+      "replaceSynced": "Replace it with this machine's",
+      "replaceSyncedHint": "Replace it with this machine's: the repository keeps its history, and the synced setup becomes this machine's. Plugins this machine does not have leave the synced setup and are removed from the other machines at their next sync."
+    },
+    "conflicts": {
+      "title": "Changed on both machines",
+      "message": "Pick which version of each file to keep, then resolve. Nothing syncs until you do.",
+      "keepLocal": "Keep this machine's",
+      "takeRemote": "Take the synced one",
+      "legend": "Version of {{file}} to keep",
+      "resolve": "Resolve"
+    },
+    "files": {
+      "settings": "{{group}} settings",
+      "plugin": "Plugin {{id}}"
+    },
+    "plugins": {
+      "title": "Plugins from your synced setup",
+      "missing": "Not installed on this machine",
+      "install": "Install",
+      "installAll": "Install all",
+      "installName": "Install {{name}}",
+      "version": "Version {{version}}",
+      "toEnable": "Turned on in your synced setup",
+      "offHere": "Off on this machine",
+      "enable": "Turn on",
+      "enableName": "Turn on {{name}}",
+      "manual": "Install these by hand",
+      "reason": {
+        "local": "Version {{version}}, installed from a folder on another machine",
+        "unlisted": "Version {{version}}, no longer among the available plugins"
+      }
+    },
+    "skipped": {
+      "title": "Left out of the last sync:",
+      "item": "{{file}}: {{reason}}",
+      "reason": {
+        "notAFile": "not a plain file",
+        "notAFolder": "not a folder",
+        "tooLarge": "too large",
+        "notJson": "not valid JSON",
+        "notAnObject": "not a JSON object",
+        "unknownName": "not a file Glyph syncs",
+        "duplicateName": "the same name in another letter case",
+        "tooMany": "more plugin files than Glyph reads",
+        "badEntry": "not a plugin entry"
+      }
+    }
   }
 }

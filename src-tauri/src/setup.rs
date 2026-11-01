@@ -13,14 +13,19 @@ use tauri_plugin_store::StoreExt;
 #[cfg(desktop)]
 use crate::{cli, commands, data_dir, grants, menu, open_launch, windows, windows_runtime};
 
+/// The renderer-facing stores, by file name under the app data dir.
+pub(crate) const SETTINGS_STORE: &str = "settings.json";
+pub(crate) const PLUGINS_STORE: &str = "plugins.json";
+pub(crate) const SESSIONS_STORE: &str = "workspace-sessions.json";
+
 /// Renderer-facing stores, opened here because the renderer holds no
 /// `store:allow-load` (see docs/security/threat-model.md). The session store
 /// batches its writes and saves explicitly, so it opts out of the builder's
 /// default debounced auto-save.
 const STORES: [(&str, bool); 3] = [
-    ("settings.json", true),
-    ("plugins.json", true),
-    ("workspace-sessions.json", false),
+    (SETTINGS_STORE, true),
+    (PLUGINS_STORE, true),
+    (SESSIONS_STORE, false),
 ];
 
 /// Runs inside Tauri's `setup` hook, before any window is shown. `env_args` is
@@ -76,7 +81,7 @@ pub fn setup_app(
         // Session restore and the recent-files menu re-open paths from
         // earlier sessions; seed their grants from the persisted settings
         // store.
-        if let Some(raw) = data_dir::read_store("settings.json") {
+        if let Some(raw) = data_dir::read_store(SETTINGS_STORE) {
             let handle = app.handle();
             let (workspaces, files) = app
                 .state::<grants::GrantRegistry>()

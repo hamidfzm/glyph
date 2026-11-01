@@ -1,16 +1,20 @@
 import { DEFAULT_SETTINGS, type Settings } from "./settings";
+import { conformToDefaults } from "./settingsConform";
 import { migrateLegacySettings } from "./settingsMigrations";
 import { deepMerge, getNestedValue, setNestedValue } from "./settingsObject";
 
 // How a settings write is assembled. Pure, so the merge is testable without
 // rendering a provider and driving its debounce.
 
+/** The key the settings live under in settings.json. */
+export const SETTINGS_STORE_KEY = "settings";
+
 /** Rebuild a full `Settings` from what is currently persisted. */
 export function settingsFromStored(stored: Partial<Settings> | null | undefined): Settings {
   if (!stored) return DEFAULT_SETTINGS;
   return deepMerge(
     DEFAULT_SETTINGS as unknown as Record<string, unknown>,
-    migrateLegacySettings(stored as unknown as Record<string, unknown>),
+    conformToDefaults(migrateLegacySettings(stored as unknown as Record<string, unknown>)),
   ) as unknown as Settings;
 }
 

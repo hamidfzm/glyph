@@ -46,11 +46,14 @@ mod tests;
 
 pub use download::Marketplace;
 pub(crate) use manifest::is_well_formed_id;
+pub(crate) use store::{inspect_dir, read_install_marker, InstallMarker, InstallSource};
 
 use download::install_from_registry;
-use store::{inspect_dir, install_into, read_asset_from, scan_plugins_root, uninstall_from};
+use store::{install_into, read_asset_from, scan_plugins_root, uninstall_from};
 
-fn plugins_root<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Result<PathBuf, String> {
+pub(crate) fn plugins_root<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+) -> Result<PathBuf, String> {
     app.path()
         .app_config_dir()
         .map(|dir| dir.join("plugins"))

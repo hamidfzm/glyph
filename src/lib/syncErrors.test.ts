@@ -32,6 +32,11 @@ describe("describeSyncError", () => {
     expect(describeSyncError({ kind: "invalid-remote-url" }, t)).toMatch(
       /must start with https:\/\/ or ssh:\/\//,
     );
+    expect(describeSyncError({ kind: "push-rejected", message: "protected" }, t)).toMatch(
+      /refused the push: protected/,
+    );
+    expect(describeSyncError({ kind: "push-rejected" }, t)).toMatch(/refused the push\./);
+    expect(describeSyncError({ kind: "busy" }, t)).toMatch(/already running/);
   });
 
   it("handles unknown or non-object inputs", () => {

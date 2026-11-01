@@ -3,11 +3,56 @@
 // only), reading declared assets, and uninstalling.
 
 use super::manifest::{
-    parse_manifest, validate_file_path, validate_id, ManifestInfo, MAX_FILE_BYTES, MAX_TOTAL_BYTES,
+    parse_manifest, validate_file_path, validate_id, ManifestInfo, INSTALL_MARKER, MAX_FILE_BYTES,
+    MAX_TOTAL_BYTES,
 };
 use super::{InstalledPlugin, PluginInspection};
+use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
+use std::time::{SystemTime, UNIX_EPOCH};
+
+/// Where an installed plugin came from.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) enum InstallSource {
+    /// Downloaded from the registry and checked against its hash.
+    Marketplace,
+    /// Copied from a folder the user picked.
+    Local,
+}
+
+/// What an install records beside the plugin's files. `installed_at` tells
+/// one install of an id from the next, so settings sync can tell a plugin
+/// removed elsewhere from one reinstalled here.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct InstallMarker {
+    pub(crate) source: InstallSource,
+    pub(crate) installed_at: u64,
+}
+
+/// Record the install. Written after every declared file, so it describes
+/// a complete install, and under a name no manifest may declare.
+fn write_install_marker(dest: &Path, source: InstallSource) -> Result<(), String> {
+    let installed_at = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_nanos() as u64)
+        .unwrap_or(0);
+    let marker = InstallMarker {
+        source,
+        installed_at,
+    };
+    let json = serde_json::to_vec(&marker).map_err(|e| format!("cannot record install: {e}"))?;
+    fs::write(dest.join(INSTALL_MARKER), json).map_err(|e| format!("cannot record install: {e}"))
+}
+
+/// The marker an install left in `dir`. `None` for a plugin installed before
+/// markers existed, or one whose marker cannot be read.
+pub(crate) fn read_install_marker(dir: &Path) -> Option<InstallMarker> {
+    let bytes = fs::read(dir.join(INSTALL_MARKER)).ok()?;
+    serde_json::from_slice(&bytes).ok()
+}
 
 /// Read only a folder's manifest metadata, for the pre-install consent dialog.
 pub(crate) fn inspect_dir(dir: &Path) -> Result<PluginInspection, String> {
@@ -94,6 +139,7 @@ pub(crate) fn install_into(root: &Path, src: &Path) -> Result<InstalledPlugin, S
             .map_err(|e| format!("declared plugin file \"{rel}\" not found: {e}"))?;
         write_plugin_file(&dest, &rel, &bytes)?;
     }
+    write_install_marker(&dest, InstallSource::Local)?;
     read_plugin_dir(&dest)
 }
 
@@ -173,6 +219,7 @@ pub(crate) fn install_package(root: &Path, bytes: &[u8]) -> Result<InstalledPlug
         }
         write_plugin_file(&dest, &rel, &bytes)?;
     }
+    write_install_marker(&dest, InstallSource::Marketplace)?;
     read_plugin_dir(&dest)
 }
 
@@ -324,25 +371,43 @@ mod tests {
         let _ = fs::remove_dir_all(&src);
     }
 
-    /// Build an in-memory zip from (name, bytes) entries for package tests.
-    fn zip_with(method: zip::CompressionMethod, entries: &[(&str, &[u8])]) -> Vec<u8> {
-        use std::io::Write;
-        let mut cursor = std::io::Cursor::new(Vec::new());
-        let mut writer = zip::ZipWriter::new(&mut cursor);
-        let options = zip::write::SimpleFileOptions::default().compression_method(method);
-        for (name, bytes) in entries {
-            writer.start_file(*name, options).unwrap();
-            writer.write_all(bytes).unwrap();
-        }
-        writer.finish().unwrap();
-        cursor.into_inner()
+    #[test]
+    fn installs_record_their_source_after_the_plugins_files() {
+        let root = temp_root("marker_root");
+        let src = temp_root("marker_src");
+        write_plugin(&src, "com.x.local", "export default {};");
+        install_into(&root, &src).unwrap();
+        let local = read_install_marker(&root.join("com.x.local")).unwrap();
+        assert_eq!(local.source, InstallSource::Local);
+
+        let bytes = zip_of(&[
+            ("manifest.json", PACKAGED_MANIFEST.as_bytes()),
+            ("main.js", b"export default {};"),
+            ("assets/data.txt", b"data"),
+        ]);
+        install_package(&root, &bytes).unwrap();
+        let first = read_install_marker(&root.join("com.x.pkg")).unwrap();
+        assert_eq!(first.source, InstallSource::Marketplace);
+
+        // A reinstall is a new install: settings sync tells the two apart.
+        install_package(&root, &bytes).unwrap();
+        let second = read_install_marker(&root.join("com.x.pkg")).unwrap();
+        assert_ne!(first.installed_at, second.installed_at);
+
+        let _ = fs::remove_dir_all(&root);
+        let _ = fs::remove_dir_all(&src);
     }
 
-    fn zip_of(entries: &[(&str, &[u8])]) -> Vec<u8> {
-        zip_with(zip::CompressionMethod::Stored, entries)
+    #[test]
+    fn a_missing_or_unreadable_marker_reads_as_none() {
+        let root = temp_root("marker_none");
+        let dir = root.join("com.x.old");
+        write_plugin(&dir, "com.x.old", "export default {};");
+        assert_eq!(read_install_marker(&dir), None);
+        fs::write(dir.join(INSTALL_MARKER), "not json").unwrap();
+        assert_eq!(read_install_marker(&dir), None);
+        let _ = fs::remove_dir_all(&root);
     }
-
-    const PACKAGED_MANIFEST: &str = r#"{"id":"com.x.pkg","name":"Pkg","version":"1.0.0","apiVersion":"0.16.0","files":["main.js","assets/data.txt"]}"#;
 
     #[test]
     fn install_package_rejects_an_oversized_file_before_writing_anything() {

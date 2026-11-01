@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { loadPluginSettings, savePluginSettings } from "@/lib/plugins/settingsStore";
+import { loadPluginSettings, removePluginSetting } from "@/lib/plugins/settingsStore";
 import {
   carriedOverColorScheme,
   legacyPresetScheme,
@@ -8,14 +8,14 @@ import {
 
 vi.mock("@/lib/plugins/settingsStore", () => ({
   loadPluginSettings: vi.fn(),
-  savePluginSettings: vi.fn(async () => {}),
+  removePluginSetting: vi.fn(async () => {}),
 }));
 
 const PLUGIN = "glyph.core.theme-presets";
 
 beforeEach(() => {
   vi.mocked(loadPluginSettings).mockReset();
-  vi.mocked(savePluginSettings).mockClear();
+  vi.mocked(removePluginSetting).mockClear();
 });
 
 describe("legacyPresetScheme", () => {
@@ -57,18 +57,15 @@ describe("carriedOverColorScheme", () => {
 });
 
 describe("removeLegacyPresetOnceWritten", () => {
-  it("drops only the preset once the settings write lands", async () => {
-    vi.mocked(loadPluginSettings).mockResolvedValue({ preset: "sepia", other: 1 });
-
+  it("drops the preset once the settings write lands", async () => {
     await removeLegacyPresetOnceWritten(Promise.resolve(true));
 
-    expect(savePluginSettings).toHaveBeenCalledWith(PLUGIN, { other: 1 });
+    expect(removePluginSetting).toHaveBeenCalledExactlyOnceWith(PLUGIN, "preset");
   });
 
   it("keeps the preset when the settings write failed", async () => {
     await removeLegacyPresetOnceWritten(Promise.resolve(false));
 
-    expect(loadPluginSettings).not.toHaveBeenCalled();
-    expect(savePluginSettings).not.toHaveBeenCalled();
+    expect(removePluginSetting).not.toHaveBeenCalled();
   });
 });
