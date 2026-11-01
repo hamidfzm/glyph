@@ -1,8 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, type Mock } from "vitest";
-import { useZoomApi } from "@/contexts/ZoomContext";
 import { ZoomProvider } from "@/contexts/ZoomProvider";
+import { ZoomButtons } from "@/test/ZoomButtons";
 import { ImageViewer } from "./ImageViewer";
 
 function zoomLevel(container: HTMLElement): number {
@@ -166,22 +166,6 @@ describe("ImageViewer", () => {
   });
 
   it("responds to the Zoom In/Out/Actual-Size commands", () => {
-    const ZoomButtons = () => {
-      const api = useZoomApi();
-      return (
-        <>
-          <button type="button" onClick={() => api?.actions.zoomIn()}>
-            cmd-zoom-in
-          </button>
-          <button type="button" onClick={() => api?.actions.zoomOut()}>
-            cmd-zoom-out
-          </button>
-          <button type="button" onClick={() => api?.actions.zoomReset()}>
-            cmd-actual-size
-          </button>
-        </>
-      );
-    };
     const { container } = render(
       <ZoomProvider>
         <ImageViewer filePath="/a/b/photo.png" />
@@ -193,7 +177,7 @@ describe("ImageViewer", () => {
     act(() => screen.getByText("cmd-zoom-out").click());
     expect(zoomLevel(container)).toBe(100);
     act(() => screen.getByText("cmd-zoom-in").click());
-    act(() => screen.getByText("cmd-actual-size").click());
+    act(() => screen.getByText("cmd-zoom-reset").click());
     expect(zoomLevel(container)).toBe(100);
   });
 

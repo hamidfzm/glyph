@@ -65,23 +65,26 @@ interface ParagraphProps {
   text?: string;
 }
 
+type SearchRef = { current: ReturnType<typeof useSearch> | null };
+
 // The <code> sibling gives the text a fiber of its own, the node React removes and inserts beside.
+function SearchableParagraph({ lead, text, searchRef }: ParagraphProps & { searchRef: SearchRef }) {
+  const contentRef = useRef<HTMLDivElement>(null);
+  searchRef.current = useSearch({ containerRef: contentRef });
+  return (
+    <div ref={contentRef}>
+      <p>
+        {lead && <em>new </em>}
+        {text}
+        <code>x</code>
+      </p>
+    </div>
+  );
+}
+
 function renderDocument(props: ParagraphProps) {
-  const search = { current: null as ReturnType<typeof useSearch> | null };
-  function SearchableParagraph({ lead, text }: ParagraphProps) {
-    const contentRef = useRef<HTMLDivElement>(null);
-    search.current = useSearch({ containerRef: contentRef });
-    return (
-      <div ref={contentRef}>
-        <p>
-          {lead && <em>new </em>}
-          {text}
-          <code>x</code>
-        </p>
-      </div>
-    );
-  }
-  const view = render(<SearchableParagraph {...props} />);
+  const search: SearchRef = { current: null };
+  const view = render(<SearchableParagraph {...props} searchRef={search} />);
   const highlight = (query: string) => {
     act(() => search.current?.setQuery(query));
     act(() => {
@@ -89,7 +92,7 @@ function renderDocument(props: ParagraphProps) {
     });
   };
   const rerender = async (next: ParagraphProps) => {
-    view.rerender(<SearchableParagraph {...next} />);
+    view.rerender(<SearchableParagraph {...next} searchRef={search} />);
     await nextFrame();
   };
   const paragraph = () => view.container.querySelector("p");

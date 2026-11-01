@@ -3,10 +3,15 @@ import { ask } from "@tauri-apps/plugin-dialog";
 import { getStore } from "@tauri-apps/plugin-store";
 import { render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { usePluginsOptional } from "@/contexts/PluginsContext";
 import { PluginsProvider } from "@/contexts/PluginsProvider";
 import { PLUGIN_API_VERSION } from "@/lib/plugins/apiVersion";
-import { installedPlugin, Probe, resetPluginsMocks } from "@/test/pluginsHarness";
+import {
+  InstallProbe,
+  installedPlugin,
+  ManageProbe,
+  Probe,
+  resetPluginsMocks,
+} from "@/test/pluginsHarness";
 
 vi.mock("@/lib/pickers", () => ({
   pickPluginDir: vi.fn(),
@@ -51,18 +56,9 @@ describe("PluginsProvider grants and updates", () => {
       sha256: "a".repeat(64),
     };
 
-    function InstallProbe() {
-      const plugins = usePluginsOptional();
-      return (
-        <button type="button" onClick={() => void plugins?.installFromRegistry(entry)}>
-          market
-        </button>
-      );
-    }
-
     render(
       <PluginsProvider>
-        <InstallProbe />
+        <InstallProbe entry={entry} />
         <Probe />
       </PluginsProvider>,
     );
@@ -111,18 +107,9 @@ describe("PluginsProvider grants and updates", () => {
       return Promise.resolve(undefined);
     });
 
-    function InstallProbe() {
-      const plugins = usePluginsOptional();
-      return (
-        <button type="button" onClick={() => void plugins?.installFromRegistry(entry)}>
-          market
-        </button>
-      );
-    }
-
     render(
       <PluginsProvider>
-        <InstallProbe />
+        <InstallProbe entry={entry} />
         <Probe />
       </PluginsProvider>,
     );
@@ -189,28 +176,15 @@ describe("PluginsProvider grants and updates", () => {
     vi.mocked(ask).mockClear();
     vi.mocked(ask).mockResolvedValueOnce(true).mockResolvedValueOnce(false);
 
-    function ManageProbe() {
-      const p = usePluginsOptional();
-      if (!p) return null;
-      return (
-        <div>
-          <span data-testid="installed">{p.installed.map((x) => x.id).join(",")}</span>
-          <span data-testid="loaded">{p.loaded.map((x) => x.id).join(",")}</span>
-          <button type="button" onClick={() => void p.installFromRegistry(entry)}>
-            update
-          </button>
-        </div>
-      );
-    }
-
     render(
       <PluginsProvider>
         <ManageProbe />
+        <InstallProbe entry={entry} />
       </PluginsProvider>,
     );
     await waitFor(() => expect(screen.getByTestId("loaded")).toHaveTextContent("com.x.demo"));
 
-    screen.getByRole("button", { name: "update" }).click();
+    screen.getByRole("button", { name: "market" }).click();
 
     await waitFor(() =>
       expect(vi.mocked(invoke)).toHaveBeenCalledWith("uninstall_plugin", { id: "com.x.demo" }),
@@ -246,19 +220,6 @@ describe("PluginsProvider grants and updates", () => {
       ),
     );
     vi.mocked(ask).mockClear();
-
-    function ManageProbe() {
-      const p = usePluginsOptional();
-      if (!p) return null;
-      return (
-        <div>
-          <span data-testid="installed">{p.installed.map((x) => x.id).join(",")}</span>
-          <button type="button" onClick={() => void p.setEnabled("com.x.demo", true)}>
-            on
-          </button>
-        </div>
-      );
-    }
 
     render(
       <PluginsProvider>
@@ -314,18 +275,9 @@ describe("PluginsProvider grants and updates", () => {
     vi.mocked(ask).mockClear();
     vi.mocked(ask).mockResolvedValueOnce(true).mockResolvedValueOnce(false);
 
-    function InstallProbe() {
-      const plugins = usePluginsOptional();
-      return (
-        <button type="button" onClick={() => void plugins?.installFromRegistry(entry)}>
-          market
-        </button>
-      );
-    }
-
     render(
       <PluginsProvider>
-        <InstallProbe />
+        <InstallProbe entry={entry} />
         <Probe />
       </PluginsProvider>,
     );
