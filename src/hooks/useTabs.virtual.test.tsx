@@ -352,6 +352,201 @@ describe("useTabs in-memory documents", () => {
     expect(fileOf(result, 1).path).toBe("/p/out.md");
   });
 
+  it("refuses a Save As onto a note another window holds, under its one spelling", async () => {
+    const writeFile = vi.fn().mockResolvedValue(undefined);
+    const shownElsewhere = vi.fn<Invoker>(async (_cmd, args) => args?.path === "/p/a.md");
+    const onWorkspaceNotice = vi.fn();
+    mockWriteFile(writeFile, {
+      document_path: spelledAs({ "/P/A.md": "/p/a.md" }),
+      window_showing_file: shownElsewhere,
+    });
+    vi.mocked(pickSaveDocument).mockResolvedValue("/P/A.md");
+    const { result } = renderHook(() => useTabs(defaultOptions({ onWorkspaceNotice })));
+    const tabId = await newDraft(result, "MY DRAFT");
+
+    let ok: boolean | undefined;
+    await act(async () => {
+      ok = await result.current.saveDocument(tabId);
+    });
+
+    expect(ok).toBe(false);
+    expect(writeFile).not.toHaveBeenCalled();
+    // Raising the other window would cover the notice that explains the refusal.
+    expect(shownElsewhere).toHaveBeenCalledWith("window_showing_file", {
+      path: "/p/a.md",
+      focus: false,
+    });
+    expect(onWorkspaceNotice).toHaveBeenCalledWith(
+      expect.objectContaining({ key: "notice.saveTargetOpenElsewhere", values: { name: "a.md" } }),
+      { persistent: true },
+    );
+    expect(fileOf(result).virtual).toBe(true);
+    expect(fileOf(result).dirty).toBe(true);
+    expect(fileOf(result).editContent).toBe("MY DRAFT");
+  });
+
+  it("saves when the check for another window fails", async () => {
+    const writeFile = vi.fn().mockResolvedValue(undefined);
+    mockWriteFile(writeFile, {
+      window_showing_file: async () => {
+        throw new Error("backend hiccup");
+      },
+    });
+    vi.mocked(pickSaveDocument).mockResolvedValue("/p/saved.md");
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    const tabId = await newDraft(result, "HELLO");
+
+    let ok: boolean | undefined;
+    await act(async () => {
+      ok = await result.current.saveDocument(tabId);
+    });
+
+    expect(ok).toBe(true);
+    expect(writesOf(writeFile)).toEqual([{ path: "/p/saved.md", content: "HELLO" }]);
+    expect(fileOf(result).path).toBe("/p/saved.md");
+  });
+
+  it("leaves the file to another window that opened it during the Save As write", async () => {
+    let held = false;
+    const { started, release } = holdWrites(1, { window_showing_file: async () => held });
+    const onWorkspaceNotice = vi.fn();
+    vi.mocked(pickSaveDocument).mockResolvedValue("/p/out.md");
+    const { result } = renderHook(() => useTabs(defaultOptions({ onWorkspaceNotice })));
+    const draftId = await newDraft(result, "MY DRAFT");
+
+    let saving: Promise<boolean> | undefined;
+    await act(async () => {
+      saving = result.current.saveDocument(draftId);
+      await started[0].promise;
+    });
+    held = true;
+    let ok: boolean | undefined;
+    await act(async () => {
+      release[0].resolve();
+      ok = await saving;
+    });
+
+    expect(ok).toBe(false);
+    expect(onWorkspaceNotice).toHaveBeenCalledWith(
+      expect.objectContaining({
+        key: "notice.saveTargetOpenElsewhere",
+        values: { name: "out.md" },
+      }),
+      { persistent: true },
+    );
+    expect(fileOf(result).virtual).toBe(true);
+    expect(fileOf(result).editContent).toBe("MY DRAFT");
+    expect(invoke).not.toHaveBeenCalledWith("watch_file", { path: "/p/out.md" });
+  });
+
+  it("writes an edit made while Save As asks about the other windows", async () => {
+    const writeFile = vi.fn().mockResolvedValue(undefined);
+    const answer = deferred<boolean>();
+    mockWriteFile(writeFile, { window_showing_file: () => answer.promise });
+    vi.mocked(pickSaveDocument).mockResolvedValue("/p/saved.md");
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    const tabId = await newDraft(result, "first");
+
+    let saving: Promise<boolean> | undefined;
+    await act(async () => {
+      saving = result.current.saveDocument(tabId);
+      await vi.waitFor(() =>
+        expect(invoke).toHaveBeenCalledWith("window_showing_file", {
+          path: "/p/saved.md",
+          focus: false,
+        }),
+      );
+    });
+    act(() => {
+      result.current.updateEditContent(tabId, "first second");
+    });
+    await act(async () => {
+      answer.resolve(false);
+      await saving;
+    });
+
+    expect(writesOf(writeFile)).toEqual([{ path: "/p/saved.md", content: "first second" }]);
+    expect(fileOf(result).dirty).toBe(false);
+  });
+
+  it("refuses before writing a note this window opened while Save As asked about the others", async () => {
+    const writeFile = vi.fn().mockResolvedValue(undefined);
+    const answer = deferred<boolean>();
+    const shownElsewhere = vi
+      .fn<Invoker>()
+      .mockReturnValueOnce(answer.promise)
+      .mockResolvedValue(false);
+    const onWorkspaceNotice = vi.fn();
+    mockWriteFile(writeFile, { window_showing_file: shownElsewhere });
+    vi.mocked(pickSaveDocument).mockResolvedValue("/p/out.md");
+    const { result } = renderHook(() => useTabs(defaultOptions({ onWorkspaceNotice })));
+    const draftId = await newDraft(result, "MY DRAFT");
+
+    let saving: Promise<boolean> | undefined;
+    await act(async () => {
+      saving = result.current.saveDocument(draftId);
+      await vi.waitFor(() => expect(shownElsewhere).toHaveBeenCalledTimes(1));
+    });
+    await act(async () => {
+      await result.current.openFile("/p/out.md");
+    });
+    let ok: boolean | undefined;
+    await act(async () => {
+      answer.resolve(false);
+      ok = await saving;
+    });
+
+    expect(ok).toBe(false);
+    expect(writeFile).not.toHaveBeenCalled();
+    expect(onWorkspaceNotice).toHaveBeenCalledWith(
+      expect.objectContaining({ key: "notice.saveTargetOpen", values: { name: "out.md" } }),
+      { persistent: true },
+    );
+    expect(fileOf(result, 0).editContent).toBe("MY DRAFT");
+    expect(fileOf(result, 1).path).toBe("/p/out.md");
+  });
+
+  it("reports nothing for a tab closed while Save As asks about the other windows", async () => {
+    const writeFile = vi.fn().mockResolvedValue(undefined);
+    const answer = deferred<boolean>();
+    const onWorkspaceNotice = vi.fn();
+    mockWriteFile(writeFile, { window_showing_file: () => answer.promise });
+    vi.mocked(pickSaveDocument).mockResolvedValue("/p/a.md");
+    const { result } = renderHook(() =>
+      useTabs(
+        defaultOptions({
+          onWorkspaceNotice,
+          autoSave: false,
+          confirmUnsaved: async () => "discard" as const,
+        }),
+      ),
+    );
+    const tabId = await newDraft(result, "first");
+
+    let saving: Promise<boolean> | undefined;
+    await act(async () => {
+      saving = result.current.saveDocument(tabId);
+      await vi.waitFor(() =>
+        expect(invoke).toHaveBeenCalledWith("window_showing_file", {
+          path: "/p/a.md",
+          focus: false,
+        }),
+      );
+    });
+    await act(async () => {
+      await result.current.closeTab(tabId);
+    });
+    let ok: boolean | undefined;
+    await act(async () => {
+      answer.resolve(true);
+      ok = await saving;
+    });
+
+    expect(ok).toBe(true);
+    expect(writeFile).not.toHaveBeenCalled();
+    expect(onWorkspaceNotice).not.toHaveBeenCalled();
+  });
+
   it("a Save As whose tab closes before its turn to write has nothing to save", async () => {
     const writeFile = vi.fn().mockResolvedValue(undefined);
     const spelling = deferred<string>();
@@ -790,6 +985,29 @@ describe("useTabs in-memory documents", () => {
       proceed = await result.current.flushForClose();
     });
 
+    expect(ask).toHaveBeenCalledWith(
+      expect.stringContaining(fileOf(result).path),
+      expect.objectContaining({ kind: "warning" }),
+    );
+    expect(proceed).toBe(false);
+    expect(result.current.tabs.map((t) => t.id)).toEqual([tabId]);
+    expect(fileOf(result).editContent).toBe("HELLO");
+  });
+
+  it("a window close reaches the unsaved-changes prompt when another window holds the target", async () => {
+    const writeFile = vi.fn().mockResolvedValue(undefined);
+    mockWriteFile(writeFile, { window_showing_file: async () => true });
+    vi.mocked(pickSaveDocument).mockResolvedValue("/p/a.md");
+    vi.mocked(ask).mockResolvedValueOnce(false);
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    const tabId = await newDraft(result, "HELLO");
+
+    let proceed: boolean | undefined;
+    await act(async () => {
+      proceed = await result.current.flushForClose();
+    });
+
+    expect(writeFile).not.toHaveBeenCalled();
     expect(ask).toHaveBeenCalledWith(
       expect.stringContaining(fileOf(result).path),
       expect.objectContaining({ kind: "warning" }),

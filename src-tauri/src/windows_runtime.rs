@@ -369,8 +369,10 @@ pub fn open_in_new_window<R: Runtime>(
 /// A note lives in one window: two windows over one file would each hold their
 /// own edit buffer and autosave chain, and the later write would silently
 /// discard the other's edits. Every in-window open consults this before loading
-/// a second copy. An implicit open passes `focus: false`, so a workspace
-/// auto-loading its remembered file cannot yank the user to another window.
+/// a second copy, and a Save As before it takes a path. An implicit open and a
+/// Save As pass `focus: false`: a workspace auto-loading its remembered file
+/// cannot yank the user to another window, and a refused Save As keeps its
+/// notice in view.
 #[tauri::command]
 pub fn window_showing_file<R: Runtime>(
     window: tauri::WebviewWindow<R>,

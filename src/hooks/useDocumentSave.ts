@@ -5,6 +5,7 @@ import type { SetTabsState } from "@/hooks/useTabStrip";
 import type { WorkspaceNotice } from "@/hooks/useWorkspaceNotice";
 import type { EnqueueWrite } from "@/hooks/useWriteQueue";
 import { documentPath } from "@/lib/documentPath";
+import { shownInAnotherWindow } from "@/lib/documentWindow";
 import { MARKDOWN_EXTENSIONS } from "@/lib/markdownExtensions";
 import { basename, isPathInside } from "@/lib/paths";
 import { pickSaveDocument } from "@/lib/pickers";
@@ -42,25 +43,26 @@ export function useDocumentSave({
   onWorkspaceNoticeRef.current = onWorkspaceNotice;
 
   // Write a virtual buffer to `target` and make it an ordinary file tab, or
-  // refuse. Runs in `target`'s turn in the write queue, so the check and the
-  // adoption are one step: a second Save As onto `target` starts once this one
-  // holds it.
+  // refuse. Runs in `target`'s turn in this window's write queue, so here the
+  // check and the adoption are one step: a second Save As onto `target` starts
+  // once this one holds it.
   const adoptTarget = useCallback(
     async (id: string, target: string): Promise<boolean> => {
-      // Neither the dialog nor the queue blocks the editor, so the buffer is
-      // read only now. A tab closed meanwhile has nothing left to save.
-      const latest = stateRef.current.tabs.find((tab) => tab.id === id);
-      if (latest?.kind !== "file") return true;
-      // newDocument seeds the edit buffer with "" and nothing resets it to null.
-      /* v8 ignore start -- unreachable: a tab that began virtual always has an edit buffer */
-      const content = latest.file.editContent ?? "";
-      /* v8 ignore stop */
-      const { revision } = latest.file;
-      const isHeld = () =>
-        stateRef.current.tabs.some((tab) => tab.kind === "file" && tab.file.path === target);
-      const refuse = () => {
+      // The notice refusing `target`, if a tab here or in another window holds it.
+      // This window's tabs are read after the backend answers, so a tab that
+      // landed meanwhile counts.
+      const refusalKey = async () => {
+        // The refusal is a notice here, which raising the other window would cover.
+        const elsewhere = await shownInAnotherWindow(target, { focus: false });
+        const here = stateRef.current.tabs.some(
+          (tab) => tab.kind === "file" && tab.file.path === target,
+        );
+        if (here) return "notice.saveTargetOpen";
+        return elsewhere ? "notice.saveTargetOpenElsewhere" : null;
+      };
+      const refuse = (key: string) => {
         onWorkspaceNoticeRef.current(
-          { key: "notice.saveTargetOpen", values: { name: basename(target) } },
+          { key, values: { name: basename(target) } },
           { persistent: true },
         );
         return false;
@@ -69,8 +71,19 @@ export function useDocumentSave({
       // Save As is the only way two tabs could land on one file. Refuse before
       // writing: the open tab may hold unsaved edits, and once the write has
       // happened there is no way to fold the two buffers into one without
-      // discarding somebody's work (#721).
-      if (isHeld()) return refuse();
+      // discarding somebody's work (#721). A tab in another window is one more
+      // buffer with its own autosave chain, so it refuses the write too.
+      const heldBefore = await refusalKey();
+      // Neither the dialog, the queue nor that check blocks the editor, so the
+      // buffer is read only now. A tab closed meanwhile has nothing left to save.
+      const latest = stateRef.current.tabs.find((tab) => tab.id === id);
+      if (latest?.kind !== "file") return true;
+      if (heldBefore) return refuse(heldBefore);
+      // newDocument seeds the edit buffer with "" and nothing resets it to null.
+      /* v8 ignore start -- unreachable: a tab that began virtual always has an edit buffer */
+      const content = latest.file.editContent ?? "";
+      /* v8 ignore stop */
+      const { revision } = latest.file;
       try {
         await invoke("write_file", { path: target, content });
       } catch (err) {
@@ -84,7 +97,8 @@ export function useDocumentSave({
       markSelfSave(target);
       // An open already under way can have landed during the write, and it
       // keeps the file: this buffer stays untitled, its text intact.
-      if (isHeld()) return refuse();
+      const heldAfter = await refusalKey();
+      if (heldAfter) return refuse(heldAfter);
       // Best-effort: a failed watch never blocks the save.
       invoke("watch_file", { path: target }).catch(() => {});
       setState((prev) => ({
