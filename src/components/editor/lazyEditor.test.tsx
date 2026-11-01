@@ -16,28 +16,35 @@ vi.mock("./SplitView", () => ({
   SplitView: ({ content }: { content: string }) => <div data-testid="split-view">{content}</div>,
 }));
 
-describe("lazyEditor", { timeout: CHUNK_LOAD_TIMEOUT_MS }, () => {
-  it("lazily renders the MarkdownEditor", async () => {
-    render(<MarkdownEditor content="editor body" onChange={() => {}} />);
-    await waitFor(
-      () => expect(screen.getByTestId("markdown-editor")).toHaveTextContent("editor body"),
-      {
-        timeout: CHUNK_LOAD_TIMEOUT_MS,
-      },
-    );
-  });
-
-  it("lazily renders the SplitView", async () => {
-    render(
-      <SplitView
-        content="split body"
-        onChange={() => {}}
-        searchOpen={false}
-        onSearchClose={() => {}}
-      />,
-    );
-    await waitFor(() => expect(screen.getByTestId("split-view")).toHaveTextContent("split body"), {
-      timeout: CHUNK_LOAD_TIMEOUT_MS,
+describe(
+  "lazyEditor",
+  () => {
+    it("lazily renders the MarkdownEditor", async () => {
+      render(<MarkdownEditor content="editor body" onChange={() => {}} />);
+      await waitFor(
+        () => expect(screen.getByTestId("markdown-editor")).toHaveTextContent("editor body"),
+        {
+          timeout: CHUNK_LOAD_TIMEOUT_MS,
+        },
+      );
     });
-  });
-});
+
+    it("lazily renders the SplitView", async () => {
+      render(
+        <SplitView
+          content="split body"
+          onChange={() => {}}
+          searchOpen={false}
+          onSearchClose={() => {}}
+        />,
+      );
+      await waitFor(
+        () => expect(screen.getByTestId("split-view")).toHaveTextContent("split body"),
+        {
+          timeout: CHUNK_LOAD_TIMEOUT_MS,
+        },
+      );
+    });
+  },
+  CHUNK_LOAD_TIMEOUT_MS,
+);

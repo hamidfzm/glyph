@@ -6,7 +6,12 @@ import { PluginsProvider } from "@/contexts/PluginsProvider";
 import { useRegistryEntries } from "@/hooks/usePluginRegistry";
 import { PLUGIN_API_VERSION } from "@/lib/plugins/apiVersion";
 import { pluginAppState, setPluginAppState } from "@/lib/plugins/appState";
-import { installedPlugin, resetPluginsMocks } from "@/test/pluginsHarness";
+import {
+  InstallProbe,
+  installedPlugin,
+  ManageProbe,
+  resetPluginsMocks,
+} from "@/test/pluginsHarness";
 
 vi.mock("@/lib/pickers", () => ({
   pickPluginDir: vi.fn(),
@@ -22,35 +27,30 @@ vi.mock("@/lib/plugins/settingsStore", () => ({
 
 beforeEach(resetPluginsMocks);
 
+function WorkspaceProbe() {
+  const p = usePluginsOptional();
+  const commands = useRegistryEntries(p?.commands ?? null);
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() => setPluginAppState({ ...pluginAppState(), workspaceRoot: "/ws" })}
+      >
+        setroot
+      </button>
+      <button type="button" onClick={() => void commands[0]?.run()}>
+        read
+      </button>
+      <span data-testid="ready">{commands.length}</span>
+    </div>
+  );
+}
+
 describe("PluginsProvider enable and uninstall", () => {
   it("tolerates enable and disable edge states across repeat calls", async () => {
     vi.mocked(invoke).mockImplementation((cmd) =>
       Promise.resolve(cmd === "list_plugins" ? [installedPlugin()] : undefined),
     );
-
-    function ManageProbe() {
-      const p = usePluginsOptional();
-      if (!p) return null;
-      return (
-        <div>
-          <span data-testid="installed">{p.installed.map((x) => x.id).join(",")}</span>
-          <span data-testid="loaded">{p.loaded.map((x) => x.id).join(",")}</span>
-          <span data-testid="disabled">{p.disabled.join(",")}</span>
-          <button type="button" onClick={() => void p.setEnabled("com.x.absent", true)}>
-            on-absent
-          </button>
-          <button type="button" onClick={() => void p.setEnabled("com.x.demo", true)}>
-            on
-          </button>
-          <button type="button" onClick={() => void p.setEnabled("com.x.demo", false)}>
-            off
-          </button>
-          <button type="button" onClick={() => void p.uninstall("com.x.demo")}>
-            rm
-          </button>
-        </div>
-      );
-    }
 
     render(
       <PluginsProvider>
@@ -107,25 +107,6 @@ describe("PluginsProvider enable and uninstall", () => {
       Promise.resolve(cmd === "list_plugins" ? [reader] : undefined),
     );
 
-    function WorkspaceProbe() {
-      const p = usePluginsOptional();
-      const commands = useRegistryEntries(p?.commands ?? null);
-      return (
-        <div>
-          <button
-            type="button"
-            onClick={() => setPluginAppState({ ...pluginAppState(), workspaceRoot: "/ws" })}
-          >
-            setroot
-          </button>
-          <button type="button" onClick={() => void commands[0]?.run()}>
-            read
-          </button>
-          <span data-testid="ready">{commands.length}</span>
-        </div>
-      );
-    }
-
     render(
       <PluginsProvider>
         <WorkspaceProbe />
@@ -157,18 +138,9 @@ describe("PluginsProvider enable and uninstall", () => {
       sha256: "a".repeat(64),
     };
 
-    function InstallProbe() {
-      const plugins = usePluginsOptional();
-      return (
-        <button type="button" onClick={() => void plugins?.installFromRegistry(entry)}>
-          market
-        </button>
-      );
-    }
-
     render(
       <PluginsProvider>
-        <InstallProbe />
+        <InstallProbe entry={entry} />
       </PluginsProvider>,
     );
     screen.getByRole("button", { name: "market" }).click();
@@ -185,20 +157,6 @@ describe("PluginsProvider enable and uninstall", () => {
     vi.mocked(invoke).mockImplementation((cmd) =>
       Promise.resolve(cmd === "list_plugins" ? [broken] : undefined),
     );
-
-    function ManageProbe() {
-      const p = usePluginsOptional();
-      if (!p) return null;
-      return (
-        <div>
-          <span data-testid="installed">{p.installed.map((x) => x.id).join(",")}</span>
-          <span data-testid="loaded">{p.loaded.map((x) => x.id).join(",")}</span>
-          <button type="button" onClick={() => void p.setEnabled("com.x.demo", true)}>
-            on
-          </button>
-        </div>
-      );
-    }
 
     render(
       <PluginsProvider>
@@ -222,19 +180,6 @@ describe("PluginsProvider enable and uninstall", () => {
       return Promise.resolve(undefined);
     });
 
-    function ManageProbe() {
-      const p = usePluginsOptional();
-      if (!p) return null;
-      return (
-        <div>
-          <span data-testid="installed">{p.installed.map((x) => x.id).join(",")}</span>
-          <button type="button" onClick={() => void p.uninstall("com.x.demo")}>
-            rm
-          </button>
-        </div>
-      );
-    }
-
     render(
       <PluginsProvider>
         <ManageProbe />
@@ -256,24 +201,6 @@ describe("PluginsProvider enable and uninstall", () => {
       Promise.resolve(cmd === "list_plugins" ? [installedPlugin()] : undefined),
     );
 
-    function ManageProbe() {
-      const p = usePluginsOptional();
-      if (!p) return null;
-      return (
-        <div>
-          <span data-testid="loaded">{p.loaded.map((x) => x.id).join(",")}</span>
-          <span data-testid="disabled">{p.disabled.join(",")}</span>
-          <span data-testid="commands">{p.commands.list().length}</span>
-          <button type="button" onClick={() => void p.setEnabled("com.x.demo", false)}>
-            off
-          </button>
-          <button type="button" onClick={() => void p.setEnabled("com.x.demo", true)}>
-            on
-          </button>
-        </div>
-      );
-    }
-
     render(
       <PluginsProvider>
         <ManageProbe />
@@ -289,7 +216,7 @@ describe("PluginsProvider enable and uninstall", () => {
     });
     await waitFor(() => expect(screen.getByTestId("disabled")).toHaveTextContent("com.x.demo"));
     expect(screen.getByTestId("loaded")).toHaveTextContent("");
-    expect(screen.getByTestId("commands")).toHaveTextContent("0");
+    expect(screen.getByTestId("command-count")).toHaveTextContent("0");
 
     await act(async () => {
       screen.getByRole("button", { name: "on" }).click();
@@ -312,26 +239,9 @@ describe("PluginsProvider enable and uninstall", () => {
       Promise.resolve(cmd === "list_plugins" ? [slow] : undefined),
     );
 
-    function ToggleProbe() {
-      const p = usePluginsOptional();
-      if (!p) return null;
-      return (
-        <div>
-          <span data-testid="loaded">{p.loaded.map((x) => x.id).join(",")}</span>
-          <span data-testid="disabled">{p.disabled.join(",")}</span>
-          <button type="button" onClick={() => void p.setEnabled("com.x.demo", false)}>
-            off
-          </button>
-          <button type="button" onClick={() => void p.setEnabled("com.x.demo", true)}>
-            on
-          </button>
-        </div>
-      );
-    }
-
     render(
       <PluginsProvider>
-        <ToggleProbe />
+        <ManageProbe />
       </PluginsProvider>,
     );
     await waitFor(() => expect(screen.getByTestId("loaded")).toHaveTextContent("com.x.demo"));
@@ -354,19 +264,6 @@ describe("PluginsProvider enable and uninstall", () => {
     vi.mocked(invoke).mockImplementation((cmd) =>
       Promise.resolve(cmd === "list_plugins" ? [installedPlugin()] : undefined),
     );
-
-    function ManageProbe() {
-      const p = usePluginsOptional();
-      if (!p) return null;
-      return (
-        <div>
-          <span data-testid="installed">{p.installed.map((x) => x.id).join(",")}</span>
-          <button type="button" onClick={() => void p.uninstall("com.x.demo")}>
-            rm
-          </button>
-        </div>
-      );
-    }
 
     render(
       <PluginsProvider>

@@ -7,7 +7,13 @@ import { registerSessionSidebarBridge, registerSessionZoomBridge } from "@/lib/s
 import type { WorkspaceSession } from "@/lib/workspaceSession";
 import { getWorkspaceSession, saveWorkspaceSession } from "@/lib/workspaceSession";
 import { deferred } from "@/test/deferred";
-import { defaultOptions, type Invoker, makeInvoker, resetTabsMocks } from "@/test/tabsHarness";
+import {
+  defaultOptions,
+  type Invoker,
+  makeInvoker,
+  resetTabsMocks,
+  spelledAs,
+} from "@/test/tabsHarness";
 import { useTabs } from "./useTabs";
 
 vi.mock("@/lib/pickers", () => ({
@@ -233,6 +239,115 @@ describe("useTabs per-workspace sessions", () => {
     expect(applyVisibility).toHaveBeenCalledWith({
       filesSidebarVisible: false,
       outlineSidebarVisible: true,
+    });
+  });
+
+  describe("two spellings of one path", () => {
+    const ROOT = "C:\\ws";
+    const VERBATIM_ROOT = "\\\\?\\C:\\ws";
+    const NOTE = "C:\\ws\\one.md";
+    const VERBATIM_NOTE = "\\\\?\\C:\\ws\\one.md";
+
+    function spellingRootAndNote() {
+      vi.mocked(invoke).mockImplementation(
+        makeInvoker({
+          document_path: spelledAs({ [VERBATIM_NOTE]: NOTE, [VERBATIM_ROOT]: ROOT }),
+        }) as typeof invoke,
+      );
+    }
+
+    it("restores one tab for a file a snapshot holds under both, active by either", async () => {
+      spellingRootAndNote();
+      saveWorkspaceSession(
+        ROOT,
+        snapshot({
+          tabs: [
+            { kind: "file", path: VERBATIM_NOTE },
+            { kind: "file", path: NOTE },
+          ],
+          activeTabPath: VERBATIM_NOTE,
+        }),
+      );
+      const { result } = renderHook(() => useTabs(defaultOptions()));
+      await ready(result);
+
+      await act(async () => {
+        await result.current.openFolder(ROOT);
+      });
+
+      expect(filePaths(result)).toEqual([NOTE]);
+      expect(result.current.activeFile?.path).toBe(NOTE);
+    });
+
+    it.each([
+      ["a saved root", VERBATIM_ROOT],
+      ["a launch, which no longer gives the old spelling", ROOT],
+    ])(
+      "adopts one spelling of a root from %s and finds its older session",
+      async (_how, opened) => {
+        spellingRootAndNote();
+        saveWorkspaceSession(
+          VERBATIM_ROOT,
+          snapshot({ tabs: [{ kind: "file", path: VERBATIM_NOTE }] }),
+        );
+        const { result } = renderHook(() => useTabs(defaultOptions()));
+        await ready(result);
+
+        await act(async () => {
+          await result.current.openFolder(opened);
+        });
+
+        expect(result.current.workspace?.root).toBe(ROOT);
+        expect(invoke).toHaveBeenCalledWith("watch_directory", { path: ROOT });
+        expect(filePaths(result)).toEqual([NOTE]);
+      },
+    );
+
+    it("finds the older session of a network root", async () => {
+      const share = "\\\\host\\share\\ws";
+      saveWorkspaceSession(
+        "\\\\?\\UNC\\host\\share\\ws",
+        snapshot({ tabs: [{ kind: "file", path: `${share}\\one.md` }] }),
+      );
+      const { result } = renderHook(() => useTabs(defaultOptions()));
+      await ready(result);
+
+      await act(async () => {
+        await result.current.openFolder(share);
+      });
+
+      expect(filePaths(result)).toEqual([`${share}\\one.md`]);
+    });
+
+    it("prefers a session under the one spelling over an older one", async () => {
+      spellingRootAndNote();
+      saveWorkspaceSession(VERBATIM_ROOT, snapshot({ tabs: [{ kind: "file", path: NOTE }] }));
+      saveWorkspaceSession(ROOT, snapshot({ tabs: [] }));
+      const { result } = renderHook(() => useTabs(defaultOptions()));
+      await ready(result);
+
+      await act(async () => {
+        await result.current.openFolder(ROOT);
+      });
+
+      expect(filePaths(result)).toEqual([]);
+    });
+
+    it("does not open again a workspace it shows under the other spelling", async () => {
+      spellingRootAndNote();
+      const { result } = renderHook(() => useTabs(defaultOptions()));
+      await ready(result);
+      await act(async () => {
+        await result.current.openFolder(ROOT);
+      });
+      vi.mocked(invoke).mockClear();
+
+      await act(async () => {
+        await result.current.openFolder(VERBATIM_ROOT);
+      });
+
+      expect(invoke).not.toHaveBeenCalledWith("watch_directory", expect.anything());
+      expect(result.current.workspace?.root).toBe(ROOT);
     });
   });
 

@@ -4,6 +4,7 @@ import { vi } from "vitest";
 import { usePluginsOptional } from "@/contexts/PluginsContext";
 import { useRegistryEntries } from "@/hooks/usePluginRegistry";
 import { PLUGIN_API_VERSION } from "@/lib/plugins/apiVersion";
+import type { RegistryEntry } from "@/lib/plugins/marketplace";
 import { loadPluginSettings } from "@/lib/plugins/settingsStore";
 import type { InstalledPlugin } from "@/lib/plugins/types";
 
@@ -70,6 +71,49 @@ export function Probe() {
       <span data-testid="commands">{commands.map((c) => c.id).join(",")}</span>
       <span data-testid="initial-load">{String(plugins?.initialLoadDone)}</span>
     </div>
+  );
+}
+
+/** Provider state and a button for each management call on the fixture plugin. */
+export function ManageProbe() {
+  const p = usePluginsOptional();
+  if (!p) return null;
+  return (
+    <div>
+      <span data-testid="installed">{p.installed.map((x) => x.id).join(",")}</span>
+      <span data-testid="loaded">{p.loaded.map((x) => x.id).join(",")}</span>
+      <span data-testid="disabled">{p.disabled.join(",")}</span>
+      <span data-testid="command-count">{p.commands.list().length}</span>
+      <button type="button" onClick={() => void p.setEnabled("com.x.absent", true)}>
+        on-absent
+      </button>
+      <button type="button" onClick={() => void p.setEnabled("com.x.demo", true)}>
+        on
+      </button>
+      <button type="button" onClick={() => void p.setEnabled("com.x.demo", false)}>
+        off
+      </button>
+      <button type="button" onClick={() => void p.uninstall("com.x.demo")}>
+        rm
+      </button>
+    </div>
+  );
+}
+
+/** A folder install button, plus a marketplace one when `entry` is given. */
+export function InstallProbe({ entry }: { entry?: RegistryEntry }) {
+  const plugins = usePluginsOptional();
+  return (
+    <>
+      <button type="button" onClick={() => void plugins?.installFromFolder()}>
+        install
+      </button>
+      {entry && (
+        <button type="button" onClick={() => void plugins?.installFromRegistry(entry)}>
+          market
+        </button>
+      )}
+    </>
   );
 }
 

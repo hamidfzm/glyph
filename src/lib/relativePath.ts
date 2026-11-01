@@ -12,7 +12,7 @@ import { isPathInside } from "@/lib/paths";
 // `.` and `..` segments. `docPath` is an absolute file path; the result keeps
 // its separator style (Windows backslash vs. POSIX forward slash) and any
 // leading prefix (drive, `\\?\` verbatim prefix, or UNC root), so it round-trips
-// with the paths the backend hands us. A trailing `#heading` on the target is
+// with the document's own path. A trailing `#heading` on the target is
 // dropped. `..` never climbs above the volume (see volumeSegments); escapes
 // past the workspace are caught separately by isWithinRoot.
 export function normalizeRelativePath(docPath: string, target: string): string {

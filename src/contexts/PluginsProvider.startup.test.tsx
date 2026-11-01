@@ -2,14 +2,15 @@ import { invoke } from "@tauri-apps/api/core";
 import { getStore } from "@tauri-apps/plugin-store";
 import { act, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { usePluginsOptional } from "@/contexts/PluginsContext";
 import { PluginsProvider } from "@/contexts/PluginsProvider";
 import { pickPluginDir } from "@/lib/pickers";
 import { loadPluginSettings, savePluginSetting } from "@/lib/plugins/settingsStore";
 import {
   grantedStore,
+  InstallProbe,
   inspection,
   installedPlugin,
+  ManageProbe,
   Probe,
   resetPluginsMocks,
 } from "@/test/pluginsHarness";
@@ -209,23 +210,10 @@ describe("PluginsProvider startup", () => {
     });
     vi.mocked(pickPluginDir).mockResolvedValue("/somewhere/plugin-folder");
 
-    function ManageProbe() {
-      const p = usePluginsOptional();
-      if (!p) return null;
-      return (
-        <div>
-          <span data-testid="loaded">{p.loaded.map((x) => x.id).join(",")}</span>
-          <span data-testid="disabled">{p.disabled.join(",")}</span>
-          <button type="button" onClick={() => void p.installFromFolder()}>
-            install
-          </button>
-        </div>
-      );
-    }
-
     render(
       <PluginsProvider>
         <ManageProbe />
+        <InstallProbe />
       </PluginsProvider>,
     );
 

@@ -139,6 +139,16 @@ function queueWrite(): Promise<void> {
   return next;
 }
 
+/** The spelling a Windows launch gave a root before every path had one. */
+function verbatimSpelling(root: string): string {
+  return root.startsWith("\\\\") ? `\\\\?\\UNC\\${root.slice(2)}` : `\\\\?\\${root}`;
+}
+
+/** `root`'s session, or the one it was saved under when launched on an earlier version. */
+export async function findWorkspaceSession(root: string): Promise<WorkspaceSession | null> {
+  return (await getWorkspaceSession(root)) ?? getWorkspaceSession(verbatimSpelling(root));
+}
+
 /** Queue `session` as the snapshot for `root` (debounced, latest wins). */
 export function saveWorkspaceSession(root: string, session: WorkspaceSession): void {
   if (readFailed.has(root)) return;

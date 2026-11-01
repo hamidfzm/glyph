@@ -9,7 +9,7 @@ import { tabPathOf } from "@/lib/tabs";
 import type { PendingOpen } from "@/lib/windowContext";
 import { getWorkspaceSession } from "@/lib/workspaceSession";
 import { deferred } from "@/test/deferred";
-import { defaultOptions, makeInvoker, resetTabsMocks } from "@/test/tabsHarness";
+import { defaultOptions, makeInvoker, resetTabsMocks, spelledAs } from "@/test/tabsHarness";
 import { useTabs } from "./useTabs";
 import { RESTORE_PLUGIN_WAIT_MS } from "./useTabsSession";
 
@@ -230,6 +230,32 @@ describe("useTabs initialization", () => {
     if (result.current.activeTab?.kind === "file") {
       expect(result.current.activeTab.file.path).toBe("/p/b.md");
     }
+  });
+
+  it("restores one tab for a file saved under two spellings, and activates it by either", async () => {
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        document_path: spelledAs({
+          "\\\\?\\C:\\p\\a.md": "C:\\p\\a.md",
+          "\\\\?\\C:\\p\\b.md": "C:\\p\\b.md",
+        }),
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() =>
+      useTabs(
+        defaultOptions({
+          openTabs: ["\\\\?\\C:\\p\\a.md", "C:\\p\\a.md", "C:\\p\\b.md"],
+          activeTabPath: "\\\\?\\C:\\p\\b.md",
+        }),
+      ),
+    );
+
+    await waitFor(() => {
+      expect(result.current.initializing).toBe(false);
+    });
+
+    expect(tabPaths(result.current.tabs)).toEqual(["C:\\p\\a.md", "C:\\p\\b.md"]);
+    expect(result.current.activeFile?.path).toBe("C:\\p\\b.md");
   });
 
   it("restores a folder entry as the workspace and file entries as tabs", async () => {

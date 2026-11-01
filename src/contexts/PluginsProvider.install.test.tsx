@@ -7,7 +7,13 @@ import { usePluginsOptional } from "@/contexts/PluginsContext";
 import { PluginsProvider } from "@/contexts/PluginsProvider";
 import { pickPluginDir } from "@/lib/pickers";
 import { PLUGIN_API_VERSION } from "@/lib/plugins/apiVersion";
-import { inspection, installedPlugin, Probe, resetPluginsMocks } from "@/test/pluginsHarness";
+import {
+  InstallProbe,
+  inspection,
+  installedPlugin,
+  Probe,
+  resetPluginsMocks,
+} from "@/test/pluginsHarness";
 
 vi.mock("@/lib/pickers", () => ({
   pickPluginDir: vi.fn(),
@@ -23,6 +29,23 @@ vi.mock("@/lib/plugins/settingsStore", () => ({
 
 beforeEach(resetPluginsMocks);
 
+function MarketProbe() {
+  const p = usePluginsOptional();
+  if (!p) return null;
+  return (
+    <div>
+      <span data-testid="registry">{p.registry.map((e) => e.id).join(",")}</span>
+      <span data-testid="loaded">{p.loaded.map((x) => x.id).join(",")}</span>
+      <button
+        type="button"
+        onClick={() => p.registry[0] && void p.installFromRegistry(p.registry[0])}
+      >
+        market
+      </button>
+    </div>
+  );
+}
+
 describe("PluginsProvider installing", () => {
   it("installs a plugin from a picked folder and shows a toast", async () => {
     vi.mocked(invoke).mockImplementation((cmd) => {
@@ -33,15 +56,6 @@ describe("PluginsProvider installing", () => {
       return Promise.resolve(undefined);
     });
     vi.mocked(pickPluginDir).mockResolvedValue("/somewhere/plugin-folder");
-
-    function InstallProbe() {
-      const plugins = usePluginsOptional();
-      return (
-        <button type="button" onClick={() => void plugins?.installFromFolder()}>
-          install
-        </button>
-      );
-    }
 
     render(
       <PluginsProvider>
@@ -63,15 +77,6 @@ describe("PluginsProvider installing", () => {
     );
     vi.mocked(pickPluginDir).mockResolvedValue(null);
 
-    function InstallProbe() {
-      const plugins = usePluginsOptional();
-      return (
-        <button type="button" onClick={() => void plugins?.installFromFolder()}>
-          install
-        </button>
-      );
-    }
-
     render(
       <PluginsProvider>
         <InstallProbe />
@@ -90,15 +95,6 @@ describe("PluginsProvider installing", () => {
     });
     vi.mocked(pickPluginDir).mockResolvedValue("/somewhere/plugin-folder");
     vi.mocked(ask).mockResolvedValueOnce(false);
-
-    function InstallProbe() {
-      const plugins = usePluginsOptional();
-      return (
-        <button type="button" onClick={() => void plugins?.installFromFolder()}>
-          install
-        </button>
-      );
-    }
 
     render(
       <PluginsProvider>
@@ -126,18 +122,9 @@ describe("PluginsProvider installing", () => {
       sha256: "aa",
     };
 
-    function InstallProbe() {
-      const plugins = usePluginsOptional();
-      return (
-        <button type="button" onClick={() => void plugins?.installFromRegistry(entry)}>
-          market
-        </button>
-      );
-    }
-
     render(
       <PluginsProvider>
-        <InstallProbe />
+        <InstallProbe entry={entry} />
       </PluginsProvider>,
     );
     screen.getByRole("button", { name: "market" }).click();
@@ -166,15 +153,6 @@ describe("PluginsProvider installing", () => {
     vi.mocked(pickPluginDir).mockResolvedValue("/somewhere/plugin-folder");
     vi.mocked(ask).mockClear();
     vi.mocked(ask).mockResolvedValueOnce(true).mockResolvedValueOnce(false);
-
-    function InstallProbe() {
-      const plugins = usePluginsOptional();
-      return (
-        <button type="button" onClick={() => void plugins?.installFromFolder()}>
-          install
-        </button>
-      );
-    }
 
     render(
       <PluginsProvider>
@@ -205,15 +183,6 @@ describe("PluginsProvider installing", () => {
       return Promise.resolve(undefined);
     });
     vi.mocked(pickPluginDir).mockResolvedValue("/somewhere/plugin-folder");
-
-    function InstallProbe() {
-      const plugins = usePluginsOptional();
-      return (
-        <button type="button" onClick={() => void plugins?.installFromFolder()}>
-          install
-        </button>
-      );
-    }
 
     render(
       <PluginsProvider>
@@ -247,15 +216,6 @@ describe("PluginsProvider installing", () => {
     });
     vi.mocked(pickPluginDir).mockResolvedValue("/somewhere/plugin-folder");
 
-    function InstallProbe() {
-      const plugins = usePluginsOptional();
-      return (
-        <button type="button" onClick={() => void plugins?.installFromFolder()}>
-          install
-        </button>
-      );
-    }
-
     render(
       <PluginsProvider>
         <InstallProbe />
@@ -282,15 +242,6 @@ describe("PluginsProvider installing", () => {
       return Promise.resolve(undefined);
     });
     vi.mocked(pickPluginDir).mockResolvedValue("/somewhere/plugin-folder");
-
-    function InstallProbe() {
-      const plugins = usePluginsOptional();
-      return (
-        <button type="button" onClick={() => void plugins?.installFromFolder()}>
-          install
-        </button>
-      );
-    }
 
     render(
       <PluginsProvider>
@@ -337,23 +288,6 @@ describe("PluginsProvider installing", () => {
       return Promise.resolve(undefined);
     });
 
-    function MarketProbe() {
-      const p = usePluginsOptional();
-      if (!p) return null;
-      return (
-        <div>
-          <span data-testid="registry">{p.registry.map((e) => e.id).join(",")}</span>
-          <span data-testid="loaded">{p.loaded.map((x) => x.id).join(",")}</span>
-          <button
-            type="button"
-            onClick={() => p.registry[0] && void p.installFromRegistry(p.registry[0])}
-          >
-            market
-          </button>
-        </div>
-      );
-    }
-
     render(
       <PluginsProvider>
         <MarketProbe />
@@ -386,15 +320,6 @@ describe("PluginsProvider installing", () => {
     });
     vi.mocked(pickPluginDir).mockResolvedValue("/bad/folder");
 
-    function InstallProbe() {
-      const plugins = usePluginsOptional();
-      return (
-        <button type="button" onClick={() => void plugins?.installFromFolder()}>
-          install
-        </button>
-      );
-    }
-
     render(
       <PluginsProvider>
         <InstallProbe />
@@ -419,15 +344,6 @@ describe("PluginsProvider installing", () => {
       return Promise.resolve(undefined);
     });
     vi.mocked(pickPluginDir).mockResolvedValue("/bad/folder");
-
-    function InstallProbe() {
-      const plugins = usePluginsOptional();
-      return (
-        <button type="button" onClick={() => void plugins?.installFromFolder()}>
-          install
-        </button>
-      );
-    }
 
     render(
       <PluginsProvider>

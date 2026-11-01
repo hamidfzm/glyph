@@ -94,7 +94,7 @@ export function nextEditorMode(current: EditorMode | undefined, canSplit = true)
   const idx = current ? cycle.indexOf(current) : 0;
   // indexOf is -1 when the stored mode is split but split is no longer in the
   // cycle; treat that as position 0 so the next tap lands on edit.
-  return cycle[((idx < 0 ? 0 : idx) + 1) % cycle.length];
+  return cycle[(Math.max(idx, 0) + 1) % cycle.length];
 }
 
 /**

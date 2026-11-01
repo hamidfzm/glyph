@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, renderHook, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SyncStatusIndicator } from "@/components/layout/SyncStatusIndicator";
@@ -83,24 +83,15 @@ describe("SyncConfigContext", () => {
   });
 
   it("exposes a null workspace path when no workspace is open", async () => {
-    let seen: string | null | undefined;
-    function Probe() {
-      seen = useSyncConfigContext().workspacePath;
-      return null;
-    }
-    render(<Probe />, { wrapper: wrap(null) });
-    await waitFor(() => expect(seen).toBeNull());
+    const { result } = renderHook(() => useSyncConfigContext(), { wrapper: wrap(null) });
+    await waitFor(() => expect(result.current.workspacePath).toBeNull());
     // No workspace => no sync commands fire on mount.
     expect(invoke).not.toHaveBeenCalled();
   });
 
   it("throws when used outside the provider", () => {
-    function Bare() {
-      useSyncConfigContext();
-      return null;
-    }
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
-    expect(() => render(<Bare />)).toThrow(/SyncConfigProvider/);
+    expect(() => renderHook(() => useSyncConfigContext())).toThrow(/SyncConfigProvider/);
     spy.mockRestore();
   });
 });
