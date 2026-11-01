@@ -69,7 +69,7 @@
     },
     "themePresets": {
       "name": "Farbschemata",
-      "description": "Fertige Farbschemata über Hell und Dunkel hinaus: Sepia, Solarized und Hoher Kontrast, jeweils mit heller und dunkler Variante."
+      "description": "Fertige Farbschemata über Hell und Dunkel hinaus: Sepia, Solarized und Hoher Kontrast, jeweils mit heller und dunkler Variante. Auswahl unter Einstellungen > Darstellung."
     }
   }
 }

@@ -69,11 +69,7 @@ export function UpdatesSection() {
       {status.kind === "available" && (
         <div className="settings-description" style={{ marginTop: 8 }}>
           {t("updates.available", { version: status.version })}{" "}
-          <button
-            type="button"
-            onClick={() => void openUrl(status.url)}
-            style={{ color: "var(--color-accent)", textDecoration: "underline", cursor: "pointer" }}
-          >
+          <button type="button" className="settings-link" onClick={() => void openUrl(status.url)}>
             {t("updates.download")}
           </button>
         </div>

@@ -69,7 +69,7 @@
     },
     "themePresets": {
       "name": "Theme presets",
-      "description": "Ready-made color schemes beyond light and dark: Sepia, Solarized, and High contrast, each with a light and a dark variant."
+      "description": "Ready-made color schemes beyond light and dark: Sepia, Solarized, and High contrast, each with a light and a dark variant. Pick one in Settings > Appearance."
     }
   }
 }

@@ -1,4 +1,5 @@
 import { type ReactNode, useCallback, useRef, useState } from "react";
+import { ColorSchemeStyle } from "@/components/plugins/ColorSchemeStyle";
 import { PluginOverlay } from "@/components/plugins/PluginOverlay";
 import { PluginStyles } from "@/components/plugins/PluginStyles";
 import { type PluginToast, PluginToasts } from "@/components/plugins/PluginToasts";
@@ -40,7 +41,7 @@ export function PluginsProvider({ children }: { children: ReactNode }) {
     }),
   );
 
-  const coreReady = useCorePlugins(host, pushToast);
+  const core = useCorePlugins(host, pushToast);
   const {
     installed,
     disabled,
@@ -52,7 +53,7 @@ export function PluginsProvider({ children }: { children: ReactNode }) {
     installFromRegistry,
     setEnabled,
     uninstall,
-  } = usePluginLibrary({ host, pushToast, coreReady });
+  } = usePluginLibrary({ host, pushToast, coreReady: core.ready });
 
   return (
     <PluginsContext.Provider
@@ -67,11 +68,13 @@ export function PluginsProvider({ children }: { children: ReactNode }) {
         settingsPanels: host.settingsPanels,
         workspaceSettingsPanels: host.workspaceSettingsPanels,
         styles: host.styles,
+        colorSchemes: host.colorSchemes,
         exporters: host.exporters,
         siteThemes: host.siteThemes,
         installed,
         disabled,
         loaded,
+        failedCorePlugins: core.failed,
         registry,
         updates,
         installFromFolder,
@@ -82,6 +85,7 @@ export function PluginsProvider({ children }: { children: ReactNode }) {
       }}
     >
       {children}
+      <ColorSchemeStyle />
       <PluginStyles />
       <PluginToasts toasts={toasts} />
       <PluginOverlay />

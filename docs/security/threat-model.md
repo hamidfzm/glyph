@@ -821,11 +821,11 @@ exist on desktop only, like `glyph mcp`.
   and `ipc.localhost` is the command bridge; a plugin that declares
   `network:localhost` for a local server reaches that server alone. The
   manifest parser refuses a `network:` host that is empty, not a plain
-  lowercase name, or under `.localhost`. A stylesheet a sandboxed plugin
-  adds is dropped when it would make requests (`url()`, `image-set()`,
-  `@import`: with a selector on an attribute, each one reports what the
-  page holds), however the name is spelled: the check reads the text with
-  its CSS escapes decoded, since `\75rl(` is still `url(`. Exports carry
+  lowercase name, or under `.localhost`. A stylesheet or color scheme a
+  sandboxed plugin adds is dropped when it would make requests (`url()`,
+  `image-set()`, `@import`: with a selector on an attribute, each one reports
+  what the page holds), however the name is spelled: the check reads the text
+  with its CSS escapes decoded, since `\75rl(` is still `url(`. Exports carry
   every plugin's styles, so the HTML export, and the styles handed to a
   plugin's exporter, write `</` as `<\/`. CSS reads both the same, and a
   stylesheet cannot end the `<style>` element it is placed in and add a
@@ -862,8 +862,12 @@ exist on desktop only, like `glyph mcp`.
   with full trust and no consent prompt, take the permissions they need
   (`workspace:read` for tags and backlinks, and `workspace:write` as well for
   daily notes) from that same list rather than from disk, and only their on/off
-  state lives in `settings.json`. A core plugin's own preferences (the chosen
-  theme preset) sit in `plugins.json` like any plugin's `ctx.settings`, and the
-  plugin checks them against its own allowlist when it reads them. The backend
+  state lives in `settings.json`. The picked color scheme (theme presets
+  offers three) is an app setting there too: the stored id is only looked up
+  among the schemes loaded plugins registered, anything malformed reads as the
+  default palette, and the stored label renders as text. A preset picked before
+  the choice moved to Appearance sits in `plugins.json`: the app reads it once,
+  accepts only the three preset ids by strict equality, and removes it after
+  `settings.json` holds the carried-over choice. The backend
   reserves the `glyph.core.` id prefix, so an installed plugin cannot take a
   core plugin's settings, grants, or host slot.

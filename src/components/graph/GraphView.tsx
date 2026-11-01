@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { FitIcon } from "@/components/icons/FitIcon";
 import { usePluginsOptional } from "@/contexts/PluginsContext";
 import { useWorkspaceRoot } from "@/contexts/TabsContext";
+import { useColorScheme } from "@/hooks/useColorScheme";
 import { useElementSize } from "@/hooks/useElementSize";
 import { useGraphCamera } from "@/hooks/useGraphCamera";
 import { useGraphFocus } from "@/hooks/useGraphFocus";
@@ -47,12 +48,17 @@ export function GraphView({ graph, onOpenFile }: GraphViewProps) {
   const { layout, version, reheat } = useGraphSimulation(graph, { persistKey });
   const camera = useGraphCamera(persistKey);
   const isDark = useIsDarkMode();
-  // Theme presets and other plugin stylesheets restyle the app too. Read after
+  // Color schemes and other plugin stylesheets restyle the app too. Read after
   // commit, once a new sheet is in the document.
   const pluginStyles = useRegistryEntries(usePluginsOptional()?.styles);
+  const { status: colorScheme } = useColorScheme();
+  const activeScheme = colorScheme.kind === "active" ? colorScheme.scheme : null;
   const [theme, setTheme] = useState(() => readGraphTheme(document.documentElement));
   // biome-ignore lint/correctness/useExhaustiveDependencies: re-read CSS variables when the theme flips or a stylesheet changes
-  useLayoutEffect(() => setTheme(readGraphTheme(document.documentElement)), [isDark, pluginStyles]);
+  useLayoutEffect(
+    () => setTheme(readGraphTheme(document.documentElement)),
+    [isDark, pluginStyles, activeScheme],
+  );
 
   // Auto-fit follows the live layout until the user takes manual control.
   // Only honour a stored auto-fit when the layout actually resumed the shape it
