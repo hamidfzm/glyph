@@ -7,6 +7,7 @@ import { isCliExportProcess } from "@/lib/cliExport";
 import { D2_EXTENSIONS } from "@/lib/d2Extensions";
 import { loadFileContent } from "@/lib/documentContent";
 import { documentPath } from "@/lib/documentPath";
+import { shownInAnotherWindow } from "@/lib/documentWindow";
 import { isImageFile } from "@/lib/imageExtensions";
 import { MARKDOWN_EXTENSIONS } from "@/lib/markdownExtensions";
 import { isNotebookFile, isSupportedFile, NOTEBOOK_EXTENSIONS } from "@/lib/notebookExtensions";
@@ -118,17 +119,8 @@ export function useOpenDocument({
       // asked for. An implicit one (a workspace auto-loading its remembered
       // file, history replaying a move) reports the miss instead: yanking focus
       // to another window on a gesture the user did not make for that note is
-      // worse than showing nothing. Fails open, so a backend hiccup degrades to
-      // the previous behavior rather than refusing to open anything.
-      try {
-        const elsewhere = await invoke<boolean>("window_showing_file", {
-          path,
-          focus: !options?.implicit,
-        });
-        if (elsewhere) return undefined;
-      } catch {
-        // ignore
-      }
+      // worse than showing nothing.
+      if (await shownInAnotherWindow(path, { focus: !options?.implicit })) return undefined;
 
       const id = generateTabId();
       try {
