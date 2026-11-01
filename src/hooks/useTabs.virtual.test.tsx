@@ -15,6 +15,7 @@ import {
   makeInvoker,
   mockWriteFile,
   resetTabsMocks,
+  spelledAs,
   type TabsHook,
   writesOf,
 } from "@/test/tabsHarness";
@@ -221,6 +222,169 @@ describe("useTabs in-memory documents", () => {
       expect(draft.file.editContent).toBe("MY DRAFT");
       expect(draft.file.path).toMatch(/^Untitled-\d+$/);
     }
+  });
+
+  it.each([
+    ["the verbatim prefix", "\\\\?\\C:\\p\\a.md"],
+    ["another casing", "C:\\p\\A.md"],
+  ])("refuses a Save As onto an open file picked under %s", async (_how, picked) => {
+    const writeFile = vi.fn().mockResolvedValue(undefined);
+    const onWorkspaceNotice = vi.fn();
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        document_path: spelledAs({ [picked]: "C:\\p\\a.md" }),
+        write_file: writeFile as unknown as Invoker,
+      }) as typeof invoke,
+    );
+    vi.mocked(pickSaveDocument).mockResolvedValue(picked);
+    const { result } = renderHook(() => useTabs(defaultOptions({ onWorkspaceNotice })));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+    await act(async () => {
+      await result.current.openFile("C:\\p\\a.md");
+    });
+    const tabId = await newDraft(result, "MY DRAFT");
+
+    let ok: boolean | undefined;
+    await act(async () => {
+      ok = await result.current.saveDocument(tabId);
+    });
+
+    expect(ok).toBe(false);
+    expect(writeFile).not.toHaveBeenCalled();
+    expect(onWorkspaceNotice).toHaveBeenCalledWith(
+      expect.objectContaining({ key: "notice.saveTargetOpen", values: { name: "a.md" } }),
+      { persistent: true },
+    );
+    expect(fileOf(result, 1).virtual).toBe(true);
+    expect(fileOf(result, 1).editContent).toBe("MY DRAFT");
+  });
+
+  it("adopts a Save As target under its one spelling", async () => {
+    const writeFile = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        document_path: spelledAs({ "c:\\p\\New.md": "C:\\p\\New.md" }),
+        write_file: writeFile as unknown as Invoker,
+      }) as typeof invoke,
+    );
+    vi.mocked(pickSaveDocument).mockResolvedValue("c:\\p\\New.md");
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    const tabId = await newDraft(result, "HELLO");
+
+    await act(async () => {
+      await result.current.saveDocument(tabId);
+    });
+
+    expect(writesOf(writeFile)).toEqual([{ path: "C:\\p\\New.md", content: "HELLO" }]);
+    expect(fileOf(result).path).toBe("C:\\p\\New.md");
+    expect(invoke).toHaveBeenCalledWith("watch_file", { path: "C:\\p\\New.md" });
+  });
+
+  it("lets one of two untitled tabs take a path both are saved onto", async () => {
+    // Both dialogs confirmed within one write: the check and the adoption are
+    // one step for a target, so the second tab sees the first one holding it.
+    // Each dialog spells the target its own way, so the queue only joins them
+    // if it is keyed by the file.
+    const { writeFile, started, release } = holdWrites(1, {
+      document_path: spelledAs({ "/P/OUT.md": "/p/out.md" }),
+    });
+    const onWorkspaceNotice = vi.fn();
+    vi.mocked(pickSaveDocument)
+      .mockResolvedValueOnce("/p/out.md")
+      .mockResolvedValueOnce("/P/OUT.md");
+    const { result } = renderHook(() => useTabs(defaultOptions({ onWorkspaceNotice })));
+    const firstId = await newDraft(result, "FIRST");
+    const secondId = await newDraft(result, "SECOND");
+
+    let saves: Promise<boolean[]> | undefined;
+    await act(async () => {
+      saves = Promise.all([
+        result.current.saveDocument(firstId),
+        result.current.saveDocument(secondId),
+      ]);
+      await started[0].promise;
+    });
+    let outcome: boolean[] | undefined;
+    await act(async () => {
+      release[0].resolve();
+      outcome = await saves;
+    });
+
+    expect(outcome).toEqual([true, false]);
+    expect(writesOf(writeFile)).toEqual([{ path: "/p/out.md", content: "FIRST" }]);
+    expect(onWorkspaceNotice).toHaveBeenCalledWith(
+      expect.objectContaining({ key: "notice.saveTargetOpen", values: { name: "out.md" } }),
+      { persistent: true },
+    );
+    expect(fileOf(result, 0).path).toBe("/p/out.md");
+    expect(fileOf(result, 1).virtual).toBe(true);
+    expect(fileOf(result, 1).editContent).toBe("SECOND");
+  });
+
+  it("leaves the file to a tab that opened it during the Save As write", async () => {
+    const { started, release } = holdWrites(1);
+    const onWorkspaceNotice = vi.fn();
+    vi.mocked(pickSaveDocument).mockResolvedValue("/p/out.md");
+    const { result } = renderHook(() => useTabs(defaultOptions({ onWorkspaceNotice })));
+    const draftId = await newDraft(result, "MY DRAFT");
+
+    let saving: Promise<boolean> | undefined;
+    await act(async () => {
+      saving = result.current.saveDocument(draftId);
+      await started[0].promise;
+    });
+    await act(async () => {
+      await result.current.openFile("/p/out.md");
+    });
+    let ok: boolean | undefined;
+    await act(async () => {
+      release[0].resolve();
+      ok = await saving;
+    });
+
+    expect(ok).toBe(false);
+    expect(onWorkspaceNotice).toHaveBeenCalledWith(
+      expect.objectContaining({ key: "notice.saveTargetOpen", values: { name: "out.md" } }),
+      { persistent: true },
+    );
+    expect(fileOf(result, 0).virtual).toBe(true);
+    expect(fileOf(result, 0).editContent).toBe("MY DRAFT");
+    expect(fileOf(result, 1).path).toBe("/p/out.md");
+  });
+
+  it("a Save As whose tab closes before its turn to write has nothing to save", async () => {
+    const writeFile = vi.fn().mockResolvedValue(undefined);
+    const spelling = deferred<string>();
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        document_path: () => spelling.promise,
+        write_file: writeFile as unknown as Invoker,
+      }) as typeof invoke,
+    );
+    vi.mocked(pickSaveDocument).mockResolvedValue("/p/saved.md");
+    const { result } = renderHook(() =>
+      useTabs(defaultOptions({ autoSave: false, confirmUnsaved: async () => "discard" as const })),
+    );
+    const tabId = await newDraft(result, "first");
+
+    let saving: Promise<boolean> | undefined;
+    await act(async () => {
+      saving = result.current.saveDocument(tabId);
+      await vi.waitFor(() =>
+        expect(invoke).toHaveBeenCalledWith("document_path", { path: "/p/saved.md" }),
+      );
+    });
+    await act(async () => {
+      await result.current.closeTab(tabId);
+    });
+    let ok: boolean | undefined;
+    await act(async () => {
+      spelling.resolve("/p/saved.md");
+      ok = await saving;
+    });
+
+    expect(ok).toBe(true);
+    expect(writeFile).not.toHaveBeenCalled();
   });
 
   it("Save As writes the text as it is when the dialog is confirmed", async () => {

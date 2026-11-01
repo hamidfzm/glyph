@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from "react";
+import { documentPath } from "@/lib/documentPath";
 import { EDITOR_MODE, type EditorMode } from "@/lib/settings";
 import {
   activeFileOf,
@@ -58,11 +59,12 @@ export function useTabStrip() {
     [setState, withActiveTab],
   );
 
-  /** Activate the tab whose primary path matches; a no-op when none does. */
+  /** Activate the tab on `path`, a saved one in any spelling; a no-op when none matches. */
   const activateTabByPath = useCallback(
-    (path: string) => {
+    async (path: string) => {
+      const spelled = await documentPath(path);
       setState((prev) => {
-        const match = prev.tabs.find((t) => tabPathOf(t) === path);
+        const match = prev.tabs.find((t) => tabPathOf(t) === spelled);
         return match ? withActiveTab(prev, match.id) : prev;
       });
     },

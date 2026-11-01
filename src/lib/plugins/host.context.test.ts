@@ -6,11 +6,12 @@ import { staticRendererFor } from "@/lib/plugins/staticRenderers";
 import type { PluginModule } from "@/lib/plugins/types";
 import { importerFor, installed } from "@/test/fixtures/pluginHost";
 
+const Render = () => null;
+
 describe("createPluginHost plugin context", () => {
   it("registers markdown contributions and removes them on unload", async () => {
     const host = createPluginHost(vi.fn());
     const remark = vi.fn();
-    const Render = () => null;
     const module: PluginModule = {
       activate(ctx) {
         ctx.markdown.registerRemarkPlugin(remark);

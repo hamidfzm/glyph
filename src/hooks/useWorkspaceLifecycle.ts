@@ -6,6 +6,7 @@ import type { SetTabsState } from "@/hooks/useTabStrip";
 import type { WorkspaceNotice } from "@/hooks/useWorkspaceNotice";
 import type { WorkspaceSessionApi } from "@/hooks/useWorkspaceSession";
 import { isCliExportProcess } from "@/lib/cliExport";
+import { documentPath } from "@/lib/documentPath";
 import { isMarkdownFile } from "@/lib/markdownExtensions";
 import { isPathInside } from "@/lib/paths";
 import { pickFolder, pickNewWorkspace } from "@/lib/pickers";
@@ -14,7 +15,7 @@ import { getWorkspaceLastFile, resolveWorkspace, type WorkspaceResolution } from
 import {
   beginSessionRestore,
   endSessionRestore,
-  getWorkspaceSession,
+  findWorkspaceSession,
   isSessionRestoring,
 } from "@/lib/workspaceSession";
 
@@ -132,8 +133,8 @@ export function useWorkspaceLifecycle({
   // Open Folder dialog) the choice is routed through the window manager so a
   // different folder opens a new window instead of replacing this one.
   const openFolder = useCallback(
-    async (root?: string, openOptions?: OpenFolderOptions) => {
-      if (!root) {
+    async (requested?: string, openOptions?: OpenFolderOptions) => {
+      if (!requested) {
         const selected = await pickFolder();
         if (typeof selected !== "string") return;
         // No explicit root means a user "Open Folder" action: route it through
@@ -153,9 +154,12 @@ export function useWorkspaceLifecycle({
         }
         return;
       }
-      if (workspaceRef.current?.root === root || folderOpenInFlight.current === root) {
-        return;
-      }
+      const isOpening = (path: string) =>
+        workspaceRef.current?.root === path || folderOpenInFlight.current === path;
+      if (isOpening(requested)) return;
+      // The tree, the tabs and the session all key off this spelling of the root.
+      const root = await documentPath(requested);
+      if (isOpening(root)) return;
 
       // A workspace is one git repo's top level (#262). Refuse a folder nested
       // inside another Glyph workspace's `.glyph/` so workspace-wide features
@@ -194,7 +198,7 @@ export function useWorkspaceLifecycle({
         // empty one restores exactly no tabs (empty is not absent, INV-2). A
         // headless export renders one document; restoring a full session there
         // would open and watch every tab of the user's real workspace.
-        const session = isCliExportProcess() ? null : await getWorkspaceSession(root);
+        const session = isCliExportProcess() ? null : await findWorkspaceSession(root);
 
         // One workspace per window: switching folders replaces the current
         // one and closes its tabs (loose external files stay). Flush the

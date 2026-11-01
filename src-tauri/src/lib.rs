@@ -23,6 +23,7 @@ mod menu_runtime;
 mod navigation;
 mod navigation_runtime;
 mod notebook;
+mod path_spelling;
 mod secrets;
 // The preview server behind `glyph serve`; desktop-only, like the CLI
 // surface that reaches it.
@@ -302,6 +303,7 @@ pub fn run() {
             commands::file::copy_file,
             commands::file::prune_export_dir,
             commands::file::check_path_exists,
+            commands::file::document_path,
             commands::file::allow_document_asset,
             #[cfg(desktop)]
             commands::file::print_document,
@@ -483,13 +485,18 @@ mod tests {
         );
     }
 
-    /// A launch argument is canonicalized before it is opened.
+    /// A launch argument is resolved before it is opened, and spelled as a
+    /// picker spells it.
+    fn launched(path: &std::path::Path) -> String {
+        cli::plain_path(&path.canonicalize().unwrap().to_string_lossy())
+    }
+
     fn file_open(path: &std::path::Path) -> (windows::OpenKind, PathBuf) {
-        (windows::OpenKind::File, path.canonicalize().unwrap())
+        (windows::OpenKind::File, PathBuf::from(launched(path)))
     }
 
     fn folder_open(path: &std::path::Path) -> (windows::OpenKind, PathBuf) {
-        (windows::OpenKind::Folder, path.canonicalize().unwrap())
+        (windows::OpenKind::Folder, PathBuf::from(launched(path)))
     }
 
     fn can_read(app: &tauri::App<MockRuntime>, path: &std::path::Path) -> bool {
@@ -545,6 +552,22 @@ mod tests {
     }
 
     #[test]
+    fn a_launched_file_is_recognised_in_the_window_that_opened_it_from_a_picker() {
+        // The launch resolves its path; the other window holds a picker's result.
+        let cwd = unique_tmp("hsi_one_spelling");
+        let file = cwd.join("note.md");
+        fs::write(&file, "x").unwrap();
+        let app = routed_app();
+        app.state::<windows::WindowRegistry>()
+            .set_files("w1", vec![launched(&file)]);
+
+        second_instance(&app, &cwd, &["note.md"]);
+
+        assert_eq!(drain_main(&app), vec![]);
+        let _ = fs::remove_dir_all(&cwd);
+    }
+
+    #[test]
     fn a_second_instance_queues_its_folder_and_claims_the_window_for_it() {
         let cwd = unique_tmp("hsi_dir");
         let folder = cwd.join("workspace");
@@ -555,13 +578,9 @@ mod tests {
 
         // Claimed before the frontend can report it, so a second folder
         // launched in the same moments opens a window instead of replacing it.
-        let claimed = folder.canonicalize().unwrap();
         assert_eq!(
             app.state::<windows::WindowRegistry>().snapshot().workspaces,
-            vec![(
-                "main".to_string(),
-                Some(claimed.to_string_lossy().to_string())
-            )]
+            vec![("main".to_string(), Some(launched(&folder)))]
         );
         assert_eq!(drain_main(&app), vec![folder_open(&folder)]);
         let _ = fs::remove_dir_all(&cwd);

@@ -9,14 +9,20 @@ vi.mock("./WorkspaceSettingsModal", () => ({
   WorkspaceSettingsModal: () => <div data-testid="workspace-settings-modal" />,
 }));
 
-describe("lazyWorkspaceSettings", { timeout: CHUNK_LOAD_TIMEOUT_MS }, () => {
-  it("lazily renders the WorkspaceSettingsModal", async () => {
-    render(<WorkspaceSettingsModal open onClose={() => {}} tab="website" onTabChange={() => {}} />);
-    await waitFor(
-      () => expect(screen.getByTestId("workspace-settings-modal")).toBeInTheDocument(),
-      {
-        timeout: CHUNK_LOAD_TIMEOUT_MS,
-      },
-    );
-  });
-});
+describe(
+  "lazyWorkspaceSettings",
+  () => {
+    it("lazily renders the WorkspaceSettingsModal", async () => {
+      render(
+        <WorkspaceSettingsModal open onClose={() => {}} tab="website" onTabChange={() => {}} />,
+      );
+      await waitFor(
+        () => expect(screen.getByTestId("workspace-settings-modal")).toBeInTheDocument(),
+        {
+          timeout: CHUNK_LOAD_TIMEOUT_MS,
+        },
+      );
+    });
+  },
+  CHUNK_LOAD_TIMEOUT_MS,
+);

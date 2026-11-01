@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import type { SetTabsState } from "@/hooks/useTabStrip";
 import type { WorkspaceNotice } from "@/hooks/useWorkspaceNotice";
 import type { EnqueueWrite } from "@/hooks/useWriteQueue";
+import { documentPath } from "@/lib/documentPath";
 import { MARKDOWN_EXTENSIONS } from "@/lib/markdownExtensions";
 import { basename, isPathInside } from "@/lib/paths";
 import { pickSaveDocument } from "@/lib/pickers";
@@ -40,6 +41,79 @@ export function useDocumentSave({
   const onWorkspaceNoticeRef = useRef(onWorkspaceNotice);
   onWorkspaceNoticeRef.current = onWorkspaceNotice;
 
+  // Write a virtual buffer to `target` and make it an ordinary file tab, or
+  // refuse. Runs in `target`'s turn in the write queue, so the check and the
+  // adoption are one step: a second Save As onto `target` starts once this one
+  // holds it.
+  const adoptTarget = useCallback(
+    async (id: string, target: string): Promise<boolean> => {
+      // Neither the dialog nor the queue blocks the editor, so the buffer is
+      // read only now. A tab closed meanwhile has nothing left to save.
+      const latest = stateRef.current.tabs.find((tab) => tab.id === id);
+      if (latest?.kind !== "file") return true;
+      // newDocument seeds the edit buffer with "" and nothing resets it to null.
+      /* v8 ignore start -- unreachable: a tab that began virtual always has an edit buffer */
+      const content = latest.file.editContent ?? "";
+      /* v8 ignore stop */
+      const { revision } = latest.file;
+      const isHeld = () =>
+        stateRef.current.tabs.some((tab) => tab.kind === "file" && tab.file.path === target);
+      const refuse = () => {
+        onWorkspaceNoticeRef.current(
+          { key: "notice.saveTargetOpen", values: { name: basename(target) } },
+          { persistent: true },
+        );
+        return false;
+      };
+      // `openFile` activates the existing tab when a path is already open, so
+      // Save As is the only way two tabs could land on one file. Refuse before
+      // writing: the open tab may hold unsaved edits, and once the write has
+      // happened there is no way to fold the two buffers into one without
+      // discarding somebody's work (#721).
+      if (isHeld()) return refuse();
+      try {
+        await invoke("write_file", { path: target, content });
+      } catch (err) {
+        console.error("Failed to save document:", err);
+        onWorkspaceNoticeRef.current(
+          { key: "notice.saveFailed", values: { name: basename(target) } },
+          { persistent: true },
+        );
+        return false;
+      }
+      markSelfSave(target);
+      // An open already under way can have landed during the write, and it
+      // keeps the file: this buffer stays untitled, its text intact.
+      if (isHeld()) return refuse();
+      // Best-effort: a failed watch never blocks the save.
+      invoke("watch_file", { path: target }).catch(() => {});
+      setState((prev) => ({
+        ...prev,
+        tabs: prev.tabs.map((tab) => {
+          if (tab.id !== id || tab.kind !== "file") return tab;
+          return {
+            ...tab,
+            file: {
+              ...tab.file,
+              path: target,
+              virtual: false,
+              // Stay dirty when a newer edit landed while the write was in flight.
+              dirty: tab.file.revision !== revision,
+              content,
+            },
+          };
+        }),
+      }));
+      addToRecent(target);
+      const root = getWorkspaceRoot();
+      if (root && isPathInside(target, root)) {
+        setWorkspaceLastFile(root, target).catch(() => {});
+      }
+      return true;
+    },
+    [addToRecent, getWorkspaceRoot, markSelfSave, setState, stateRef],
+  );
+
   // Save a virtual buffer to a chosen path (Save As): on success it becomes an
   // ordinary file tab; a cancelled or failed dialog returns false so close can discard.
   const saveVirtualAs = useCallback(
@@ -73,10 +147,8 @@ export function useDocumentSave({
         console.error("Save As failed:", err);
         pickFailed = true;
       }
-      // The dialog does not block the editor, so the buffer is read only now.
-      // A tab closed while it was open has nothing left to save.
-      const latest = stateRef.current.tabs.find((tab) => tab.id === id);
-      if (latest?.kind !== "file") return true;
+      // A tab closed while the dialog was open has nothing left to save.
+      if (!stateRef.current.tabs.some((tab) => tab.id === id)) return true;
       if (pickFailed) {
         onWorkspaceNoticeRef.current(
           { key: "notice.saveFailed", values: { name: title } },
@@ -85,64 +157,10 @@ export function useDocumentSave({
         return false;
       }
       if (!target) return false;
-      // newDocument seeds the edit buffer with "" and nothing resets it to null.
-      /* v8 ignore start -- unreachable: a tab that began virtual always has an edit buffer */
-      const content = latest.file.editContent ?? "";
-      /* v8 ignore stop */
-      const { revision } = latest.file;
-      // `openFile` activates the existing tab when a path is already open, so
-      // Save As is the only way two tabs could land on one file. Refuse before
-      // writing: the open tab may hold unsaved edits, and once the write has
-      // happened there is no way to fold the two buffers into one without
-      // discarding somebody's work (#721).
-      const alreadyOpen = stateRef.current.tabs.some(
-        (tab) => tab.kind === "file" && tab.file.path === target,
-      );
-      if (alreadyOpen) {
-        onWorkspaceNoticeRef.current(
-          { key: "notice.saveTargetOpen", values: { name: basename(target) } },
-          { persistent: true },
-        );
-        return false;
-      }
-      try {
-        await invoke("write_file", { path: target, content });
-      } catch (err) {
-        console.error("Failed to save document:", err);
-        onWorkspaceNoticeRef.current(
-          { key: "notice.saveFailed", values: { name: basename(target) } },
-          { persistent: true },
-        );
-        return false;
-      }
-      markSelfSave(target);
-      // Best-effort: a failed watch never blocks the save.
-      invoke("watch_file", { path: target }).catch(() => {});
-      setState((prev) => ({
-        ...prev,
-        tabs: prev.tabs.map((tab) => {
-          if (tab.id !== id || tab.kind !== "file") return tab;
-          return {
-            ...tab,
-            file: {
-              ...tab.file,
-              path: target,
-              virtual: false,
-              // Stay dirty when a newer edit landed while the write was in flight.
-              dirty: tab.file.revision !== revision,
-              content,
-            },
-          };
-        }),
-      }));
-      addToRecent(target);
-      const root = getWorkspaceRoot();
-      if (root && isPathInside(target, root)) {
-        setWorkspaceLastFile(root, target).catch(() => {});
-      }
-      return true;
+      const spelled = await documentPath(target);
+      return enqueueWrite(spelled, () => adoptTarget(id, spelled));
     },
-    [addToRecent, getWorkspaceRoot, markSelfSave, setState, stateRef, t],
+    [adoptTarget, enqueueWrite, getWorkspaceRoot, stateRef, t],
   );
 
   // Persist one dirty editable tab. Safe to call for any tab id: skips graph,

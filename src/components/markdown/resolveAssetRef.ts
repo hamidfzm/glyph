@@ -1,10 +1,10 @@
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { resolveWorkspacePath } from "@/lib/relativePath";
 
-// Strip a Windows verbatim ("\\?\", or UNC "\\?\UNC\") path prefix. The backend
-// hands us canonicalized paths, which on Windows carry this prefix; it tells the
-// OS to read the path literally, so the forward slashes we join with stop being
-// valid separators and the asset server fails the read (HTTP 500).
+// Strip a Windows verbatim ("\\?\", or UNC "\\?\UNC\") path prefix, which a path
+// the backend declined to respell still carries. It tells the OS to read the
+// path literally, so the forward slashes we join with stop being valid
+// separators and the asset server fails the read (HTTP 500).
 function stripVerbatimPrefix(path: string): string {
   return path.replace(/^\\\\\?\\UNC\\/, "\\\\").replace(/^\\\\\?\\/, "");
 }

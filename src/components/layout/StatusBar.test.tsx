@@ -64,6 +64,15 @@ function Wrapper({ value, children }: { value: TabsContextValue; children: React
   );
 }
 
+function Bump() {
+  const api = useZoomApi();
+  return (
+    <button type="button" onClick={() => api?.setNoteZoom("tab-1", () => 1.5)}>
+      bump
+    </button>
+  );
+}
+
 function renderStatusBar(opts: Opts = {}) {
   const value = buildContext(opts);
   return render(
@@ -107,14 +116,6 @@ describe("StatusBar", () => {
 
   it("scales the zoom percentage by the active tab's temporary multiplier", () => {
     const value = buildContext({ filePath: "/a.md", displayContent: "some content" });
-    function Bump() {
-      const api = useZoomApi();
-      return (
-        <button type="button" onClick={() => api?.setNoteZoom("tab-1", () => 1.5)}>
-          bump
-        </button>
-      );
-    }
     render(
       <Wrapper value={value}>
         <ZoomProvider>
