@@ -258,8 +258,9 @@ pub fn set_window_workspace<R: Runtime>(
 }
 
 /// Frontend reports the file tabs its window has open, keeping the routing
-/// registry current so a request for an open file focuses the window showing it.
-/// The window's assistant takes its active note only from among these.
+/// registry current so a request for an open file focuses the window showing it
+/// and a Save As onto it is refused. The window's assistant takes its active note
+/// only from among these.
 #[tauri::command]
 pub fn set_window_files<R: Runtime>(
     window: tauri::WebviewWindow<R>,

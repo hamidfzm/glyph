@@ -492,7 +492,8 @@ describe("useTabs in-memory documents", () => {
     });
     let ok: boolean | undefined;
     await act(async () => {
-      answer.resolve(false);
+      // Held in both places: the tab here is the one the notice can send the user to.
+      answer.resolve(true);
       ok = await saving;
     });
 
