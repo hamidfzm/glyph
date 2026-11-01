@@ -281,11 +281,11 @@ export function useTabs(options: UseTabsOptions) {
       if (!ws) return;
       const path = await createEntry(ws.root, kind);
       if (!path) return;
-      await openFile(path);
+      const id = await openFile(path);
       setState((prev) => ({
         ...prev,
         tabs: prev.tabs.map((tab) =>
-          tab.kind === "file" && tab.file.path === path
+          tab.kind === "file" && tab.id === id
             ? {
                 ...tab,
                 file: { ...tab.file, mode: EDITOR_MODE.edit, editContent: tab.file.content },

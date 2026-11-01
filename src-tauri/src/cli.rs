@@ -56,7 +56,8 @@ pub enum InitialOpenAction {
 /// Returns `None` for paths that don't exist or aren't regular files /
 /// directories (e.g. broken symlinks, sockets, FIFOs).
 pub fn classify_resolved_path(canonical: &Path) -> Option<InitialOpenAction> {
-    let abs = canonical.to_string_lossy().to_string();
+    // Spelled as a picker spells it, or a window takes one file for two.
+    let abs = plain_path(&canonical.to_string_lossy());
     if canonical.is_dir() {
         Some(InitialOpenAction::Folder(abs))
     } else if canonical.is_file() {
@@ -789,10 +790,11 @@ mod tests {
 
         let launch = launch_opens(&argv_of(&["note.md"]), &cwd);
         assert_eq!(opened(&launch), vec![file_named("note.md")]);
-        // The open carries the canonical absolute path, not the argument.
+        // The open carries the absolute path a picker would give, not the argument.
+        let canonical = cwd.join("note.md").canonicalize().unwrap();
         assert_eq!(
-            PathBuf::from(&launch.opens[0].path),
-            cwd.join("note.md").canonicalize().unwrap()
+            launch.opens[0].path,
+            plain_path(&canonical.to_string_lossy())
         );
         assert!(launch.skipped.is_empty());
 

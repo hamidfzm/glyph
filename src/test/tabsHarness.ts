@@ -40,6 +40,9 @@ export function makeInvoker(overrides: Partial<Record<string, Invoker>> = {}): I
       case "take_pending_opens":
         // Nothing was launched at this window.
         return [];
+      case "document_path":
+        // Every path is its file's one spelling, unless a test says otherwise (`spelledAs`).
+        return args?.path;
       case "read_file":
         return "FILE BODY";
       case "window_showing_file":
@@ -84,15 +87,27 @@ export function makeInvoker(overrides: Partial<Record<string, Invoker>> = {}): I
   };
 }
 
-/** Route `write_file` to `writeFile`, every other command to the defaults. */
-export function mockWriteFile(writeFile: ReturnType<typeof vi.fn>): void {
+/** A `document_path` that rewrites each key of `spellings` to its value, as a backend
+ *  that sees two spellings of one file does. */
+export function spelledAs(spellings: Record<string, string>): Invoker {
+  return async (_cmd, args) => {
+    const path = String(args?.path);
+    return spellings[path] ?? path;
+  };
+}
+
+/** Route `write_file` to `writeFile`, every other command to `overrides` or the defaults. */
+export function mockWriteFile(
+  writeFile: ReturnType<typeof vi.fn>,
+  overrides: Partial<Record<string, Invoker>> = {},
+): void {
   vi.mocked(invoke).mockImplementation(
-    makeInvoker({ write_file: writeFile as unknown as Invoker }) as typeof invoke,
+    makeInvoker({ ...overrides, write_file: writeFile as unknown as Invoker }) as typeof invoke,
   );
 }
 
 /** Hold each of the first `count` writes open until released; later writes land at once. */
-export function holdWrites(count: number) {
+export function holdWrites(count: number, overrides: Partial<Record<string, Invoker>> = {}) {
   const started = Array.from({ length: count }, () => deferred());
   const release = Array.from({ length: count }, () => deferred());
   let writes = 0;
@@ -102,7 +117,7 @@ export function holdWrites(count: number) {
     started[n].resolve();
     await release[n].promise;
   });
-  mockWriteFile(writeFile);
+  mockWriteFile(writeFile, overrides);
   return { writeFile, started, release };
 }
 

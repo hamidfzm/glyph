@@ -37,6 +37,9 @@ vi.mock("@/lib/documentHighlight", async (importOriginal) => ({
   locateLineInDocument: vi.fn(() => true),
 }));
 
+// These backends answer by command alone, and each path here is its file's one spelling.
+vi.mock("@/lib/documentPath", () => ({ documentPath: async (path: string) => path }));
+
 // Mocked so a test can drive what the shell shows for an export, its progress
 // and its notice (the real hook never gets that far here: the mocked viewer
 // renders no `.markdown-body` to export).

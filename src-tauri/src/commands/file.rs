@@ -1,4 +1,3 @@
-use icu_normalizer::ComposingNormalizerBorrowed;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::ffi::OsString;
@@ -9,6 +8,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use tauri::{AppHandle, Manager, Runtime, State};
 
 use crate::grants::{self, is_symlink, GrantRegistry};
+use crate::path_spelling::{folded, on_disk_spelling};
 
 /// Documents over this size are refused rather than read. The whole document
 /// crosses IPC and sits in the renderer's editor, so this is the one bound on
@@ -171,25 +171,18 @@ fn manifest_entry_path(out_dir: &Path, rel: &str) -> io::Result<Option<PathBuf>>
     Ok(parent.starts_with(out_dir).then(|| parent.join(name)))
 }
 
-/// Fold a manifest entry for lookup: separators unified, case and Unicode
-/// normalization form ignored. Names that fold alike are only candidates: a
-/// rename that changes nothing but case rewrites one file on Windows and macOS
-/// and leaves two on Linux, and one that only recomposes an accent rewrites
-/// one file on macOS and leaves two elsewhere, which is the volume's to say
-/// (`is_one_file`).
-fn manifest_entry_key(rel: &str) -> String {
-    let composed = ComposingNormalizerBorrowed::new_nfc().normalize(rel);
-    composed.replace('\\', "/").to_lowercase()
-}
-
-/// Site-relative paths grouped by what they fold to.
+/// Site-relative paths grouped by what they fold to. Names that fold alike are
+/// only candidates: a rename that changes nothing but case rewrites one file on
+/// Windows and macOS and leaves two on Linux, and one that only recomposes an
+/// accent rewrites one file on macOS and leaves two elsewhere, which is the
+/// volume's to say (`is_one_file`).
 struct EntriesByKey<'a>(HashMap<String, Vec<&'a str>>);
 
 impl<'a> EntriesByKey<'a> {
     fn of(rels: &'a [String]) -> Self {
         let mut by_key: HashMap<String, Vec<&str>> = HashMap::new();
         for rel in rels {
-            by_key.entry(manifest_entry_key(rel)).or_default().push(rel);
+            by_key.entry(folded(rel)).or_default().push(rel);
         }
         Self(by_key)
     }
@@ -431,7 +424,7 @@ pub fn prune_export_dir(
     let mut stuck_count = 0;
     let mut first_stuck = None;
     for rel in &previous {
-        let key = manifest_entry_key(rel);
+        let key = folded(rel);
         let (written, unreplaced) = (written_by_key.alike(&key), unreplaced_by_key.alike(&key));
         match prune_entry(&out_dir, rel, written, unreplaced) {
             Ok(Pruned::Dropped) => {}
@@ -472,9 +465,18 @@ pub fn check_path_exists(path: String, grants: State<'_, GrantRegistry>) -> Resu
         .map_err(|e| format!("Failed to find path: {e}"))
 }
 
+/// The spelling of `path` that every tab holds (see [`on_disk_spelling`]). A
+/// name not on disk yet, a Save As target, is spelled by its resolved folder.
+#[tauri::command]
+pub fn document_path(path: String, grants: State<'_, GrantRegistry>) -> Result<String, String> {
+    let canonical = grants.ensure_readable(&path)?;
+    Ok(on_disk_spelling(&path, &canonical))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::cli::plain_path;
     use crate::vault::test_support::link_folder;
     use std::io::Write;
     use tauri::test::{mock_app, MockRuntime};
@@ -779,6 +781,153 @@ mod tests {
         }
 
         let _ = fs::remove_file(&file_path);
+    }
+
+    /// A temp folder as its resolved, plain path: on Windows `temp_dir` can be
+    /// a short name, which a spelling keeps.
+    fn resolved_tmp() -> (tempfile::TempDir, PathBuf) {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let resolved = tmp.path().canonicalize().unwrap();
+        let dir = PathBuf::from(plain_path(&resolved.to_string_lossy()));
+        (tmp, dir)
+    }
+
+    fn spelling_of(app: &tauri::App<MockRuntime>, path: &Path) -> Result<String, String> {
+        document_path(
+            path.to_string_lossy().to_string(),
+            app.state::<GrantRegistry>(),
+        )
+    }
+
+    #[test]
+    fn document_path_is_denied_without_a_grant() {
+        let (_tmp, dir) = resolved_tmp();
+        let note = dir.join("note.md");
+        fs::write(&note, "x").unwrap();
+
+        // A missing path gets the same answer, so it says nothing about what is on disk.
+        let app = app_with_grants();
+        for path in [note, dir.join("nope.md")] {
+            let err = spelling_of(&app, &path).expect_err("must be denied");
+            assert!(
+                err.starts_with("path is outside the allowed workspaces and files:"),
+                "got: {err}"
+            );
+        }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn document_path_never_looks_a_network_or_device_path_up() {
+        let app = app_with_grants();
+        for path in crate::grants::NEVER_LOOKED_UP {
+            let err = spelling_of(&app, Path::new(path)).expect_err("must be refused");
+            assert!(err.contains("network or device path"), "got: {err}");
+        }
+    }
+
+    #[test]
+    fn document_path_drops_what_a_canonical_path_adds_on_windows() {
+        let (_tmp, dir) = resolved_tmp();
+        let note = dir.join("note.md");
+        fs::write(&note, "x").unwrap();
+
+        let app = app_with_workspace(&dir);
+        let canonical = note.canonicalize().unwrap();
+        assert_eq!(
+            spelling_of(&app, &canonical),
+            Ok(note.to_string_lossy().to_string())
+        );
+    }
+
+    #[test]
+    fn document_path_takes_the_casing_of_a_volume_that_ignores_it() {
+        let (_tmp, dir) = resolved_tmp();
+        let folder = dir.join("Docs");
+        fs::create_dir(&folder).unwrap();
+        let note = folder.join("Notes.md");
+        fs::write(&note, "x").unwrap();
+        let shouted = dir.join("DOCS").join("NOTES.md");
+
+        let app = app_with_workspace(&dir);
+        let expected = if shouted.exists() { &note } else { &shouted };
+        assert_eq!(
+            spelling_of(&app, &shouted),
+            Ok(expected.to_string_lossy().to_string())
+        );
+    }
+
+    #[test]
+    fn document_path_keeps_two_names_a_volume_holds_apart() {
+        let (_tmp, dir) = resolved_tmp();
+        let upper = dir.join("Notes.md");
+        let lower = dir.join("notes.md");
+        fs::write(&upper, "first").unwrap();
+        fs::write(&lower, "second").unwrap();
+
+        let app = app_with_workspace(&dir);
+        let spellings = (spelling_of(&app, &upper), spelling_of(&app, &lower));
+        // Both writes reached one file when the volume ignores case.
+        let as_on_disk = upper.to_string_lossy().to_string();
+        let expected = if fs::read_to_string(&upper).unwrap() == "second" {
+            (Ok(as_on_disk.clone()), Ok(as_on_disk))
+        } else {
+            (Ok(as_on_disk), Ok(lower.to_string_lossy().to_string()))
+        };
+        assert_eq!(spellings, expected);
+    }
+
+    #[test]
+    fn document_path_spells_a_new_name_by_its_resolved_folder() {
+        let (_tmp, dir) = resolved_tmp();
+        let folder = dir.join("Docs");
+        fs::create_dir(&folder).unwrap();
+        let shouted_folder = dir.join("DOCS");
+        let target = shouted_folder.join("New.md");
+
+        let app = app_with_workspace(&dir);
+        let on_disk = if shouted_folder.exists() {
+            folder.join("New.md")
+        } else {
+            target.clone()
+        };
+        assert_eq!(
+            spelling_of(&app, &target),
+            Ok(on_disk.to_string_lossy().to_string())
+        );
+    }
+
+    #[test]
+    fn document_path_answers_for_a_save_as_target_the_picker_granted() {
+        let (_tmp, dir) = resolved_tmp();
+        let target = dir.join("new.md");
+
+        let app = app_with_grants();
+        app.state::<GrantRegistry>()
+            .grant_document_target(&target)
+            .unwrap();
+        assert_eq!(
+            spelling_of(&app, &target),
+            Ok(target.to_string_lossy().to_string())
+        );
+    }
+
+    #[test]
+    fn document_path_keeps_the_spelling_of_a_path_through_a_link() {
+        // A tab follows the tree, or it would leave the folder it was opened from.
+        let (_tmp, dir) = resolved_tmp();
+        let real = dir.join("real");
+        fs::create_dir(&real).unwrap();
+        fs::write(real.join("note.md"), "x").unwrap();
+        let link = dir.join("link");
+        link_folder(&real, &link);
+        let through_link = link.join("note.md");
+
+        let app = app_with_workspace(&dir);
+        assert_eq!(
+            spelling_of(&app, &through_link),
+            Ok(through_link.to_string_lossy().to_string())
+        );
     }
 
     #[test]

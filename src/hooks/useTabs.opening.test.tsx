@@ -2,7 +2,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getCliExportRequest, resetCliExportRequestCache } from "@/lib/cliExport";
-import { defaultOptions, makeInvoker, resetTabsMocks } from "@/test/tabsHarness";
+import { deferred } from "@/test/deferred";
+import { defaultOptions, makeInvoker, resetTabsMocks, spelledAs } from "@/test/tabsHarness";
 import { useTabs } from "./useTabs";
 
 vi.mock("@/lib/pickers", () => ({
@@ -373,6 +374,163 @@ describe("useTabs opening documents", () => {
   });
 });
 
+describe("useTabs opening one file under two spellings", () => {
+  const ONE_FILE = "C:\\p\\a.md";
+  const OTHER_SPELLINGS = {
+    "\\\\?\\C:\\p\\a.md": ONE_FILE,
+    "C:\\p\\A.md": ONE_FILE,
+  };
+
+  it("activates the open tab whichever spelling arrives", async () => {
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({ document_path: spelledAs(OTHER_SPELLINGS) }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    const opened: (string | undefined)[] = [];
+    for (const path of ["\\\\?\\C:\\p\\a.md", ONE_FILE, "C:\\p\\A.md"]) {
+      await act(async () => {
+        opened.push(await result.current.openFile(path));
+      });
+    }
+
+    expect(result.current.tabs).toHaveLength(1);
+    expect(result.current.activeFile?.path).toBe(ONE_FILE);
+    expect(new Set(opened).size).toBe(1);
+    const watched = vi.mocked(invoke).mock.calls.filter((call) => call[0] === "watch_file");
+    expect(watched).toEqual([["watch_file", { path: ONE_FILE }]]);
+  });
+
+  it("activates a tab named by its own path in the same tick, with no lookup", async () => {
+    // A search hit jumps within the document straight after this call.
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+    await act(async () => {
+      await result.current.openFile("/p/a.md");
+    });
+    await act(async () => {
+      await result.current.openFile("/p/b.md");
+    });
+    vi.mocked(invoke).mockClear();
+
+    act(() => {
+      void result.current.openFile("/p/a.md");
+    });
+
+    expect(result.current.activeFile?.path).toBe("/p/a.md");
+    expect(invoke).not.toHaveBeenCalledWith("document_path", expect.anything());
+  });
+
+  it("reports the one tab when two opens of a file overlap", async () => {
+    const read = deferred<string>();
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({ read_file: () => read.promise }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    let opened: (string | undefined)[] = [];
+    await act(async () => {
+      const opens = Promise.all([
+        result.current.openFile("/p/a.md"),
+        result.current.openFile("/p/a.md"),
+      ]);
+      read.resolve("body");
+      opened = await opens;
+    });
+
+    expect(result.current.tabs).toHaveLength(1);
+    expect(opened).toEqual([result.current.tabs[0].id, result.current.tabs[0].id]);
+  });
+
+  it("asks the other windows about the file under its one spelling", async () => {
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({ document_path: spelledAs(OTHER_SPELLINGS) }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFile("C:\\p\\A.md");
+    });
+
+    expect(invoke).toHaveBeenCalledWith("window_showing_file", { path: ONE_FILE, focus: true });
+  });
+
+  it("records the file in Recent Files under its one spelling", async () => {
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({ document_path: spelledAs(OTHER_SPELLINGS) }) as typeof invoke,
+    );
+    const onSettingsChange = vi.fn();
+    const { result } = renderHook(() => useTabs(defaultOptions({ onSettingsChange })));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFile("\\\\?\\C:\\p\\a.md");
+    });
+
+    expect(onSettingsChange).toHaveBeenCalledWith("behavior.recentFiles", [ONE_FILE]);
+  });
+
+  it("keeps two tabs for two names the volume holds apart", async () => {
+    // A case-sensitive volume: the backend spells each as given.
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFile("/p/Notes.md");
+    });
+    await act(async () => {
+      await result.current.openFile("/p/notes.md");
+    });
+
+    expect(result.current.tabs).toHaveLength(2);
+  });
+
+  it("opens a path the backend will not spell as it was given", async () => {
+    // The read that follows is the one that reports a refusal.
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        document_path: async () => {
+          throw new Error("path is outside the allowed workspaces and files");
+        },
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.openFile("/p/a.md");
+    });
+
+    expect(invoke).toHaveBeenCalledWith("read_file", { path: "/p/a.md" });
+    expect(result.current.activeFile?.path).toBe("/p/a.md");
+  });
+
+  it("marks a note created in the workspace for editing under its one spelling", async () => {
+    const created = "C:\\p\\ws\\Untitled.md";
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        create_note: async () => "\\\\?\\C:\\p\\ws\\Untitled.md",
+        document_path: spelledAs({ "\\\\?\\C:\\p\\ws\\Untitled.md": created }),
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+    await act(async () => {
+      await result.current.openFolder("C:\\p\\ws");
+    });
+
+    await act(async () => {
+      await result.current.createNoteInWorkspace();
+    });
+
+    expect(result.current.activeFile?.path).toBe(created);
+    expect(result.current.activeFile?.mode).toBe("edit");
+  });
+});
+
 describe("mobile file opening", () => {
   // These tests flip the platform mock to mobile; restore it so later describes
   // don't silently take the mobile read path.
@@ -398,6 +556,7 @@ describe("mobile file opening", () => {
     expect(result.current.activeFile?.content).toBe("# from the picker");
     expect(vi.mocked(readTextFile)).toHaveBeenCalledWith("content://com.provider/doc.md");
     const commands = vi.mocked(invoke).mock.calls.map((c) => c[0]);
+    expect(commands).not.toContain("document_path");
     expect(commands).not.toContain("read_file");
     expect(commands).not.toContain("watch_file");
   });
