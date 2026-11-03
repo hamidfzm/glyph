@@ -5,10 +5,15 @@ import {
   captureListener,
   changeOnDisk,
   defaultOptions,
+  fileOf,
+  holdWrites,
   type Invoker,
   makeInvoker,
   mockWriteFile,
+  openWorkspaceNote,
+  renamesTo,
   resetTabsMocks,
+  writesOf,
 } from "@/test/tabsHarness";
 import { useTabs } from "./useTabs";
 
@@ -201,6 +206,78 @@ describe("useTabs programmatic edits", () => {
       expect(result.current.tabs[0].file.editContent).toBe("B");
       expect(result.current.tabs[0].file.dirty).toBe(true);
     }
+  });
+
+  it("a toggle whose write was in flight across a rename is written at the new path too", async () => {
+    const { writeFile, started, release } = holdWrites(1, {
+      read_file: async () => "- [ ] task",
+      rename_path: renamesTo("/p/ws/b.md"),
+    });
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    const tabId = await openWorkspaceNote(result);
+
+    let toggling: Promise<void> | undefined;
+    await act(async () => {
+      toggling = result.current.toggleTask(tabId, 1);
+      await started[0].promise;
+    });
+    await act(async () => {
+      await result.current.renamePath("/p/ws/a.md", "b");
+    });
+    await act(async () => {
+      release[0].resolve();
+      await toggling;
+    });
+
+    // The renamed file may predate the toggle, so the tab is clean only once b.md holds it.
+    expect(writesOf(writeFile)).toEqual([
+      { path: "/p/ws/a.md", content: "- [x] task" },
+      { path: "/p/ws/b.md", content: "- [x] task" },
+    ]);
+    expect(fileOf(result).path).toBe("/p/ws/b.md");
+    expect(fileOf(result).content).toBe("- [x] task");
+    expect(fileOf(result).dirty).toBe(false);
+
+    await act(async () => {
+      await result.current.undoEdit(tabId);
+    });
+    expect(writesOf(writeFile).at(-1)).toEqual({ path: "/p/ws/b.md", content: "- [ ] task" });
+  });
+
+  it("an edit queued behind a write of the old path is written at the new path only", async () => {
+    const { writeFile, started, release } = holdWrites(1, {
+      read_file: async () => "A",
+      rename_path: renamesTo("/p/ws/b.md"),
+    });
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    const tabId = await openWorkspaceNote(result);
+
+    let first: Promise<void> | undefined;
+    await act(async () => {
+      first = result.current.commitEdit(tabId, "B");
+      await started[0].promise;
+    });
+    let second: Promise<void> | undefined;
+    act(() => {
+      second = result.current.commitEdit(tabId, "C");
+    });
+    await act(async () => {
+      await result.current.renamePath("/p/ws/a.md", "b");
+    });
+    await act(async () => {
+      release[0].resolve();
+      await Promise.all([first, second]);
+    });
+
+    // C never reaches a.md, which would bring the old file back beside the renamed one.
+    expect(writesOf(writeFile)).toEqual([
+      { path: "/p/ws/a.md", content: "B" },
+      { path: "/p/ws/b.md", content: "B" },
+      { path: "/p/ws/b.md", content: "C" },
+    ]);
+    expect(fileOf(result).path).toBe("/p/ws/b.md");
+    expect(fileOf(result).content).toBe("C");
+    expect(fileOf(result).dirty).toBe(false);
   });
 
   it("commitEdit is a no-op for an unknown tab id", async () => {

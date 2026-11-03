@@ -6,5 +6,5 @@ import type { FileTab, Tab } from "@/lib/tabs";
 export function autoSaveDocuments(tabs: Tab[]): SavableDocument[] {
   return tabs
     .filter((tab): tab is FileTab => tab.kind === "file" && tab.file.dirty && !tab.file.virtual)
-    .map((tab) => ({ id: tab.id, revision: tab.file.revision }));
+    .map((tab) => ({ id: tab.id, revision: tab.file.revision, path: tab.file.path }));
 }
