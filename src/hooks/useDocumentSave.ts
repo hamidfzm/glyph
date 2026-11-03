@@ -177,8 +177,7 @@ export function useDocumentSave({
     [adoptTarget, enqueueWrite, getWorkspaceRoot, stateRef, t],
   );
 
-  // One Save As per tab: a save asked for while it is open (Ctrl+S, then a close)
-  // waits on its answer, since a second dialog would act on a tab already saved (#884).
+  // One Save As per tab until its answer is written; a second would act on a saved tab (#884).
   const pendingSaveAs = useRef(new Map<string, Promise<boolean>>());
   const saveVirtualAs = useCallback(
     (id: string, title: string): Promise<boolean> => {
@@ -193,10 +192,11 @@ export function useDocumentSave({
 
   // Persist one dirty editable tab. Safe to call for any tab id: skips graph,
   // clean, and still-loading tabs. The write is queued per path, and the
-  // dirty flag is cleared only when the written revision is still current, so a
-  // slow write completing after a newer edit never strands that edit. Resolves
-  // false when the write or Save As failed, true otherwise, including when an
-  // edit made during the write leaves the tab dirty: `saveUntilClean` checks that.
+  // dirty flag is cleared only when the written revision is still current and
+  // the tab is still at the written path, so a slow write completing after a
+  // newer edit never strands that edit. Resolves false when the write or Save As
+  // failed, true otherwise, including when an edit, rename or move during the
+  // write leaves the tab dirty: `saveUntilClean` checks that.
   const saveDocument = useCallback(
     (id: string): Promise<boolean> => {
       const tab = stateRef.current.tabs.find((candidate) => candidate.id === id);
