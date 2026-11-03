@@ -28,6 +28,12 @@ function setup(settings: Settings = DEFAULT_SETTINGS) {
 describe("EditorTab", () => {
   beforeEach(() => {
     clearDictionarySources();
+    // What the English dictionary core plugin registers while it is on.
+    registerDictionarySource({
+      language: "en",
+      label: "English (US)",
+      load: () => Promise.resolve({ aff: "", dic: "" }),
+    });
   });
 
   it("offers the keymap presets", () => {
@@ -125,7 +131,20 @@ describe("EditorTab", () => {
     expect(updateSettings).toHaveBeenCalledWith("editor.spellCheckLanguages", []);
   });
 
-  it("a plugin dictionary for en replaces the built-in entry", () => {
+  it("lists an enabled en by its code while the English dictionary is off", () => {
+    clearDictionarySources();
+    const { updateSettings } = setup({
+      ...DEFAULT_SETTINGS,
+      editor: { ...DEFAULT_SETTINGS.editor, spellCheck: true, spellCheckLanguages: ["en"] },
+    });
+    expect(screen.queryByText("English (US)")).toBeNull();
+    const toggle = toggleIn("en");
+    expect(toggle).toBeChecked();
+    fireEvent.click(toggle);
+    expect(updateSettings).toHaveBeenCalledWith("editor.spellCheckLanguages", []);
+  });
+
+  it("a plugin dictionary for en replaces the core English entry", () => {
     registerDictionarySource({
       language: "en",
       label: "English (custom)",

@@ -61,21 +61,12 @@ export function EditorTab() {
     { value: "vscode", label: t("editor.keymapOptions.vscode") },
   ];
 
-  // Built-in English plus every plugin-contributed dictionary, live-updating
-  // as plugins load and unload. A plugin may override "en" itself; dedupe by
-  // language with the plugin's entry winning, like the speller does. Languages
-  // whose plugin was uninstalled but are still enabled stay listed (by raw
-  // code) so they can be turned off instead of silently lingering.
-  const pluginDictionaries = useSyncExternalStore(
-    subscribeDictionarySources,
-    listDictionarySources,
-  );
-  const knownOptions = [
-    ...(pluginDictionaries.some((d) => d.language === "en")
-      ? []
-      : [{ language: "en", label: t("editor.spellCheck.languages.en") }]),
-    ...pluginDictionaries.map((d) => ({ language: d.language, label: d.label })),
-  ];
+  // Every plugin-contributed dictionary (English is a core plugin), live-updating
+  // as plugins load and unload. Languages whose plugin was turned off or
+  // uninstalled but are still enabled stay listed (by raw code) so they can be
+  // turned off instead of silently lingering.
+  const dictionaries = useSyncExternalStore(subscribeDictionarySources, listDictionarySources);
+  const knownOptions = dictionaries.map((d) => ({ language: d.language, label: d.label }));
   const enabledLanguages = editor.spellCheckLanguages;
   const languageOptions = [
     ...knownOptions,

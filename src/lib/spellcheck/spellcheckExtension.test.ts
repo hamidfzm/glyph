@@ -9,7 +9,7 @@ interface FakeSpeller {
   add: ReturnType<typeof vi.fn>;
 }
 
-const { getSpeller, makeSpeller, spellers } = vi.hoisted(() => {
+const { defaultGetSpeller, getSpeller, makeSpeller, spellers } = vi.hoisted(() => {
   const spellers = new Map<string, FakeSpeller>();
   const makeSpeller = (
     known: string[],
@@ -21,14 +21,17 @@ const { getSpeller, makeSpeller, spellers } = vi.hoisted(() => {
   });
   // Unknown languages stay pending forever, standing in for a dictionary that
   // has not finished loading.
-  const getSpeller = vi.fn((language: string) => {
+  const defaultGetSpeller = (language: string) => {
     const speller = spellers.get(language);
     return speller ? Promise.resolve(speller) : new Promise<FakeSpeller>(() => {});
-  });
-  return { getSpeller, makeSpeller, spellers };
+  };
+  const getSpeller = vi.fn(defaultGetSpeller);
+  return { defaultGetSpeller, getSpeller, makeSpeller, spellers };
 });
 vi.mock("./speller", () => ({ getSpeller }));
 
+import { deferred } from "@/test/deferred";
+import { clearDictionarySources, registerDictionarySource } from "./dictionarySources";
 import { scriptCoverage } from "./scripts";
 import {
   buildMisspellings,
@@ -92,16 +95,37 @@ describe("buildMisspellings", () => {
 
 const labels = () => ({ ignore: "Ignore", add: "Add", empty: "None" });
 
+// The extension loads only languages a plugin has registered; the mocked
+// speller never calls load, so the source only has to exist.
+function registerLanguage(language: string): () => void {
+  return registerDictionarySource({
+    language,
+    label: language,
+    load: () => Promise.resolve({ aff: "", dic: "" }),
+  });
+}
+
+// Mounted the way the editor does it, so a test can change the language set
+// in place.
+const spellcheckSlot = new Compartment();
+
 function mount(doc: string, languages: readonly string[]): EditorView {
   const parent = document.createElement("div");
   document.body.appendChild(parent);
   return new EditorView({
     state: EditorState.create({
       doc,
-      extensions: [markdown({ base: markdownLanguage }), buildSpellcheck(languages, labels)],
+      extensions: [
+        markdown({ base: markdownLanguage }),
+        spellcheckSlot.of(buildSpellcheck(languages, labels)),
+      ],
     }),
     parent,
   });
+}
+
+function setLanguages(view: EditorView, languages: readonly string[]): void {
+  view.dispatch({ effects: spellcheckSlot.reconfigure(buildSpellcheck(languages, labels)) });
 }
 
 // Let the mocked getSpeller promises resolve and the initial scans run.
@@ -133,6 +157,13 @@ function suggestionItems(): string[] {
   ].map((item) => item.textContent ?? "");
 }
 
+// Whether the word at pos is marked: only a marked word opens the menu.
+function isFlagged(view: EditorView, pos: number): boolean {
+  document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+  rightClickAt(view, pos);
+  return document.querySelector(".spellcheck-menu") !== null;
+}
+
 describe("buildSpellcheck (editor integration)", () => {
   beforeEach(() => {
     clearIgnoredWords();
@@ -142,6 +173,9 @@ describe("buildSpellcheck (editor integration)", () => {
     // A second Latin-script dictionary (unresolvable codes default to Latn).
     spellers.set("xx", makeSpeller(["helo"], { helo: ["hell", "halo"] }));
     getSpeller.mockClear();
+    getSpeller.mockImplementation(defaultGetSpeller);
+    clearDictionarySources();
+    for (const language of ["en", "fa", "xx", "pending", "slow"]) registerLanguage(language);
   });
 
   afterEach(() => {
@@ -284,36 +318,18 @@ describe("buildSpellcheck (editor integration)", () => {
   });
 
   it("a dictionary resolving after its configuration was replaced does not paint", async () => {
-    let releaseSlow!: (speller: FakeSpeller) => void;
-    const slow = new Promise<FakeSpeller>((resolve) => {
-      releaseSlow = resolve;
-    });
-    getSpeller.mockImplementation((language: string) => {
-      if (language === "slow") return slow;
-      const speller = spellers.get(language);
-      return speller ? Promise.resolve(speller) : new Promise<FakeSpeller>(() => {});
-    });
-
-    const compartment = new Compartment();
-    const parent = document.createElement("div");
-    document.body.appendChild(parent);
-    const view = new EditorView({
-      state: EditorState.create({
-        doc: "helo world",
-        extensions: [
-          markdown({ base: markdownLanguage }),
-          compartment.of(buildSpellcheck(["slow"], labels)),
-        ],
-      }),
-      parent,
-    });
+    const slow = deferred<FakeSpeller>();
+    getSpeller.mockImplementation((language: string) =>
+      language === "slow" ? slow.promise : defaultGetSpeller(language),
+    );
+    const view = mount("helo world", ["slow"]);
     await flushMicrotasks();
 
     // Switch to English while the slow dictionary is still loading, then let
     // it resolve with a speller that would flag "world".
-    view.dispatch({ effects: compartment.reconfigure(buildSpellcheck(["en"], labels)) });
+    setLanguages(view, ["en"]);
     await flushMicrotasks();
-    releaseSlow(makeSpeller([], { world: ["word"] }));
+    slow.resolve(makeSpeller([], { world: ["word"] }));
     await flushMicrotasks();
 
     rightClickAt(view, 7); // inside "world", correct per the live English dictionary
@@ -334,27 +350,143 @@ describe("buildSpellcheck (editor integration)", () => {
   });
 
   it("a right-click on a stale mark right after a language-set change is a no-op", async () => {
-    const compartment = new Compartment();
-    const parent = document.createElement("div");
-    document.body.appendChild(parent);
-    const view = new EditorView({
-      state: EditorState.create({
-        doc: "helo world",
-        extensions: [
-          markdown({ base: markdownLanguage }),
-          compartment.of(buildSpellcheck(["en"], labels)),
-        ],
-      }),
-      parent,
-    });
+    const view = mount("helo world", ["en"]);
     await flushMicrotasks(); // "helo" is now marked by the English dictionary
 
     // Reconfigure to a set whose dictionary never resolves. The old marks are
     // still painted, but the fresh plugin instance has no loaded dictionaries
     // yet, so the context menu must not open against a stale checker.
-    view.dispatch({ effects: compartment.reconfigure(buildSpellcheck(["pending"], labels)) });
+    setLanguages(view, ["pending"]);
     rightClickAt(view, 2);
     expect(document.querySelector(".spellcheck-menu")).toBeNull();
+    view.destroy();
+  });
+
+  it("settles on the last language set after rapid changes", async () => {
+    const doc = `helo ${GHALAT}`;
+    const view = mount(doc, ["en"]);
+    for (const languages of [[], ["en", "fa"], ["fa"]]) setLanguages(view, languages);
+    await flushMicrotasks();
+
+    expect(isFlagged(view, 2)).toBe(false); // English is off
+    expect(isFlagged(view, doc.length - 1)).toBe(true);
+    view.destroy();
+  });
+});
+
+describe("buildSpellcheck (dictionary registry changes)", () => {
+  beforeEach(() => {
+    clearIgnoredWords();
+    spellers.clear();
+    spellers.set("en", makeSpeller(["world"]));
+    getSpeller.mockClear();
+    getSpeller.mockImplementation(defaultGetSpeller);
+    clearDictionarySources();
+    registerLanguage("en");
+  });
+
+  afterEach(() => {
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    document.body.innerHTML = "";
+  });
+
+  it("starts checking a language once its dictionary registers after mount", async () => {
+    spellers.set("late", makeSpeller(["world"]));
+    const view = mount("helo world", ["late"]);
+    await flushMicrotasks();
+    expect(isFlagged(view, 2)).toBe(false);
+
+    registerLanguage("late");
+    await flushMicrotasks();
+    expect(isFlagged(view, 2)).toBe(true);
+    view.destroy();
+  });
+
+  it("swaps to a replacement dictionary without leaving the old marks", async () => {
+    const view = mount("helo world", ["en"]);
+    await flushMicrotasks();
+    expect(isFlagged(view, 2)).toBe(true);
+
+    spellers.set("en", makeSpeller(["helo"]));
+    registerLanguage("en");
+    await flushMicrotasks();
+    expect(isFlagged(view, 2)).toBe(false);
+    expect(isFlagged(view, 7)).toBe(true);
+    view.destroy();
+  });
+
+  it("clears a language's marks when its dictionary is removed", async () => {
+    const removeLate = registerLanguage("late");
+    spellers.set("late", makeSpeller(["world"]));
+    const view = mount("helo world", ["late"]);
+    await flushMicrotasks();
+    expect(isFlagged(view, 2)).toBe(true);
+
+    removeLate();
+    await flushMicrotasks();
+    expect(isFlagged(view, 2)).toBe(false);
+    view.destroy();
+  });
+
+  it("a load for a source replaced meanwhile paints nothing when it lands", async () => {
+    const stale = deferred<FakeSpeller>();
+    getSpeller.mockImplementationOnce(() => stale.promise);
+    spellers.set("en", makeSpeller(["helo", "world"]));
+    const view = mount("helo world", ["en"]);
+    registerLanguage("en"); // the replacement loads the accepting speller
+    await flushMicrotasks();
+
+    stale.resolve(makeSpeller([]));
+    await flushMicrotasks();
+    expect(isFlagged(view, 2)).toBe(false);
+    view.destroy();
+  });
+
+  it("a language whose dictionary fails to load leaves the others checking", async () => {
+    registerLanguage("fa");
+    getSpeller.mockImplementation((language: string) =>
+      language === "fa" ? Promise.reject(new Error("broken")) : defaultGetSpeller(language),
+    );
+    const doc = `helo ${GHALAT}`;
+    const view = mount(doc, ["en", "fa"]);
+    await flushMicrotasks();
+    expect(isFlagged(view, 2)).toBe(true);
+    expect(isFlagged(view, doc.length - 1)).toBe(false);
+    view.destroy();
+  });
+
+  it("ignores registrations for languages outside its set", async () => {
+    const view = mount("helo world", ["en"]);
+    await flushMicrotasks();
+    getSpeller.mockClear();
+    registerLanguage("de");
+    expect(getSpeller).not.toHaveBeenCalled();
+    view.destroy();
+  });
+
+  it("stops following the registry once torn down", async () => {
+    const view = mount("helo world", ["en"]);
+    await flushMicrotasks();
+    view.destroy();
+    getSpeller.mockClear();
+    registerLanguage("en");
+    expect(getSpeller).not.toHaveBeenCalled();
+  });
+
+  it("orders merged suggestions by the configured languages, not load order", async () => {
+    registerLanguage("xx");
+    const english = deferred<FakeSpeller>();
+    getSpeller.mockImplementation((language: string) =>
+      language === "en" ? english.promise : defaultGetSpeller(language),
+    );
+    spellers.set("xx", makeSpeller([], { helo: ["halo"] }));
+    const view = mount("helo", ["en", "xx"]);
+    await flushMicrotasks(); // xx has loaded, English has not
+    english.resolve(makeSpeller([], { helo: ["hello"] }));
+    await flushMicrotasks();
+
+    rightClickAt(view, 2);
+    expect(suggestionItems()).toEqual(["hello", "halo"]);
     view.destroy();
   });
 });

@@ -70,6 +70,10 @@
     "themePresets": {
       "name": "Farbschemata",
       "description": "Fertige Farbschemata über Hell und Dunkel hinaus: Sepia, Solarized und Hoher Kontrast, jeweils mit heller und dunkler Variante. Auswahl unter Einstellungen > Darstellung."
+    },
+    "dictionaryEn": {
+      "name": "Englisches Wörterbuch",
+      "description": "US-Englisch für die Rechtschreibprüfung im Editor. „Rechtschreibung prüfen“ und die Sprachen unter Einstellungen > Editor einschalten."
     }
   }
 }

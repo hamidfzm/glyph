@@ -53,6 +53,11 @@ export const CORE_PLUGINS: readonly CorePlugin[] = [
     settingsKey: "themePresets",
     load: () => import("@/plugins/core/theme-presets/themePresetsPlugin"),
   },
+  {
+    id: "glyph.core.dictionary-en",
+    settingsKey: "dictionaryEn",
+    load: () => import("@/plugins/core/dictionary-en/dictionaryEnPlugin"),
+  },
 ];
 
 /** The host entry for a core plugin: bundled, so there is no folder or source text. */

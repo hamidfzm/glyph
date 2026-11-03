@@ -425,9 +425,11 @@ export interface SpellcheckRegistryApi {
   /**
    * Contribute a spell-check dictionary for a language. It appears in the
    * Settings language picker under `label`, and `load` runs only when the user
-   * selects the language. Registering an already-known code (including the
-   * built-in "en") replaces it; the disposer removes the dictionary and drops
-   * any cached checker built from it.
+   * selects the language, returning the Hunspell `.aff`/`.dic` text (refused
+   * past 32 million characters combined). Registering an already-known code
+   * (including "en" from the core English dictionary) replaces it; the
+   * disposer removes the dictionary, drops any cached checker built from it,
+   * and restores the one it replaced.
    */
   registerDictionary(dictionary: DictionaryContribution): Disposer;
 }
