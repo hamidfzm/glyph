@@ -63,9 +63,10 @@ export function getDictionarySource(language: string): DictionaryContribution | 
 }
 
 /**
- * Current contributions in registration order. The same array reference is
- * returned until the registry changes, so it is safe as a
- * `useSyncExternalStore` snapshot.
+ * The contribution each language resolves to, in the order the languages first
+ * registered (one that loses its last registration and returns goes last). The
+ * same array reference is returned until the registry changes, so it is safe as
+ * a `useSyncExternalStore` snapshot.
  */
 export function listDictionarySources(): readonly DictionaryContribution[] {
   return snapshot;

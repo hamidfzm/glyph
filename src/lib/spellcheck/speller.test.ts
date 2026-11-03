@@ -57,7 +57,7 @@ describe("getSpeller", () => {
     expect(createHunspellSpeller).not.toHaveBeenCalled();
   });
 
-  it("logs a failed load and retries on the next call", async () => {
+  it("logs a failed read and retries it on the next call", async () => {
     expectConsole(/"fa" spell-check dictionary failed to load/);
     let attempt = 0;
     register("AFF", () => {
@@ -66,7 +66,7 @@ describe("getSpeller", () => {
         ? Promise.reject(new Error("asset missing"))
         : Promise.resolve({ aff: "AFF", dic: "DIC" });
     });
-    await expect(getSpeller("fa")).rejects.toThrow("asset missing");
+    await expect(getSpeller("fa")).rejects.toThrow(/could not be read/);
     await flush();
     await expect(loadFa()).resolves.toMatchObject({ aff: "AFF" });
   });
@@ -78,11 +78,30 @@ describe("getSpeller", () => {
     expect(createHunspellSpeller).not.toHaveBeenCalled();
   });
 
-  it("rejects an oversized dictionary without parsing it", async () => {
+  it("rejects an oversized dictionary once, without parsing or reading it again", async () => {
     expectConsole(/"fa" spell-check dictionary failed to load/);
-    register("AFF", () => Promise.resolve({ aff: "", dic: "x".repeat(32_000_001) }));
-    await expect(getSpeller("fa")).rejects.toThrow(/size limit/);
+    const load = vi.fn(() => Promise.resolve({ aff: "", dic: "x".repeat(32_000_001) }));
+    register("AFF", load);
+    const refused = getSpeller("fa");
+    await expect(refused).rejects.toThrow(/size limit/);
+    await flush();
+    expect(getSpeller("fa")).toBe(refused);
+    expect(load).toHaveBeenCalledTimes(1);
     expect(createHunspellSpeller).not.toHaveBeenCalled();
+  });
+
+  it("keeps a dictionary that fails to parse failed until its source changes", async () => {
+    expectConsole(/"fa" spell-check dictionary failed to load/);
+    createHunspellSpeller.mockRejectedValueOnce(new Error("Aborted()"));
+    register("FIRST");
+    const failed = getSpeller("fa");
+    await expect(failed).rejects.toThrow("Aborted()");
+    await flush();
+    expect(getSpeller("fa")).toBe(failed);
+    expect(createHunspellSpeller).toHaveBeenCalledTimes(1);
+
+    register("SECOND");
+    await expect(loadFa()).resolves.toMatchObject({ aff: "SECOND" });
   });
 
   it("frees the cached checker and loads the new source when it is replaced", async () => {
@@ -118,7 +137,7 @@ describe("getSpeller", () => {
     const fresh = getSpeller("fa");
 
     slow.reject(new Error("first source broke"));
-    await expect(stale).rejects.toThrow("first source broke");
+    await expect(stale).rejects.toThrow(/could not be read/);
     expect(getSpeller("fa")).toBe(fresh);
   });
 

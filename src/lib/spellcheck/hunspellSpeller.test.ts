@@ -1,7 +1,8 @@
+import { getWasmModule } from "hunspell-wasm";
 import { describe, expect, it } from "vitest";
 import { createHunspellSpeller } from "./hunspellSpeller";
 
-// A tiny dictionary exercising what German needs and nspell lacked: compound
+// A tiny dictionary exercising what German dictionaries rely on: compound
 // begin/middle/end parts, a part valid only inside a compound, a suffix allowed
 // inside a compound, and a homonym whose plain entry must survive a
 // compound-only twin.
@@ -86,7 +87,7 @@ describe("createHunspellSpeller", () => {
   });
 
   it("reads the text as given whatever encoding the affix file declares", async () => {
-    for (const aff of ["", "SET ISO8859-1\nTRY eéc", "﻿SET ISO8859-15\n"]) {
+    for (const aff of ["", "SET ISO8859-1\nTRY eéc", "\uFEFFSET ISO8859-15\n"]) {
       const speller = await createHunspellSpeller(aff, "2\nécole\nfiancé\n");
       // Capitalizing and suggesting both read the characters, not just bytes.
       expect(speller.correct("École"), JSON.stringify(aff)).toBe(true);
@@ -95,10 +96,23 @@ describe("createHunspellSpeller", () => {
     }
   });
 
+  it("sizes a dictionary by its words, not by the count it claims", async () => {
+    // Taken at its word, this count would hold the shared heap at 2 GB.
+    const speller = await createHunspellSpeller("", "536000000\nword\n");
+    expect(speller.correct("word")).toBe(true);
+    speller.dispose();
+    const { HEAPU8 } = await getWasmModule();
+    expect(HEAPU8.length).toBeLessThan(64 * 1024 * 1024);
+
+    const next = await createHunspellSpeller(AFF, DIC);
+    expect(next.correct("sunflower")).toBe(true);
+    next.dispose();
+  });
+
   it("survives malformed dictionaries without breaking the next one", async () => {
     const malformed: [string, string][] = [
       ["", ""],
-      ["\u0000￿\ud800", "not a count\n\u0000"],
+      ["\u0000\uffff\ud800", "not a count\n\u0000"],
       ["", "999999999\nword\n"],
       ["FLAG num\n", "2\nword/99999999\nother/0,70000,-5\n"],
       ["AF 2\nAF A\nAF B\n", "2\nword/7\nother/-1\n"],

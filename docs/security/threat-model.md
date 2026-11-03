@@ -861,10 +861,13 @@ exist on desktop only, like `glyph mcp`.
   it is refused unless both files are strings under 32 million characters
   together, then parsed by Hunspell compiled to WebAssembly, whose only file
   system is in memory and which has no network. Every dictionary shares that
-  module's heap, so a memory-safety bug in Hunspell stays inside the
-  WebAssembly sandbox but could corrupt the other dictionaries' answers; a
-  dictionary that merely fails to parse fails only its own language. A plugin
-  that declares
+  module's heap, which grows to at most 2 GB and never shrinks. The word count
+  a `.dic` file states is replaced by the number of lines it holds, so a
+  dictionary takes memory in proportion to its text, not to a number it
+  claims, but a large one keeps that memory for the session after it is
+  removed. A memory-safety bug in Hunspell stays inside the WebAssembly
+  sandbox but could corrupt the other dictionaries' answers, and a dictionary
+  that fails to parse fails only its own language. A plugin that declares
   `"sandbox": false` still executes in the app context and sees everything the
   renderer sees (the host's own Escape handling and close button on a plugin
   overlay guard against a plugin's bugs, not against a hostile one); that mode
@@ -890,10 +893,10 @@ exist on desktop only, like `glyph mcp`.
   plugin's id. Sandboxed plugins get none of it. Core plugins (the compiled-in
   `CORE_PLUGINS` list: D2, Mermaid, math, tags, backlinks, daily notes, theme
   presets, and the English dictionary today) are app code shipped in the
-  signed binary: they load
-  with full trust and no consent prompt, take the permissions they need
-  (`workspace:read` for tags and backlinks, and `workspace:write` as well for
-  daily notes) from that same list rather than from disk, and only their on/off
+  signed binary: they load with full trust and no consent prompt, take the
+  permissions they need (`workspace:read` for tags and backlinks, and
+  `workspace:write` as well for daily notes) from that same list rather than
+  from disk, and only their on/off
   state lives in `settings.json`. The picked color scheme (theme presets
   offers three) is an app setting there too: the stored id is only looked up
   among the schemes loaded plugins registered, anything malformed reads as the

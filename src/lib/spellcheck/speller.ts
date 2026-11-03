@@ -12,10 +12,19 @@ const MAX_DICTIONARY_LENGTH = 32_000_000;
 // (session-scoped, in memory).
 const cache = new Map<string, Promise<Speller>>();
 
+// A plugin failing to hand over its text may succeed next time (an asset read),
+// so only this failure is retried; a missing, refused or unparseable dictionary
+// fails the same way until its source changes.
+class DictionaryReadError extends Error {}
+
 async function loadSpeller(language: string): Promise<Speller> {
   const source = getDictionarySource(language);
   if (!source) throw new Error(`no dictionary is registered for "${language}"`);
-  const { aff, dic } = await source.load();
+  const { aff, dic } = await source.load().catch((error: unknown) => {
+    throw new DictionaryReadError(`the "${language}" dictionary could not be read`, {
+      cause: error,
+    });
+  });
   // A sandboxed plugin's result crosses a worker boundary unchecked.
   if (typeof aff !== "string" || typeof dic !== "string") {
     throw new Error(`the "${language}" dictionary is not text`);
@@ -44,11 +53,12 @@ export function getSpeller(language: string): Promise<Speller> {
   let pending = cache.get(language);
   if (!pending) {
     pending = loadSpeller(language);
-    // Never cache a failed load: drop it so the next call retries instead of
-    // handing back the rejected promise for the rest of the session.
+    // Any other failure stays cached, so it is logged once, and the registry
+    // listener above drops it when a new source arrives.
     pending.catch((error) => {
-      if (cache.get(language) === pending) cache.delete(language);
       console.error(`The "${language}" spell-check dictionary failed to load:`, error);
+      const retryable = error instanceof DictionaryReadError;
+      if (retryable && cache.get(language) === pending) cache.delete(language);
     });
     cache.set(language, pending);
   }
