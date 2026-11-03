@@ -49,10 +49,10 @@ export function Lightbox({ items, index, onIndexChange, onClose }: LightboxProps
   const computeFit = useCallback(() => {
     const size = naturalRef.current;
     if (!size) return 1;
+    // Only a mounted stage reports a size, so the refs below are set.
     // A table's scroll box already sits inside the padding, less its scrollbar.
-    if (isTable) return fitWidthScale(size.w, tableScrollerRef.current?.clientWidth ?? 0);
-    const stage = stageRef.current;
-    if (!stage) return 1;
+    if (isTable) return fitWidthScale(size.w, tableScrollerRef.current!.clientWidth);
+    const stage = stageRef.current!;
     // Subtract the overlay padding so a fitted image clears the toolbar/edges.
     const styles = getComputedStyle(stage);
     const availWidth =

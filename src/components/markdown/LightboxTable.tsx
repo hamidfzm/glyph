@@ -19,8 +19,8 @@ export function LightboxTable({ table, scale, scrollerRef, onMeasure }: Lightbox
 
   // Measured before the first paint, while the zoom is still 1.
   useLayoutEffect(() => {
-    const body = bodyRef.current;
-    if (body) onMeasure({ w: body.offsetWidth, h: body.offsetHeight });
+    const body = bodyRef.current!;
+    onMeasure({ w: body.offsetWidth, h: body.offsetHeight });
   }, [onMeasure]);
 
   return (
