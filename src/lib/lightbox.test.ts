@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clampScale, fitScale, MAX_SCALE, MIN_SCALE } from "./lightbox";
+import { clampScale, fitScale, fitWidthScale, MAX_SCALE, MIN_SCALE } from "./lightbox";
 
 describe("clampScale", () => {
   it("keeps values within [MIN_SCALE, MAX_SCALE]", () => {
@@ -28,5 +28,24 @@ describe("fitScale", () => {
   it("uses the limiting axis", () => {
     // 1000x2000 into 1000x1000 → limited by height → 0.5
     expect(fitScale(1000, 2000, 1000, 1000)).toBe(0.5);
+  });
+});
+
+describe("fitWidthScale", () => {
+  it("returns 1 when a width is unknown", () => {
+    expect(fitWidthScale(0, 1000)).toBe(1);
+    expect(fitWidthScale(1000, 0)).toBe(1);
+  });
+
+  it("shrinks a wide table to the available width", () => {
+    expect(fitWidthScale(2000, 1000)).toBe(0.5);
+  });
+
+  it("never enlarges a narrow table past actual size", () => {
+    expect(fitWidthScale(400, 1000)).toBe(1);
+  });
+
+  it("stays within the minimum scale for an extreme table", () => {
+    expect(fitWidthScale(1_000_000, 100)).toBe(MIN_SCALE);
   });
 });

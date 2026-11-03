@@ -154,6 +154,8 @@ export function useCanvasEditing({ data, commit, viewport, stageRef }: UseCanvas
       /* v8 ignore start -- defensive: a focused canvas textarea implies editingId, handled above */
       if (target?.closest("input, textarea, [contenteditable]")) return;
       /* v8 ignore stop */
+      // A dialog over the board (a card's table lightbox) keeps its keys.
+      if (target?.closest('[aria-modal="true"]')) return;
       if (selectedEdge) {
         e.preventDefault();
         commit(removeEdge(dataRef.current, selectedEdge));

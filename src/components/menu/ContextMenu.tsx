@@ -49,11 +49,15 @@ export function ContextMenu({ menu, onClose }: ContextMenuProps) {
     const handleMouseDown = (e: MouseEvent) => {
       if (!rootRef.current?.contains(e.target as Node)) onClose();
     };
+    // Captured and claimed, so the Escape that dismisses the menu does not
+    // also close what it opened over (the lightbox).
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key !== "Escape") return;
+      e.stopPropagation();
+      onClose();
     };
     window.addEventListener("mousedown", handleMouseDown, true);
-    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keydown", handleKeyDown, true);
     window.addEventListener("resize", onClose);
     window.addEventListener("blur", onClose);
     // Capture: scroll doesn't bubble, and the anchor often sits in an inner
@@ -61,7 +65,7 @@ export function ContextMenu({ menu, onClose }: ContextMenuProps) {
     window.addEventListener("scroll", onClose, true);
     return () => {
       window.removeEventListener("mousedown", handleMouseDown, true);
-      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keydown", handleKeyDown, true);
       window.removeEventListener("resize", onClose);
       window.removeEventListener("blur", onClose);
       window.removeEventListener("scroll", onClose, true);

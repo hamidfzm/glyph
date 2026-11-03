@@ -1,11 +1,4 @@
-import {
-  type CSSProperties,
-  type SyntheticEvent,
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
+import { type MouseEvent, useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { ChevronLeftIcon } from "@/components/icons/ChevronLeftIcon";
@@ -14,45 +7,52 @@ import { ModalCloseIcon } from "@/components/icons/ModalCloseIcon";
 import { useDragPan } from "@/hooks/useDragPan";
 import { useLightboxKeys } from "@/hooks/useLightboxKeys";
 import { useWindowFullscreen } from "@/hooks/useWindowFullscreen";
-import { clampScale, fitScale, type LightboxImage } from "@/lib/lightbox";
-import { svgSizeFromUrl } from "@/lib/svgSizeFromUrl";
+import {
+  clampScale,
+  fitScale,
+  fitWidthScale,
+  type LightboxItem,
+  type NaturalSize,
+} from "@/lib/lightbox";
+import { LightboxImage } from "./LightboxImage";
+import { LightboxTable } from "./LightboxTable";
 import { LightboxToolbar } from "./LightboxToolbar";
 
 const WHEEL_ZOOM_SPEED = 0.0015;
 
 interface LightboxProps {
-  images: LightboxImage[];
+  items: LightboxItem[];
   index: number;
   onIndexChange: (index: number) => void;
   onClose: () => void;
 }
 
-// Full-screen image viewer: dark backdrop, zoom controls (fit, actual size,
-// zoom in/out), and arrow-key navigation between the document's images. The
-// image is laid out at `natural × scale` inside a scrollable stage so zooming
-// past the viewport pans rather than clips.
-export function Lightbox({ images, index, onIndexChange, onClose }: LightboxProps) {
+// Full-screen viewer for images, diagrams, and tables: dark backdrop, zoom
+// controls (fit, actual size, zoom in/out), and arrow-key navigation between
+// the document's images. Zoomed content scrolls rather than clips: an image in
+// the stage itself, a table in a scroll box of its own.
+export function Lightbox({ items, index, onIndexChange, onClose }: LightboxProps) {
   const { t } = useTranslation("common");
-  const image = images[index];
-  const imgRef = useRef<HTMLImageElement>(null);
+  const item = items[index];
+  const isTable = item?.kind === "table";
   const stageRef = useRef<HTMLDivElement>(null);
+  const tableScrollerRef = useRef<HTMLDivElement>(null);
   useDragPan(stageRef);
   const [scale, setScale] = useState(1);
   const [isFit, setIsFit] = useState(true);
-  const [loaded, setLoaded] = useState(false);
-  // Intrinsic pixel size, or null when the image has none (SVGs with only a
-  // `viewBox` report naturalWidth/Height === 0). Drives the sizing model below.
-  // `naturalRef` mirrors it for the fit math, which runs inside the load
-  // handler before the state has committed.
-  const [natural, setNatural] = useState<{ w: number; h: number } | null>(null);
-  const naturalRef = useRef<{ w: number; h: number } | null>(null);
+  // The content's natural size for the fit math, reported by the stage: null
+  // until measured, or for an image with no intrinsic size.
+  const naturalRef = useRef<NaturalSize | null>(null);
 
-  const hasMultiple = images.length > 1;
+  const hasMultiple = items.length > 1;
 
   const computeFit = useCallback(() => {
-    const stage = stageRef.current;
     const size = naturalRef.current;
-    if (!stage || !size) return 1;
+    if (!size) return 1;
+    // A table's scroll box already sits inside the padding, less its scrollbar.
+    if (isTable) return fitWidthScale(size.w, tableScrollerRef.current?.clientWidth ?? 0);
+    const stage = stageRef.current;
+    if (!stage) return 1;
     // Subtract the overlay padding so a fitted image clears the toolbar/edges.
     const styles = getComputedStyle(stage);
     const availWidth =
@@ -60,7 +60,7 @@ export function Lightbox({ images, index, onIndexChange, onClose }: LightboxProp
     const availHeight =
       stage.clientHeight - parseFloat(styles.paddingTop) - parseFloat(styles.paddingBottom);
     return fitScale(size.w, size.h, availWidth, availHeight);
-  }, []);
+  }, [isTable]);
 
   const applyFit = useCallback(() => {
     setScale(computeFit());
@@ -79,44 +79,19 @@ export function Lightbox({ images, index, onIndexChange, onClose }: LightboxProp
 
   const goTo = useCallback(
     (next: number) => {
-      if (next < 0 || next >= images.length) return;
-      setLoaded(false);
-      setNatural(null);
+      if (next < 0 || next >= items.length) return;
       naturalRef.current = null;
       onIndexChange(next);
     },
-    [images.length, onIndexChange],
+    [items.length, onIndexChange],
   );
 
-  const applySize = useCallback(
-    (size: { w: number; h: number } | null) => {
+  const handleMeasure = useCallback(
+    (size: NaturalSize | null) => {
       naturalRef.current = size;
-      setNatural(size);
       applyFit();
     },
     [applyFit],
-  );
-
-  const handleLoad = useCallback(
-    (event: SyntheticEvent<HTMLImageElement>) => {
-      const img = event.currentTarget;
-      setLoaded(true);
-      // SVGs with only a viewBox report no intrinsic pixel size; recover one from
-      // the markup (decoded from a data URL, or fetched for asset/remote SVGs) so
-      // the image still lays out at natural × scale and pans when zoomed. Only a
-      // size-less unparseable source keeps the contained layout below.
-      if (img.naturalWidth > 0 && img.naturalHeight > 0) {
-        applySize({ w: img.naturalWidth, h: img.naturalHeight });
-        return;
-      }
-      applySize(null);
-      const src = img.src;
-      svgSizeFromUrl(src).then((size) => {
-        // Drop the result if the user has navigated to another image meanwhile.
-        if (size && imgRef.current?.src === src) applySize(size);
-      });
-    },
-    [applySize],
   );
 
   useLightboxKeys({
@@ -129,7 +104,7 @@ export function Lightbox({ images, index, onIndexChange, onClose }: LightboxProp
     onClose,
   });
 
-  // Keep the image fitted when the window resizes, unless the user has zoomed.
+  // Keep the content fitted when the window resizes, unless the user has zoomed.
   useEffect(() => {
     if (!isFit) return;
     const handleResize = () => setScale(computeFit());
@@ -154,30 +129,37 @@ export function Lightbox({ images, index, onIndexChange, onClose }: LightboxProp
     return () => stage.removeEventListener("wheel", handleWheel);
   }, []);
 
-  if (!image) return null;
+  // A table opens from a keyboard-reachable button: take focus so the arrow and
+  // page keys scroll it, not the document behind.
+  useEffect(() => {
+    if (isTable) tableScrollerRef.current?.focus();
+  }, [isTable]);
 
-  // With an intrinsic size we lay the image out at `natural × scale` so zooming
-  // past the viewport pans. Without one (an SVG with only a viewBox) there are
-  // no pixels to multiply, so fill the stage with object-fit contain and zoom
-  // via transform — max-width alone caps the size but can't enlarge it.
-  const imageStyle: CSSProperties = natural
-    ? // `natural` is only set together with `loaded` in handleLoad, so it's
-      // always loaded by the time this branch renders.
-      { width: natural.w * scale, opacity: 1 }
-    : {
-        width: "100%",
-        height: "100%",
-        objectFit: "contain",
-        transform: `scale(${scale})`,
-        opacity: loaded ? 1 : 0,
-        // The stretched element owns the letterbox around the visible image;
-        // letting clicks through keeps the backdrop's click-to-close working.
-        pointerEvents: "none",
-      };
+  if (!item) return null;
 
-  // The dialog is the scroll container and the backdrop: clicking it directly
-  // (i.e. the empty area around the image) closes. The controls below are
-  // `position: fixed`, so they stay pinned while a zoomed image scrolls.
+  let label = t("lightbox.viewer");
+  if (item.kind === "table") label = t("lightbox.tableViewer");
+  else if (item.alt) label = t("lightbox.image", { alt: item.alt });
+
+  const handleClick = (event: MouseEvent<HTMLDivElement>) => {
+    event.stopPropagation();
+    const target = event.target as Element;
+    // Following a link out of a table leaves the lightbox for wherever it leads.
+    if (target.closest('a[href]:not([aria-disabled="true"])')) {
+      onClose();
+      return;
+    }
+    const isBackdrop = target === event.currentTarget || target === tableScrollerRef.current;
+    if (!isBackdrop) return;
+    // A text selection dragged out past the table ends in a click on the backdrop.
+    const selection = window.getSelection();
+    if (selection?.toString() && event.currentTarget.contains(selection.anchorNode)) return;
+    onClose();
+  };
+
+  // The dialog is the backdrop and an image's scroll container: clicking it
+  // directly (i.e. the empty area around the content) closes. The controls
+  // below are `position: fixed`, so they stay pinned while zoomed content scrolls.
   // Portaled to <body>: a transformed ancestor (canvas cards render markdown
   // inside the pan/zoom world) would otherwise become the containing block and
   // trap the "full-screen" overlay inside the pane.
@@ -187,11 +169,13 @@ export function Lightbox({ images, index, onIndexChange, onClose }: LightboxProp
       className="lightbox-overlay"
       role="dialog"
       aria-modal="true"
-      aria-label={image.alt ? t("lightbox.image", { alt: image.alt }) : t("lightbox.viewer")}
+      aria-label={label}
       data-print-hide="true"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
+      // React bubbles a portal's events up the tree that rendered it (a canvas
+      // card would start a move or an edit); the modal keeps its presses.
+      onPointerDown={(e) => e.stopPropagation()}
+      onDoubleClick={(e) => e.stopPropagation()}
+      onClick={handleClick}
       onKeyDown={(e) => {
         if (e.key === "Escape") {
           e.preventDefault();
@@ -222,22 +206,23 @@ export function Lightbox({ images, index, onIndexChange, onClose }: LightboxProp
         </button>
       )}
 
-      <img
-        ref={imgRef}
-        src={image.src}
-        alt={image.alt}
-        className="lightbox-image"
-        style={imageStyle}
-        onLoad={handleLoad}
-        draggable={false}
-      />
+      {item.kind === "table" ? (
+        <LightboxTable
+          table={item}
+          scale={scale}
+          scrollerRef={tableScrollerRef}
+          onMeasure={handleMeasure}
+        />
+      ) : (
+        <LightboxImage image={item} scale={scale} onMeasure={handleMeasure} />
+      )}
 
       {hasMultiple && (
         <button
           type="button"
           className="lightbox-button lightbox-nav lightbox-next"
           onClick={() => goTo(index + 1)}
-          disabled={index === images.length - 1}
+          disabled={index === items.length - 1}
           aria-label={t("lightbox.next")}
           title={t("lightbox.next")}
         >
@@ -248,7 +233,7 @@ export function Lightbox({ images, index, onIndexChange, onClose }: LightboxProp
       <LightboxToolbar
         scale={scale}
         index={index}
-        total={images.length}
+        total={items.length}
         onZoomBy={zoomBy}
         onFit={applyFit}
         onActualSize={actualSize}

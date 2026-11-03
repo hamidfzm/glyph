@@ -104,6 +104,8 @@ export function CanvasEditor({ content, filePath, onChange, viewportKey }: Canva
   // app-level handler leaves it alone; stopPropagation keeps a node's menu
   // from also opening the stage's. Creation lands at the clicked world point.
   const openMenu = (e: ReactMouseEvent, target: CanvasMenuTarget) => {
+    // React also bubbles a card's portaled overlay (its table lightbox) here.
+    if (!stageRef.current?.contains(e.target as Node)) return;
     e.preventDefault();
     e.stopPropagation();
     const at = worldAt(e);

@@ -1,6 +1,7 @@
 import { useCallback, useMemo } from "react";
 import ReactMarkdown from "react-markdown";
 import { EmbedContext, type EmbedContextValue, useEmbedContext } from "@/contexts/EmbedContext";
+import { LightboxContext } from "@/contexts/LightboxContext";
 import { LightboxProvider } from "@/contexts/LightboxProvider";
 import { usePluginsOptional } from "@/contexts/PluginsContext";
 import { useWorkspaceRoot } from "@/contexts/TabsContext";
@@ -38,6 +39,8 @@ interface MarkdownContentProps {
   showFrontmatter?: boolean;
   /** Stamp `data-line` on top-level blocks, for split view scroll sync. */
   sourceLines?: boolean;
+  /** Zoomable images and expandable tables. Defaults to true. */
+  lightbox?: boolean;
 }
 
 // The markdown rendering core: frontmatter block + ReactMarkdown wired up with
@@ -55,6 +58,7 @@ export function MarkdownContent({
   onFencedBlockEdit,
   showFrontmatter = true,
   sourceLines = false,
+  lightbox = true,
 }: MarkdownContentProps) {
   const workspaceRoot = useWorkspaceRoot();
   // Extend the ancestor embed chain with this document's file so a nested
@@ -150,35 +154,45 @@ export function MarkdownContent({
     [onFencedBlockEdit],
   );
 
+  const body = (
+    <>
+      {frontmatter && <FrontmatterBlock data={frontmatter} />}
+      <ReactMarkdown
+        remarkPlugins={remarkPlugins}
+        rehypePlugins={rehypePlugins}
+        components={{
+          a: LinkWithWikilink,
+          img: ImageComponent,
+          image: SvgImageComponent,
+          video: VideoComponent,
+          audio: AudioComponent,
+          source: MediaSourceComponent,
+          pre: CodeBlock,
+          li: TaskListLi,
+          div: DivComponent,
+          table: TableComponent,
+          h1: MarkdownHeading,
+          h2: MarkdownHeading,
+          h3: MarkdownHeading,
+          h4: MarkdownHeading,
+          h5: MarkdownHeading,
+          h6: MarkdownHeading,
+        }}
+      >
+        {content}
+      </ReactMarkdown>
+    </>
+  );
+
   return (
     <EmbedContext.Provider value={embedValue}>
-      <LightboxProvider>
-        {frontmatter && <FrontmatterBlock data={frontmatter} />}
-        <ReactMarkdown
-          remarkPlugins={remarkPlugins}
-          rehypePlugins={rehypePlugins}
-          components={{
-            a: LinkWithWikilink,
-            img: ImageComponent,
-            image: SvgImageComponent,
-            video: VideoComponent,
-            audio: AudioComponent,
-            source: MediaSourceComponent,
-            pre: CodeBlock,
-            li: TaskListLi,
-            div: DivComponent,
-            table: TableComponent,
-            h1: MarkdownHeading,
-            h2: MarkdownHeading,
-            h3: MarkdownHeading,
-            h4: MarkdownHeading,
-            h5: MarkdownHeading,
-            h6: MarkdownHeading,
-          }}
-        >
-          {content}
-        </ReactMarkdown>
-      </LightboxProvider>
+      {lightbox ? (
+        <LightboxProvider>{body}</LightboxProvider>
+      ) : (
+        // Null, not absent: a portaled host (a hover preview) still sits under
+        // the document's provider in the React tree.
+        <LightboxContext.Provider value={null}>{body}</LightboxContext.Provider>
+      )}
     </EmbedContext.Provider>
   );
 }

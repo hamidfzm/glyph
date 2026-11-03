@@ -10,8 +10,12 @@ export function sizeScroller(el: HTMLElement, range: number) {
   Object.defineProperty(el, "scrollHeight", { value: VIEWPORT + range, configurable: true });
 }
 
-export function stubOffsetTop(el: HTMLElement, top: number) {
-  Object.defineProperty(el, "offsetTop", { value: top, configurable: true });
+/** Places `el` `top` px down its scroller's content, which sits at screen 0. */
+export function stubContentTop(el: HTMLElement, scroller: HTMLElement, top: number) {
+  Object.defineProperty(el, "getBoundingClientRect", {
+    value: () => ({ top: top - scroller.scrollTop }),
+    configurable: true,
+  });
 }
 
 /** Replaces ResizeObserver with one whose callbacks the caller fires by hand. */

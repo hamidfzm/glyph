@@ -3,7 +3,7 @@ import { type ReactNode, useEffect, useRef } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SettingsContext, type SettingsContextValue } from "@/contexts/SettingsContext";
 import { DEFAULT_SETTINGS } from "@/lib/settings";
-import { captureResizeObserver, sizeScroller, stubOffsetTop } from "@/test/scrollMetrics";
+import { captureResizeObserver, sizeScroller, stubContentTop } from "@/test/scrollMetrics";
 
 const LINE_HEIGHT = 20;
 
@@ -122,7 +122,7 @@ function renderSplit(syncScroll: boolean) {
   sizeScroller(preview, 1000);
   // The anchors were measured on mount, before these offsets existed, so a
   // reflow is fired to re-measure them the way a real image load would.
-  stubOffsetTop(view.getByTestId("last-anchor"), 500);
+  stubContentTop(view.getByTestId("last-anchor"), preview, 500);
   fireResize();
   return { editor, preview };
 }
