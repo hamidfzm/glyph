@@ -750,18 +750,16 @@ describe("useTabs in-memory documents", () => {
     expect(result.current.tabs).toHaveLength(0);
   });
 
-  it("an older Save As dialog confirmed last still saves the newest text", async () => {
+  // A second dialog answered after the first would act on a saved tab (#884).
+  it("a save asked for while Save As is open waits on that dialog", async () => {
     const writeFile = vi.fn().mockResolvedValue(undefined);
     mockWriteFile(writeFile);
-    const older = deferred<string | null>();
-    const newer = deferred<string | null>();
-    vi.mocked(pickSaveDocument)
-      .mockReturnValueOnce(older.promise)
-      .mockReturnValueOnce(newer.promise);
-    const { result } = renderHook(() => useTabs(defaultOptions()));
+    const dialog = deferred<string | null>();
+    vi.mocked(pickSaveDocument).mockReturnValue(dialog.promise);
+    const onWorkspaceNotice = vi.fn();
+    const { result } = renderHook(() => useTabs(defaultOptions({ onWorkspaceNotice })));
     const tabId = await newDraft(result, "one");
 
-    // Two dialogs pending for one tab, as Auto Save opens when typing continues.
     let first: Promise<boolean> | undefined;
     let second: Promise<boolean> | undefined;
     act(() => {
@@ -773,24 +771,60 @@ describe("useTabs in-memory documents", () => {
     act(() => {
       second = result.current.saveDocument(tabId);
     });
+    expect(pickSaveDocument).toHaveBeenCalledTimes(1);
+
+    let saved: (boolean | undefined)[] | undefined;
     await act(async () => {
-      newer.resolve("/p/b.md");
-      await second;
+      dialog.resolve("/p/b.md");
+      saved = await Promise.all([first, second]);
     });
     act(() => {
       result.current.updateEditContent(tabId, "one two three");
     });
     await act(async () => {
-      older.resolve("/p/a.md");
-      await first;
+      await result.current.saveDocument(tabId);
     });
 
-    expect(writeFile).toHaveBeenLastCalledWith("write_file", {
-      path: fileOf(result).path,
-      content: "one two three",
-    });
-    expect(fileOf(result).content).toBe("one two three");
+    expect(saved).toEqual([true, true]);
+    expect(pickSaveDocument).toHaveBeenCalledTimes(1);
+    expect(writesOf(writeFile)).toEqual([
+      { path: "/p/b.md", content: "one two" },
+      { path: "/p/b.md", content: "one two three" },
+    ]);
+    expect(fileOf(result).path).toBe("/p/b.md");
     expect(fileOf(result).dirty).toBe(false);
+    expect(onWorkspaceNotice).not.toHaveBeenCalled();
+    const watched = vi.mocked(invoke).mock.calls.filter(([cmd]) => cmd === "watch_file");
+    expect(watched).toEqual([["watch_file", { path: "/p/b.md" }]]);
+  });
+
+  it("both saves waiting on a cancelled Save As fail, and the next save asks again", async () => {
+    const writeFile = vi.fn().mockResolvedValue(undefined);
+    mockWriteFile(writeFile);
+    const first = deferred<string | null>();
+    vi.mocked(pickSaveDocument).mockReturnValueOnce(first.promise).mockResolvedValueOnce("/p/b.md");
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    const tabId = await newDraft(result, "one");
+
+    let saved: boolean[] | undefined;
+    await act(async () => {
+      const saving = [result.current.saveDocument(tabId), result.current.saveDocument(tabId)];
+      first.resolve(null);
+      saved = await Promise.all(saving);
+    });
+    expect(saved).toEqual([false, false]);
+    expect(fileOf(result).virtual).toBe(true);
+
+    await act(async () => {
+      await result.current.saveDocument(tabId);
+    });
+
+    expect(pickSaveDocument).toHaveBeenCalledTimes(2);
+    expect(writeFile).toHaveBeenCalledExactlyOnceWith("write_file", {
+      path: "/p/b.md",
+      content: "one",
+    });
+    expect(fileOf(result).path).toBe("/p/b.md");
   });
 
   it("saveDocument adopts the path outside the workspace even when the watch fails", async () => {
@@ -1103,6 +1137,48 @@ describe("closing untitled documents", () => {
       expect(fileOf(result, 0).virtual).toBe(true);
     },
   );
+
+  it.each([
+    ["closing the tab, then saving it", true],
+    ["saving the tab, then closing it", false],
+  ])("%s asks for one Save As, and its answer closes the tab", async (_how, closeFirst) => {
+    vi.mocked(ask).mockClear();
+    const writeFile = vi.fn().mockResolvedValue(undefined);
+    mockWriteFile(writeFile);
+    const dialog = deferred<string | null>();
+    vi.mocked(pickSaveDocument).mockReturnValue(dialog.promise);
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    const tabId = await newDraft(result, "one");
+
+    let closing: Promise<boolean> | undefined;
+    let saving: Promise<boolean> | undefined;
+    const close = () => {
+      closing = result.current.closeTab(tabId);
+    };
+    const save = () => {
+      saving = result.current.saveDocument(tabId);
+    };
+    act(() => {
+      const [first, second] = closeFirst ? [close, save] : [save, close];
+      first();
+      second();
+    });
+    expect(pickSaveDocument).toHaveBeenCalledTimes(1);
+
+    let outcome: (boolean | undefined)[] | undefined;
+    await act(async () => {
+      dialog.resolve("/p/b.md");
+      outcome = await Promise.all([closing, saving]);
+    });
+
+    expect(outcome).toEqual([true, true]);
+    expect(ask).not.toHaveBeenCalled();
+    expect(writeFile).toHaveBeenCalledExactlyOnceWith("write_file", {
+      path: "/p/b.md",
+      content: "one",
+    });
+    expect(result.current.tabs).toHaveLength(0);
+  });
 
   it("writes a tab with a path while an untitled tab's Save As is still open", async () => {
     const writeFile = vi.fn().mockResolvedValue(undefined);
