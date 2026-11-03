@@ -1180,6 +1180,43 @@ describe("closing untitled documents", () => {
     expect(result.current.tabs).toHaveLength(0);
   });
 
+  it("closing an untitled tab while its confirmed Save As is writing asks no second time", async () => {
+    vi.mocked(ask).mockClear();
+    const { writeFile, started, release } = holdWrites(1);
+    vi.mocked(pickSaveDocument).mockResolvedValue("/p/b.md");
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    const tabId = await newDraft(result, "one");
+
+    let saving: Promise<boolean> | undefined;
+    await act(async () => {
+      saving = result.current.saveDocument(tabId);
+      await started[0].promise;
+    });
+    act(() => {
+      result.current.updateEditContent(tabId, "one two");
+    });
+    let closing: Promise<boolean> | undefined;
+    act(() => {
+      closing = result.current.closeTab(tabId);
+    });
+    let outcome: (boolean | undefined)[] | undefined;
+    await act(async () => {
+      release[0].resolve();
+      outcome = await Promise.all([saving, closing]);
+    });
+
+    expect(outcome).toEqual([true, true]);
+    expect(pickSaveDocument).toHaveBeenCalledTimes(1);
+    expect(ask).not.toHaveBeenCalled();
+    expect(writesOf(writeFile)).toEqual([
+      { path: "/p/b.md", content: "one" },
+      { path: "/p/b.md", content: "one two" },
+    ]);
+    const watched = vi.mocked(invoke).mock.calls.filter(([cmd]) => cmd === "watch_file");
+    expect(watched).toEqual([["watch_file", { path: "/p/b.md" }]]);
+    expect(result.current.tabs).toHaveLength(0);
+  });
+
   it("writes a tab with a path while an untitled tab's Save As is still open", async () => {
     const writeFile = vi.fn().mockResolvedValue(undefined);
     mockWriteFile(writeFile);
