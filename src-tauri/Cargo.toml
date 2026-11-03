@@ -1,6 +1,6 @@
 [package]
 name = "glyph"
-version = "0.27.0"
+version = "0.27.1"
 description = "A cross-platform markdown viewer"
 authors = ["hamidfzm"]
 edition = "2021"
@@ -77,6 +77,11 @@ tauri-plugin-single-instance = "2"
 # Tauri, at the version Tauri builds against.
 [target."cfg(target_os = \"linux\")".dependencies]
 gtk = "0.18"
+
+# `TerminateProcess` for the GUI exit path (see `exit_without_teardown` in
+# src/lib.rs). Already in the tree at this version with this feature enabled.
+[target."cfg(target_os = \"windows\")".dependencies]
+windows-sys = { version = "0.61", features = ["Win32_System_Threading"] }
 
 # Desktop-only dependencies. The window-state plugin has no mobile equivalent
 # (no OS window state there); git2's vendored OpenSSL and sentry don't

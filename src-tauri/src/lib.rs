@@ -461,12 +461,31 @@ pub fn run() {
         // the process on exit (tauri-apps/tao#1180). Plugin `on_event` handlers
         // (window state, stores) run before this callback, so everything that
         // must persist is already written by the time `Exit` arrives.
+        // `exit_without_teardown` says why it is not `process::exit`.
         #[cfg(target_os = "windows")]
         if matches!(_event, RunEvent::Exit) {
             telemetry::flush();
-            std::process::exit(0);
+            exit_without_teardown();
         }
     });
+}
+
+/// End the process without the teardown `ExitProcess` runs. `process::exit`
+/// still runs the main thread's thread-local destructors on the way out, and
+/// muda's dark menu bar keeps its two GDI brushes in thread-locals whose
+/// destructor calls `DeleteObject` there, which faults: every run that ever
+/// drew the menu bar dark crashed on exit (#1025; muda 0.20.0 here, and its
+/// main branch still has that destructor). `TerminateProcess` skips
+/// thread-local destructors and DLL detach handlers, and nothing in this
+/// process persists anything from either: by the time `Exit` arrives, plugins
+/// have saved their state and the caller has flushed telemetry.
+#[cfg(target_os = "windows")]
+fn exit_without_teardown() -> ! {
+    use windows_sys::Win32::System::Threading::{GetCurrentProcess, TerminateProcess};
+    // SAFETY: plain kernel32 calls on the pseudo-handle of this process.
+    unsafe { TerminateProcess(GetCurrentProcess(), 0) };
+    // Only reached if the call failed; the old path beats hanging.
+    std::process::exit(0)
 }
 
 #[cfg(test)]
