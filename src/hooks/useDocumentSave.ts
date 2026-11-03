@@ -130,7 +130,7 @@ export function useDocumentSave({
 
   // Save a virtual buffer to a chosen path (Save As): on success it becomes an
   // ordinary file tab; a cancelled or failed dialog returns false so close can discard.
-  const saveVirtualAs = useCallback(
+  const pickAndAdopt = useCallback(
     async (id: string, title: string): Promise<boolean> => {
       const pick = (dir?: string) =>
         pickSaveDocument(
@@ -177,6 +177,20 @@ export function useDocumentSave({
     [adoptTarget, enqueueWrite, getWorkspaceRoot, stateRef, t],
   );
 
+  // One Save As per tab: a save asked for while it is open (Ctrl+S, then a close)
+  // waits on its answer, since a second dialog would act on a tab already saved (#884).
+  const pendingSaveAs = useRef(new Map<string, Promise<boolean>>());
+  const saveVirtualAs = useCallback(
+    (id: string, title: string): Promise<boolean> => {
+      const pending = pendingSaveAs.current.get(id);
+      if (pending) return pending;
+      const saving = pickAndAdopt(id, title).finally(() => pendingSaveAs.current.delete(id));
+      pendingSaveAs.current.set(id, saving);
+      return saving;
+    },
+    [pickAndAdopt],
+  );
+
   // Persist one dirty editable tab. Safe to call for any tab id: skips graph,
   // clean, and still-loading tabs. The write is queued per path, and the
   // dirty flag is cleared only when the written revision is still current, so a
@@ -204,13 +218,17 @@ export function useDocumentSave({
         try {
           await invoke("write_file", { path, content });
           markSelfSave(path);
-          updateActiveFile(id, (f) => ({
-            ...f,
-            content,
-            // Stay dirty when a newer edit landed while this write was in
-            // flight, so the newer revision is saved too.
-            dirty: f.revision !== revision,
-          }));
+          updateActiveFile(id, (f) => {
+            // A tab renamed or moved during the write stays dirty: its file is not the one written.
+            if (f.path !== path) return f;
+            return {
+              ...f,
+              content,
+              // Stay dirty when a newer edit landed while this write was in
+              // flight, so the newer revision is saved too.
+              dirty: f.revision !== revision,
+            };
+          });
           return true;
         } catch (err) {
           console.error("Auto-save failed:", err);
