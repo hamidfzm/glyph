@@ -192,11 +192,11 @@ export function useDocumentSave({
 
   // Persist one dirty editable tab. Safe to call for any tab id: skips graph,
   // clean, and still-loading tabs. The write is queued per path, and the
-  // dirty flag is cleared only when the written revision is still current and
-  // the tab is still at the written path, so a slow write completing after a
-  // newer edit never strands that edit. Resolves false when the write or Save As
-  // failed, true otherwise, including when an edit during the write, or a rename
-  // or move before or during it, leaves the tab dirty: `saveUntilClean` checks that.
+  // dirty flag is cleared only when the written revision is still current, so
+  // a slow write completing after a newer edit never strands that edit. Resolves
+  // false when the write or Save As failed, true otherwise, including when an
+  // edit during the write, or a rename or move before its turn, leaves the tab
+  // dirty: `saveUntilClean` checks that.
   const saveDocument = useCallback(
     (id: string): Promise<boolean> => {
       const tab = stateRef.current.tabs.find((candidate) => candidate.id === id);
@@ -221,17 +221,14 @@ export function useDocumentSave({
         try {
           await invoke("write_file", { path, content });
           markSelfSave(path);
-          updateActiveFile(id, (f) => {
-            // A tab renamed or moved during the write stays dirty: its file is not the one written.
-            if (f.path !== path) return f;
-            return {
-              ...f,
-              content,
-              // Stay dirty when a newer edit landed while this write was in
-              // flight, so the newer revision is saved too.
-              dirty: f.revision !== revision,
-            };
-          });
+          // A rename or move waits for this write, so the tab is still at `path`.
+          updateActiveFile(id, (f) => ({
+            ...f,
+            content,
+            // Stay dirty when a newer edit landed while this write was in
+            // flight, so the newer revision is saved too.
+            dirty: f.revision !== revision,
+          }));
           return true;
         } catch (err) {
           console.error("Auto-save failed:", err);

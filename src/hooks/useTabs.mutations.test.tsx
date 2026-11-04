@@ -9,15 +9,19 @@ import { expectConsole } from "@/test/consoleGuard";
 import { deferred } from "@/test/deferred";
 import { renderTabStrip } from "@/test/renderTabStrip";
 import {
+  applied,
   captureListener,
   changeOnDisk,
   defaultOptions,
   deliver,
   fileOf,
+  holdWrites,
   makeInvoker,
+  renamesTo,
   resetTabsMocks,
   type TabsHook,
   vaultSnapshot,
+  writesOf,
 } from "@/test/tabsHarness";
 import { useTabs } from "./useTabs";
 
@@ -41,14 +45,6 @@ const relinked = (newPath: string, over: Partial<Relink> = {}): Relink => ({
   failed: null,
   ...over,
 });
-
-/** Whether `command` ran for real rather than as a dry run. */
-const applied = (command: string) =>
-  vi
-    .mocked(invoke)
-    .mock.calls.some(
-      ([cmd, args]) => cmd === command && (args as { dryRun?: boolean }).dryRun === false,
-    );
 
 async function openWorkspace(result: TabsHook) {
   await waitFor(() => expect(result.current.initializing).toBe(false));
@@ -631,6 +627,78 @@ describe("useTabs link rewriting on rename and move", () => {
     });
 
     expect(steps).toEqual(["preview", "save typed", "save typed more", "apply"]);
+  });
+
+  it("renames a note whose own links it rewrites after saving it, without waiting on itself", async () => {
+    const steps: string[] = [];
+    vi.mocked(invoke).mockImplementation(
+      makeInvoker({
+        write_file: async (_cmd, args) => {
+          steps.push(`save ${args?.content}`);
+        },
+        rename_path: async (_cmd, args) => {
+          steps.push(args?.dryRun ? "preview" : "apply");
+          return relinked("/p/ws/trip.md", { files: [{ path: "/p/ws/travel.md", links: 1 }] });
+        },
+      }) as typeof invoke,
+    );
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await openWorkspace(result);
+    await openDirty(result, "/p/ws/travel.md", "typed");
+
+    let renamed: string | null = null;
+    await act(async () => {
+      renamed = await result.current.renamePath("/p/ws/travel.md", "trip");
+    });
+
+    expect(renamed).toBe("/p/ws/trip.md");
+    expect(steps).toEqual(["preview", "save typed", "apply"]);
+    expect(fileOf(result).path).toBe("/p/ws/trip.md");
+  });
+
+  it("moves a folder only once the writes of every open note inside it have finished", async () => {
+    const { writeFile, started, release } = holdWrites(2, {
+      move_path: renamesTo("/p/ws/dest/sub"),
+    });
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await openWorkspace(result);
+    await act(async () => {
+      await result.current.openFile("/p/ws/sub/a.md");
+      await result.current.openFile("/p/ws/sub/b.md");
+    });
+    const ids = result.current.tabs.map((tab) => tab.id);
+    act(() => {
+      for (const id of ids) {
+        result.current.setTabMode(id, EDITOR_MODE.edit);
+        result.current.updateEditContent(id, "typed");
+      }
+    });
+
+    let saving: Promise<boolean[]> | undefined;
+    await act(async () => {
+      saving = Promise.all(ids.map((id) => result.current.saveDocument(id)));
+      await Promise.all([started[0].promise, started[1].promise]);
+    });
+    let moving: Promise<string | null> | undefined;
+    await deliver(() => {
+      moving = result.current.movePath("/p/ws/sub", "/p/ws/dest");
+    });
+    await deliver(() => release[0].resolve());
+
+    // Moved now, b.md's write could open its old path after the folder left it.
+    expect(applied("move_path")).toBe(false);
+
+    await act(async () => {
+      release[1].resolve();
+      await Promise.all([saving, moving]);
+    });
+
+    expect(applied("move_path")).toBe(true);
+    expect(writesOf(writeFile)).toHaveLength(2);
+    expect(fileOf(result, 0).path).toBe("/p/ws/dest/sub/a.md");
+    expect(fileOf(result, 1).path).toBe("/p/ws/dest/sub/b.md");
+    expect(fileOf(result, 0).dirty).toBe(false);
+    expect(fileOf(result, 1).dirty).toBe(false);
   });
 
   it("does not rename when an affected tab cannot be saved", async () => {

@@ -168,9 +168,9 @@ export function useTabs(options: UseTabsOptions) {
 
   const getWorkspaceRoot = useCallback(() => workspaceRef.current?.root ?? null, [workspaceRef]);
 
-  // One queue for every document write, so a save and a programmatic edit of
-  // the same file can never overlap.
-  const { enqueueWrite, writesSettled } = useWriteQueue();
+  // One queue for every document write and every rename or move, so a save, a
+  // programmatic edit and a relocation of the same file can never overlap.
+  const { enqueueWrite, enqueueRelocation, writesSettled } = useWriteQueue();
 
   const { saveDocument, saveUntilClean } = useDocumentSave({
     stateRef,
@@ -197,6 +197,7 @@ export function useTabs(options: UseTabsOptions) {
     stateRef,
     workspaceRef,
     saveUntilClean,
+    enqueueRelocation,
     markSelfSave,
     reloadFromDisk,
     refreshIndexes,

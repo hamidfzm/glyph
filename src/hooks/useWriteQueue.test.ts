@@ -69,3 +69,63 @@ describe("useWriteQueue", () => {
     expect(next).toHaveBeenCalledOnce();
   });
 });
+
+describe("useWriteQueue relocations", () => {
+  const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+  it("runs a relocation once the writes inside the moved path have finished", async () => {
+    const { result } = renderHook(() => useWriteQueue());
+    const inside = deferred();
+    const outside = deferred();
+    const relocate = vi.fn(async () => "moved");
+
+    const write = result.current.enqueueWrite("/p/dir/a.md", () => inside.promise);
+    result.current.enqueueWrite("/p/other.md", () => outside.promise);
+    const relocating = result.current.enqueueRelocation("/p/dir", relocate);
+    await flush();
+    const startedEarly = relocate.mock.calls.length > 0;
+
+    inside.resolve();
+    await write;
+    expect(await relocating).toBe("moved");
+    expect(startedEarly).toBe(false);
+    outside.resolve();
+  });
+
+  it("holds a write of a moved path asked for meanwhile, one never written before included", async () => {
+    const { result } = renderHook(() => useWriteQueue());
+    const gate = deferred();
+    const order: string[] = [];
+
+    const relocating = result.current.enqueueRelocation("/p/dir", async () => {
+      await gate.promise;
+      order.push("move");
+    });
+    const writes = ["/p/dir/a.md", "/p/dir/sub/b.md"].map((path) =>
+      result.current.enqueueWrite(path, async () => {
+        order.push(path);
+      }),
+    );
+    await result.current.enqueueWrite("/p/dir.md", async () => {
+      order.push("/p/dir.md");
+    });
+
+    gate.resolve();
+    await Promise.all([relocating, ...writes]);
+    expect(order).toEqual(["/p/dir.md", "move", "/p/dir/a.md", "/p/dir/sub/b.md"]);
+  });
+
+  it("lets the writes it held run when a relocation fails", async () => {
+    const { result } = renderHook(() => useWriteQueue());
+    const next = vi.fn(async () => {});
+
+    const relocating = result.current.enqueueRelocation("/p/a.md", () =>
+      Promise.reject(new Error("refused")),
+    );
+    const queued = result.current.enqueueWrite("/p/a.md", next);
+
+    await expect(relocating).rejects.toThrow("refused");
+    await queued;
+    expect(next).toHaveBeenCalledOnce();
+  });
+});
