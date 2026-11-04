@@ -90,4 +90,26 @@ describe("getSpeller", () => {
     expect(fetch).toHaveBeenCalledTimes(2); // aff + dic from public/
     expect(nspellMock).toHaveBeenCalledTimes(2);
   });
+
+  it("keeps the newer checker cached when an older load fails after it", async () => {
+    let failOld!: (err: Error) => void;
+    registerDictionarySource({
+      language: "fa",
+      label: "Persian",
+      load: () =>
+        new Promise((_, reject) => {
+          failOld = reject;
+        }),
+    });
+    const old = getSpeller("fa");
+    // A plugin update registers again; its instance's checker replaces the old one.
+    const load = vi.fn(() => Promise.resolve({ aff: "A2", dic: "D2" }));
+    registerDictionarySource({ language: "fa", label: "Persian", load });
+    const current = getSpeller("fa");
+
+    failOld(new Error("plugin stopped"));
+    await expect(old).rejects.toThrow("plugin stopped");
+    expect(getSpeller("fa")).toBe(current);
+    expect(load).toHaveBeenCalledTimes(1);
+  });
 });

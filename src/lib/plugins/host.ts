@@ -255,7 +255,10 @@ export function createPluginHost(
             assetRead: createAssetsApi(plugin.id).readBinary,
           },
           workerSpawner,
-        );
+        ).catch((err: unknown) => {
+          bag.dispose(); // roll back anything the worker registered before it failed
+          throw err;
+        });
         bag.add(terminate);
         if (loadGeneration.get(plugin.id) !== generation) {
           bag.dispose();
