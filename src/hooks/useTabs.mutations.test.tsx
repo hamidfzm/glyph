@@ -694,7 +694,10 @@ describe("useTabs link rewriting on rename and move", () => {
     });
 
     expect(applied("move_path")).toBe(true);
-    expect(writesOf(writeFile)).toHaveLength(2);
+    expect(writesOf(writeFile)).toEqual([
+      { path: "/p/ws/sub/a.md", content: "typed" },
+      { path: "/p/ws/sub/b.md", content: "typed" },
+    ]);
     expect(fileOf(result, 0).path).toBe("/p/ws/dest/sub/a.md");
     expect(fileOf(result, 1).path).toBe("/p/ws/dest/sub/b.md");
     expect(fileOf(result, 0).dirty).toBe(false);

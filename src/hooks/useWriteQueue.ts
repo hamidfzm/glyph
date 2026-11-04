@@ -44,8 +44,14 @@ export function useWriteQueue(): WriteQueue {
 
   const enqueueRelocation = useCallback(
     <T>(path: string, relocate: () => Promise<T>): Promise<T> => {
-      const moved = [...chains.current].filter(([written]) => isPathInside(written, path));
-      const run = Promise.all(moved.map(([, chain]) => chain)).then(relocate);
+      const turns = [...chains.current]
+        .filter(([written]) => isPathInside(written, path))
+        .map(([, chain]) => chain);
+      for (const relocation of relocations.current) {
+        const overlaps = isPathInside(path, relocation.path) || isPathInside(relocation.path, path);
+        if (overlaps) turns.push(relocation.done);
+      }
+      const run = Promise.all(turns).then(relocate);
       const relocation = { path, done: run.catch(() => {}) };
       relocations.current.add(relocation);
       relocation.done.then(() => relocations.current.delete(relocation));

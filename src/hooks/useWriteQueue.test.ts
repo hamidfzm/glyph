@@ -101,18 +101,39 @@ describe("useWriteQueue relocations", () => {
       await gate.promise;
       order.push("move");
     });
-    const writes = ["/p/dir/a.md", "/p/dir/sub/b.md"].map((path) =>
+    const writes = ["/p/dir/a.md", "/p/dir/sub/b.md", "/p/dir.md"].map((path) =>
       result.current.enqueueWrite(path, async () => {
         order.push(path);
       }),
     );
-    await result.current.enqueueWrite("/p/dir.md", async () => {
-      order.push("/p/dir.md");
-    });
+    await flush();
 
     gate.resolve();
     await Promise.all([relocating, ...writes]);
     expect(order).toEqual(["/p/dir.md", "move", "/p/dir/a.md", "/p/dir/sub/b.md"]);
+  });
+
+  it("runs relocations of one path, or of a folder and a path inside it, one after the other", async () => {
+    const { result } = renderHook(() => useWriteQueue());
+    const gate = deferred();
+    const order: string[] = [];
+    const relocation = (path: string, wait?: Promise<void>) =>
+      result.current.enqueueRelocation(path, async () => {
+        await wait;
+        order.push(path);
+      });
+
+    const relocating = [
+      relocation("/p/dir", gate.promise),
+      relocation("/p/dir/a.md"),
+      relocation("/p/dir"),
+      relocation("/p/other"),
+    ];
+    await flush();
+
+    gate.resolve();
+    await Promise.all(relocating);
+    expect(order).toEqual(["/p/other", "/p/dir", "/p/dir/a.md", "/p/dir"]);
   });
 
   it("lets the writes it held run when a relocation fails", async () => {

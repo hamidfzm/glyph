@@ -54,8 +54,8 @@ export function useRelocation({
     [confirmRelink, saveUntilClean, stateRef],
   );
 
-  // Null when the user backs out at the prompt, or the workspace changed while
-  // it was open. The move and `follow` (the tabs taking the new path) run in
+  // Null when the user backs out at the prompt, or the workspace changed before
+  // the move's turn came. The move and `follow` (the tabs taking the new path) run in
   // `from`'s turn in the write queue; `confirm`'s saves stay outside, as they would wait on it.
   const relocate = useCallback(
     async (
