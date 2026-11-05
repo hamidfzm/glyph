@@ -98,6 +98,31 @@ describe("startSandbox", () => {
     expect(worker.terminated).toBe(true);
   });
 
+  it("an abort before activation rejects, terminates, and ignores the worker afterwards", async () => {
+    const api = apiStub();
+    const worker = new FakeWorker();
+    const activation = new AbortController();
+    const promise = startSandbox(plugin, {}, api, () => worker, activation.signal);
+
+    activation.abort();
+    await expect(promise).rejects.toThrow("stopped while activating");
+    expect(worker.terminated).toBe(true);
+    worker.emit({ type: "register-command", id: "c1", title: "Late" });
+    worker.emit({ type: "activated" });
+    expect(api.registerCommand).not.toHaveBeenCalled();
+  });
+
+  it("an abort after activation leaves the worker to the disposer", async () => {
+    const worker = new FakeWorker();
+    const activation = new AbortController();
+    const promise = startSandbox(plugin, {}, apiStub(), () => worker, activation.signal);
+    worker.emit({ type: "activated" });
+    await promise;
+
+    activation.abort();
+    expect(worker.terminated).toBe(false);
+  });
+
   it("ignores worker failures after activation", async () => {
     const { worker } = await startActivated();
     worker.onerror?.("late failure");

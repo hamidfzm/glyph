@@ -55,16 +55,17 @@ const defaultSpawner: WorkerSpawner = (source) =>
 /**
  * Run a sandboxed plugin in a dedicated worker and bridge its protocol
  * messages onto the host API. Resolves once the worker reports `activated`;
- * rejects on `error` or worker failure. The returned disposer terminates the
- * worker (the host's DisposerBag removes the registered contributions). Once
- * stopped, by either, the calls it had not answered and any made later
- * reject, and its messages are ignored.
+ * rejects on `error`, worker failure, or `signal` aborting first. The returned
+ * disposer terminates the worker (the host's DisposerBag removes the
+ * registered contributions). Once stopped, by any of these, the calls it had
+ * not answered and any made later reject, and its messages are ignored.
  */
 export function startSandbox(
   plugin: InstalledPlugin,
   settings: Record<string, unknown>,
   api: SandboxHostApi,
   spawn: WorkerSpawner = defaultSpawner,
+  signal?: AbortSignal,
 ): Promise<Disposer> {
   const worker = spawn(buildWorkerBootstrap());
   let exportSeq = 0;
@@ -100,6 +101,11 @@ export function startSandbox(
     worker.onerror = (event) => {
       if (!activated) fail(new Error(`sandbox worker failed: ${String(event)}`));
     };
+
+    // An activate that never settles would otherwise keep the worker running.
+    signal?.addEventListener("abort", () => {
+      if (!activated) fail(new Error(`Sandboxed plugin ${plugin.id} was stopped while activating`));
+    });
 
     worker.onmessage = ({ data }) => {
       if (stopped) return;

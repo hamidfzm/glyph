@@ -52,6 +52,32 @@ describe("createPluginHost overlapping loads", () => {
     expect(deactivate).toHaveBeenCalledTimes(1);
   });
 
+  it("an unload during an activate that has not settled removes what it registered, before and after", async () => {
+    const host = createPluginHost(vi.fn());
+    const deactivate = vi.fn();
+    let resume!: () => void;
+    const module: PluginModule = {
+      async activate(ctx) {
+        ctx.commands.register({ id: "early.cmd", title: "Early", run: () => {} });
+        await new Promise<void>((resolve) => (resume = resolve));
+        ctx.commands.register({ id: "late.cmd", title: "Late", run: () => {} });
+      },
+      deactivate,
+    };
+
+    const load = host.load(installed(), importerFor(module));
+    await vi.waitFor(() => expect(resume).toBeDefined());
+    expect(host.commands.list().map((c) => c.id)).toEqual(["early.cmd"]);
+    host.unload("com.x.demo");
+    expect(host.commands.list()).toHaveLength(0);
+
+    resume();
+    await expect(load).resolves.toBe(false);
+    expect(host.commands.list()).toHaveLength(0);
+    expect(host.listLoaded()).toEqual([]);
+    expect(deactivate).toHaveBeenCalledTimes(1);
+  });
+
   it("logs but survives when a superseded load's deactivate throws", async () => {
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
     const host = createPluginHost(vi.fn());
