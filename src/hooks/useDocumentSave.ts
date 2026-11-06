@@ -130,7 +130,7 @@ export function useDocumentSave({
 
   // Save a virtual buffer to a chosen path (Save As): on success it becomes an
   // ordinary file tab; a cancelled or failed dialog returns false so close can discard.
-  const saveVirtualAs = useCallback(
+  const pickAndAdopt = useCallback(
     async (id: string, title: string): Promise<boolean> => {
       const pick = (dir?: string) =>
         pickSaveDocument(
@@ -177,12 +177,26 @@ export function useDocumentSave({
     [adoptTarget, enqueueWrite, getWorkspaceRoot, stateRef, t],
   );
 
+  // One Save As per tab until its answer is written; a second would act on a saved tab (#884).
+  const pendingSaveAs = useRef(new Map<string, Promise<boolean>>());
+  const saveVirtualAs = useCallback(
+    (id: string, title: string): Promise<boolean> => {
+      const pending = pendingSaveAs.current.get(id);
+      if (pending) return pending;
+      const saving = pickAndAdopt(id, title).finally(() => pendingSaveAs.current.delete(id));
+      pendingSaveAs.current.set(id, saving);
+      return saving;
+    },
+    [pickAndAdopt],
+  );
+
   // Persist one dirty editable tab. Safe to call for any tab id: skips graph,
   // clean, and still-loading tabs. The write is queued per path, and the
-  // dirty flag is cleared only when the written revision is still current, so a
-  // slow write completing after a newer edit never strands that edit. Resolves
-  // false when the write or Save As failed, true otherwise, including when an
-  // edit made during the write leaves the tab dirty: `saveUntilClean` checks that.
+  // dirty flag is cleared only when the written revision is still current and
+  // the tab is still at the written path, so a slow write completing after a
+  // newer edit never strands that edit. Resolves false when the write or Save As
+  // failed, true otherwise, including when an edit, rename or move during the
+  // write leaves the tab dirty: `saveUntilClean` checks that.
   const saveDocument = useCallback(
     (id: string): Promise<boolean> => {
       const tab = stateRef.current.tabs.find((candidate) => candidate.id === id);
@@ -204,13 +218,17 @@ export function useDocumentSave({
         try {
           await invoke("write_file", { path, content });
           markSelfSave(path);
-          updateActiveFile(id, (f) => ({
-            ...f,
-            content,
-            // Stay dirty when a newer edit landed while this write was in
-            // flight, so the newer revision is saved too.
-            dirty: f.revision !== revision,
-          }));
+          updateActiveFile(id, (f) => {
+            // A tab renamed or moved during the write stays dirty: its file is not the one written.
+            if (f.path !== path) return f;
+            return {
+              ...f,
+              content,
+              // Stay dirty when a newer edit landed while this write was in
+              // flight, so the newer revision is saved too.
+              dirty: f.revision !== revision,
+            };
+          });
           return true;
         } catch (err) {
           console.error("Auto-save failed:", err);
