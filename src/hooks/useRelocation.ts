@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { type RefObject, useCallback } from "react";
 import type { WorkspaceNotice } from "@/hooks/useWorkspaceNotice";
+import type { EnqueueRelocation } from "@/hooks/useWriteQueue";
 import { basename } from "@/lib/paths";
 import { type FileTab, fileTabs, type TabsState, type Workspace } from "@/lib/tabs";
 import type { Relink, RelinkRequest } from "@/lib/vault";
@@ -9,6 +10,7 @@ interface UseRelocationOptions {
   stateRef: RefObject<TabsState>;
   workspaceRef: RefObject<Workspace | null>;
   saveUntilClean: (dirtyTabs: () => FileTab[]) => Promise<FileTab[]>;
+  enqueueRelocation: EnqueueRelocation;
   markSelfSave: (path: string) => void;
   reloadFromDisk: (tabId: string, path: string, revision?: number) => Promise<void>;
   refreshIndexes: (root: string, isCurrent: () => boolean) => Promise<void>;
@@ -28,6 +30,7 @@ export function useRelocation({
   stateRef,
   workspaceRef,
   saveUntilClean,
+  enqueueRelocation,
   markSelfSave,
   reloadFromDisk,
   refreshIndexes,
@@ -51,20 +54,30 @@ export function useRelocation({
     [confirmRelink, saveUntilClean, stateRef],
   );
 
-  // Null when the user backs out at the prompt, or the workspace changed while
-  // it was open.
+  // Null when the user backs out at the prompt, or the workspace changed before
+  // the move's turn came. The move and `follow` (the tabs taking the new path) run in
+  // `from`'s turn in the write queue; `confirm`'s saves stay outside, as they would wait on it.
   const relocate = useCallback(
-    async (command: "rename_path" | "move_path", args: Record<string, unknown>, root: string) => {
+    async (
+      command: "rename_path" | "move_path",
+      args: Record<string, unknown>,
+      root: string,
+      from: string,
+      follow: (done: Relink) => Promise<void>,
+    ) => {
       const preview = await invoke<Relink>(command, { ...args, root, dryRun: true });
       if (!(await confirm(preview, root))) return null;
-      if (workspaceRef.current?.root !== root) return null;
-      const revisions = new Map(
-        fileTabs(stateRef.current).map((tab) => [tab.id, tab.file.revision] as const),
-      );
-      const done = await invoke<Relink>(command, { ...args, root, dryRun: false });
-      return { done, revisions };
+      return enqueueRelocation(from, async () => {
+        if (workspaceRef.current?.root !== root) return null;
+        const revisions = new Map(
+          fileTabs(stateRef.current).map((tab) => [tab.id, tab.file.revision] as const),
+        );
+        const done = await invoke<Relink>(command, { ...args, root, dryRun: false });
+        await follow(done);
+        return { done, revisions };
+      });
     },
-    [confirm, stateRef, workspaceRef],
+    [confirm, enqueueRelocation, stateRef, workspaceRef],
   );
 
   const settle = useCallback(
@@ -95,10 +108,15 @@ export function useRelocation({
       const root = workspaceRef.current?.root;
       if (!root) return null;
       try {
-        const relocated = await relocate("rename_path", { path, newName, extensions }, root);
+        const relocated = await relocate(
+          "rename_path",
+          { path, newName, extensions },
+          root,
+          path,
+          (done) => refreshAfterRename(path, done.newPath, root),
+        );
         if (!relocated) return null;
         const { done, revisions } = relocated;
-        await refreshAfterRename(path, done.newPath, root);
         await settle(done, root, revisions);
         return done.newPath;
       } catch (err) {
@@ -114,11 +132,12 @@ export function useRelocation({
       const root = workspaceRef.current?.root;
       if (!root) return null;
       try {
-        const relocated = await relocate("move_path", { from, toDir }, root);
+        const relocated = await relocate("move_path", { from, toDir }, root, from, async (done) => {
+          if (done.newPath !== from) await refreshAfterMove(from, toDir, done.newPath, root);
+        });
         if (!relocated) return null;
         const { done, revisions } = relocated;
         if (done.newPath === from) return from;
-        await refreshAfterMove(from, toDir, done.newPath, root);
         await settle(done, root, revisions);
         return done.newPath;
       } catch (err) {

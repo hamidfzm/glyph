@@ -2,9 +2,11 @@ import { invoke } from "@tauri-apps/api/core";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  applied,
   captureListener,
   changeOnDisk,
   defaultOptions,
+  deliver,
   fileOf,
   holdWrites,
   type Invoker,
@@ -208,7 +210,7 @@ describe("useTabs programmatic edits", () => {
     }
   });
 
-  it("a toggle whose write was in flight across a rename is written at the new path too", async () => {
+  it("renames a note only once its toggle in flight is written", async () => {
     const { writeFile, started, release } = holdWrites(1, {
       read_file: async () => "- [ ] task",
       rename_path: renamesTo("/p/ws/b.md"),
@@ -221,19 +223,18 @@ describe("useTabs programmatic edits", () => {
       toggling = result.current.toggleTask(tabId, 1);
       await started[0].promise;
     });
-    await act(async () => {
-      await result.current.renamePath("/p/ws/a.md", "b");
+    let renaming: Promise<string | null> | undefined;
+    await deliver(() => {
+      renaming = result.current.renamePath("/p/ws/a.md", "b");
     });
+    expect(applied("rename_path")).toBe(false);
     await act(async () => {
       release[0].resolve();
-      await toggling;
+      await Promise.all([toggling, renaming]);
     });
 
-    // The renamed file may predate the toggle, so the tab is clean only once b.md holds it.
-    expect(writesOf(writeFile)).toEqual([
-      { path: "/p/ws/a.md", content: "- [x] task" },
-      { path: "/p/ws/b.md", content: "- [x] task" },
-    ]);
+    // The toggle reached a.md before it moved, so b.md holds it.
+    expect(writesOf(writeFile)).toEqual([{ path: "/p/ws/a.md", content: "- [x] task" }]);
     expect(fileOf(result).path).toBe("/p/ws/b.md");
     expect(fileOf(result).content).toBe("- [x] task");
     expect(fileOf(result).dirty).toBe(false);
@@ -244,7 +245,7 @@ describe("useTabs programmatic edits", () => {
     expect(writesOf(writeFile).at(-1)).toEqual({ path: "/p/ws/b.md", content: "- [ ] task" });
   });
 
-  it("an edit queued behind a write of the old path is written at the new path only", async () => {
+  it("an edit asked while a rename waits on a write is written at the new path only", async () => {
     const { writeFile, started, release } = holdWrites(1, {
       read_file: async () => "A",
       rename_path: renamesTo("/p/ws/b.md"),
@@ -257,22 +258,22 @@ describe("useTabs programmatic edits", () => {
       first = result.current.commitEdit(tabId, "B");
       await started[0].promise;
     });
+    let renaming: Promise<string | null> | undefined;
+    await deliver(() => {
+      renaming = result.current.renamePath("/p/ws/a.md", "b");
+    });
     let second: Promise<void> | undefined;
     act(() => {
       second = result.current.commitEdit(tabId, "C");
     });
     await act(async () => {
-      await result.current.renamePath("/p/ws/a.md", "b");
-    });
-    await act(async () => {
       release[0].resolve();
-      await Promise.all([first, second]);
+      await Promise.all([first, renaming, second]);
     });
 
-    // C never reaches a.md, which would bring the old file back beside the renamed one.
+    // C runs after the rename, and writing a.md would bring the old file back beside b.md.
     expect(writesOf(writeFile)).toEqual([
       { path: "/p/ws/a.md", content: "B" },
-      { path: "/p/ws/b.md", content: "B" },
       { path: "/p/ws/b.md", content: "C" },
     ]);
     expect(fileOf(result).path).toBe("/p/ws/b.md");

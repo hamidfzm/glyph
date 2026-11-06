@@ -5,6 +5,7 @@ import { autoSaveDocuments } from "@/lib/autoSaveDocuments";
 import { pickSaveDocument } from "@/lib/pickers";
 import { deferred } from "@/test/deferred";
 import {
+  applied,
   defaultOptions,
   fileOf,
   holdWrites,
@@ -179,7 +180,7 @@ describe("Auto Save and untitled documents", () => {
 });
 
 describe("Auto Save and a renamed note", () => {
-  it("saves a note at its new path when it was renamed while its write was in flight", async () => {
+  it("renames a note only once its Auto Save write has finished, and saves nothing more", async () => {
     const { writeFile, started, release } = holdWrites(1, {
       rename_path: renamesTo("/p/ws/b.md"),
     });
@@ -197,23 +198,24 @@ describe("Auto Save and a renamed note", () => {
     await act(async () => {
       await started[0].promise;
     });
-    await act(async () => {
-      await result.current.renamePath("/p/ws/a.md", "b");
+    let renaming: Promise<string | null> | undefined;
+    act(() => {
+      renaming = result.current.renamePath("/p/ws/a.md", "b");
     });
+    await wait(0);
+    expect(applied("rename_path")).toBe(false);
     await act(async () => {
       release[0].resolve();
+      await renaming;
     });
     await wait(DEBOUNCE);
 
-    expect(writesOf(writeFile)).toEqual([
-      { path: "/p/ws/a.md", content: "EDITED" },
-      { path: "/p/ws/b.md", content: "EDITED" },
-    ]);
+    expect(writesOf(writeFile)).toEqual([{ path: "/p/ws/a.md", content: "EDITED" }]);
     expect(fileOf(result).path).toBe("/p/ws/b.md");
     expect(fileOf(result).dirty).toBe(false);
   });
 
-  it("saves a note at its new path when a save queued behind its write was left out by the rename", async () => {
+  it("saves a note at its new path when its Auto Save during the rename was left out", async () => {
     const { writeFile, started, release } = holdWrites(1, {
       rename_path: renamesTo("/p/ws/b.md"),
     });
@@ -231,16 +233,23 @@ describe("Auto Save and a renamed note", () => {
     await act(async () => {
       await started[0].promise;
     });
+    let renaming: Promise<string | null> | undefined;
+    act(() => {
+      renaming = result.current.renamePath("/p/ws/a.md", "b");
+    });
     act(() => {
       result.current.updateEditContent(tabId, "ONE TWO");
     });
     await wait(DEBOUNCE);
     await act(async () => {
-      await result.current.renamePath("/p/ws/a.md", "b");
-    });
-    await act(async () => {
       release[0].resolve();
+      await renaming;
     });
+
+    // That save ran after the rename, so it wrote nothing, and a.md did not come back.
+    expect(writesOf(writeFile)).toEqual([{ path: "/p/ws/a.md", content: "ONE" }]);
+    expect(fileOf(result).dirty).toBe(true);
+
     await wait(DEBOUNCE);
 
     expect(writesOf(writeFile)).toEqual([
