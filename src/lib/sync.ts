@@ -61,6 +61,8 @@ export type SyncErrorKind =
   | "conflict"
   | "invalid-state"
   | "invalid-remote-url"
+  | "push-rejected"
+  | "busy"
   | "io"
   | "backend";
 

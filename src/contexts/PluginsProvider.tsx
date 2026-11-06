@@ -6,10 +6,11 @@ import { type PluginToast, PluginToasts } from "@/components/plugins/PluginToast
 import { PluginsContext } from "@/contexts/PluginsContext";
 import { useCorePlugins } from "@/hooks/useCorePlugins";
 import { usePluginLibrary } from "@/hooks/usePluginLibrary";
+import { useSyncedPluginReload } from "@/hooks/useSyncedPluginReload";
 import { registerTranslations } from "@/lib/i18n";
 import { pluginAppState } from "@/lib/plugins/appState";
 import { createPluginHost } from "@/lib/plugins/host";
-import { loadPluginSettings, savePluginSettings } from "@/lib/plugins/settingsStore";
+import { loadPluginSettings, savePluginSetting } from "@/lib/plugins/settingsStore";
 
 const TOAST_DURATION_MS = 4000;
 
@@ -37,11 +38,12 @@ export function PluginsProvider({ children }: { children: ReactNode }) {
   const [host] = useState(() =>
     createPluginHost(pushToast, registerTranslations, () => pluginAppState().workspaceRoot, {
       load: loadPluginSettings,
-      save: (id, settings) => void savePluginSettings(id, settings),
+      save: (id, key, value) => void savePluginSetting(id, key, value),
     }),
   );
 
   const core = useCorePlugins(host, pushToast);
+  useSyncedPluginReload(host);
   const {
     installed,
     disabled,
