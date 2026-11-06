@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { createPluginHost } from "@/lib/plugins/host";
+import { fileTypes } from "@/lib/plugins/fileTypes";
+import { createPluginHost, type PluginHost } from "@/lib/plugins/host";
 import type { ModuleImporter } from "@/lib/plugins/loader";
 import type { InstalledPlugin, PluginModule } from "@/lib/plugins/types";
 import { clearDictionarySources, getDictionarySource } from "@/lib/spellcheck/dictionarySources";
@@ -165,37 +166,194 @@ describe("sandboxed plugins", () => {
     errors.mockRestore();
   });
 
-  it("propagates activation errors and loads nothing", async () => {
+  it("rolls back what a plugin registered before its activation failed", async () => {
+    clearDictionarySources();
     const worker = new FakeWorker();
-    const spawn = () => {
-      queueMicrotask(() => worker.emit({ type: "error", message: "broken plugin" }));
-      return worker;
-    };
-    const host = createPluginHost(vi.fn(), undefined, undefined, undefined, spawn);
+    const host = createPluginHost(vi.fn(), undefined, undefined, undefined, () => worker);
 
-    await expect(host.load(boxed())).rejects.toThrow("broken plugin");
+    const loading = host.load(boxed());
+    await vi.waitFor(() => expect(worker.onmessage).not.toBeNull());
+    worker.emit({ type: "register-dictionary", language: "en", label: "English" });
+    worker.emit({ type: "register-command", id: "c1", title: "Boxed cmd" });
+    const dictionary = getDictionarySource("en")?.load();
+    worker.emit({ type: "error", message: "broken plugin" });
+
+    await expect(dictionary).rejects.toThrow("stopped");
+    await expect(loading).rejects.toThrow("broken plugin");
+    // A leaked "en" would hide the bundled English for the rest of the session.
+    expect(getDictionarySource("en")).toBeUndefined();
+    expect(host.commands.list()).toHaveLength(0);
     expect(host.listLoaded()).toHaveLength(0);
     expect(worker.terminated).toBe(true);
   });
 
-  it("a sandbox load resolving after unloadAll rolls back and terminates", async () => {
+  it("settles the calls the worker owed when the host unmounts, and ignores it afterwards", async () => {
+    clearDictionarySources();
     const worker = new FakeWorker();
-    let activate!: () => void;
-    const spawn = () => {
-      activate = () => worker.emit({ type: "activated" });
-      return worker;
-    };
-    const host = createPluginHost(vi.fn(), undefined, undefined, undefined, spawn);
+    const notify = vi.fn();
+    const backend = { load: vi.fn().mockResolvedValue({}), save: vi.fn() };
+    const host = createPluginHost(notify, undefined, undefined, backend, spawnerFor(worker));
 
-    const pending = host.load(boxed());
-    // Let the load progress to spawning the worker, then tear down before activation.
-    await vi.waitFor(() => expect(activate).toBeDefined());
+    await host.load(boxed());
+    worker.emit({ type: "register-dictionary", language: "en", label: "English" });
+    worker.emit({ type: "register-exporter", id: "e1", label: "E", extension: "txt" });
+    const dictionary = getDictionarySource("en")?.load();
+    const exported = host.exporters.list()[0].build("<p/>", { title: "", css: "", dark: false });
     host.unloadAll();
-    activate();
-    await pending;
 
-    expect(host.listLoaded()).toHaveLength(0);
-    expect(worker.terminated).toBe(true);
+    await expect(dictionary).rejects.toThrow("stopped");
+    await expect(exported).rejects.toThrow("stopped");
+    expect(getDictionarySource("en")).toBeUndefined();
+
+    worker.emit({ type: "notify", message: "still here" });
+    worker.emit({ type: "settings-set", key: "theme", value: "dark" });
+    expect(notify).not.toHaveBeenCalled();
+    expect(backend.save).not.toHaveBeenCalled();
+  });
+
+  it("a newer load stops the activation it supersedes, and that one's failure leaves it alone", async () => {
+    const first = new FakeWorker();
+    const second = new FakeWorker();
+    const workers = [first, second];
+    const host = createPluginHost(
+      vi.fn(),
+      undefined,
+      undefined,
+      undefined,
+      () => workers.shift() as FakeWorker,
+    );
+
+    const superseded = host.load(boxed());
+    await vi.waitFor(() => expect(first.onmessage).not.toBeNull());
+    first.emit({ type: "register-command", id: "a", title: "Old" });
+    const replacing = host.load(boxed({ version: "2.0.0" }));
+    expect(first.terminated).toBe(true);
+    expect(host.commands.list()).toHaveLength(0);
+    await vi.waitFor(() => expect(second.onmessage).not.toBeNull());
+    second.emit({ type: "activated" });
+    await expect(replacing).resolves.toBe(true);
+    second.emit({ type: "register-command", id: "b", title: "New" });
+
+    first.emit({ type: "error", message: "broken plugin" });
+    await expect(superseded).resolves.toBe(false);
+    expect(host.commands.list().map((c) => c.id)).toEqual(["b"]);
+    expect(host.listLoaded().map((p) => p.version)).toEqual(["2.0.0"]);
+    expect(second.terminated).toBe(false);
+  });
+
+  describe("unloaded while activating", () => {
+    /** Load until the worker is up and has registered one of everything, then stop. */
+    async function loadUntilRegistered(stop: (host: PluginHost, worker: FakeWorker) => void) {
+      clearDictionarySources();
+      const worker = new FakeWorker();
+      const host = createPluginHost(vi.fn(), undefined, undefined, undefined, () => worker);
+      const loading = host.load(boxed());
+      await vi.waitFor(() => expect(worker.onmessage).not.toBeNull());
+      worker.emit({ type: "register-command", id: "c1", title: "Boxed cmd" });
+      worker.emit({ type: "add-styles", css: ".x{}" });
+      worker.emit({ type: "register-exporter", id: "e1", label: "E", extension: "txt" });
+      worker.emit({ type: "register-file-type", extensions: ["boxed"], language: "boxed" });
+      worker.emit({ type: "register-dictionary", language: "en", label: "English" });
+      const dictionary = getDictionarySource("en")?.load();
+      stop(host, worker);
+      return { worker, host, loading, dictionary };
+    }
+
+    const expectNothingRegistered = (host: PluginHost) => {
+      expect(host.commands.list()).toHaveLength(0);
+      expect(host.styles.list()).toHaveLength(0);
+      expect(host.exporters.list()).toHaveLength(0);
+      expect(fileTypes.list()).toHaveLength(0);
+      expect(getDictionarySource("en")).toBeUndefined();
+      expect(host.listLoaded()).toHaveLength(0);
+    };
+
+    it.each([
+      ["unload", (host: PluginHost) => host.unload("com.x.demo")],
+      ["unloadAll", (host: PluginHost) => host.unloadAll()],
+    ])("%s removes its registrations and stops its worker at once", async (_, stop) => {
+      // The worker never reports activated: an untrusted activate can hang.
+      const { worker, host, loading, dictionary } = await loadUntilRegistered(stop);
+
+      expectNothingRegistered(host);
+      expect(worker.terminated).toBe(true);
+      await expect(dictionary).rejects.toThrow("stopped");
+      await expect(loading).resolves.toBe(false);
+    });
+
+    it.each([{ type: "activated" }, { type: "error", message: "late" }] as const)(
+      "ignores a $type the worker sends afterwards",
+      async (late) => {
+        const { worker, host, loading, dictionary } = await loadUntilRegistered((h) =>
+          h.unload("com.x.demo"),
+        );
+
+        worker.emit({ type: "register-command", id: "c2", title: "Late" });
+        worker.emit(late);
+
+        await expect(dictionary).rejects.toThrow("stopped");
+        await expect(loading).resolves.toBe(false);
+        expectNothingRegistered(host);
+      },
+    );
+
+    it("leaves a newer load of the same plugin to activate", async () => {
+      const first = new FakeWorker();
+      const second = new FakeWorker();
+      const workers = [first, second];
+      const host = createPluginHost(
+        vi.fn(),
+        undefined,
+        undefined,
+        undefined,
+        () => workers.shift() as FakeWorker,
+      );
+
+      const stale = host.load(boxed());
+      await vi.waitFor(() => expect(first.onmessage).not.toBeNull());
+      first.emit({ type: "register-command", id: "old", title: "Old" });
+      host.unload("com.x.demo");
+      const fresh = host.load(boxed({ version: "2.0.0" }));
+      await vi.waitFor(() => expect(second.onmessage).not.toBeNull());
+      second.emit({ type: "register-command", id: "new", title: "New" });
+      second.emit({ type: "activated" });
+      await expect(fresh).resolves.toBe(true);
+
+      first.emit({ type: "activated" });
+      await expect(stale).resolves.toBe(false);
+      expect(host.commands.list().map((c) => c.id)).toEqual(["new"]);
+      expect(host.listLoaded().map((p) => p.version)).toEqual(["2.0.0"]);
+      expect(second.terminated).toBe(false);
+    });
+
+    it("stops a worker that activated in the same tick as the unload", async () => {
+      const { worker, host, loading, dictionary } = await loadUntilRegistered((h, w) => {
+        w.emit({ type: "activated" });
+        h.unload("com.x.demo");
+      });
+
+      await expect(dictionary).rejects.toThrow("stopped");
+      await expect(loading).resolves.toBe(false);
+      expectNothingRegistered(host);
+      expect(worker.terminated).toBe(true);
+    });
+
+    it("spawns no worker when unloaded while its settings are read", async () => {
+      let settingsRead!: (settings: Record<string, unknown>) => void;
+      const backend = {
+        load: () => new Promise<Record<string, unknown>>((resolve) => (settingsRead = resolve)),
+        save: vi.fn(),
+      };
+      const spawn = vi.fn(() => new FakeWorker());
+      const host = createPluginHost(vi.fn(), undefined, undefined, backend, spawn);
+
+      const loading = host.load(boxed());
+      host.unload("com.x.demo");
+      settingsRead({});
+
+      await expect(loading).resolves.toBe(false);
+      expect(spawn).not.toHaveBeenCalled();
+    });
   });
 });
 

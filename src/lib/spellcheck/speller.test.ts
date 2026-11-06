@@ -133,12 +133,15 @@ describe("getSpeller", () => {
     const slow = deferred<{ aff: string; dic: string }>();
     register("FIRST", () => slow.promise);
     const stale = getSpeller("fa");
-    register("SECOND");
+    // A plugin update registers again; its instance's checker replaces the old one.
+    const freshLoad = vi.fn(() => Promise.resolve({ aff: "SECOND", dic: "DIC" }));
+    register("SECOND", freshLoad);
     const fresh = getSpeller("fa");
 
-    slow.reject(new Error("first source broke"));
+    slow.reject(new Error("plugin stopped"));
     await expect(stale).rejects.toThrow(/could not be read/);
     expect(getSpeller("fa")).toBe(fresh);
+    expect(freshLoad).toHaveBeenCalledTimes(1);
   });
 
   it("frees the checker when its source is removed", async () => {
