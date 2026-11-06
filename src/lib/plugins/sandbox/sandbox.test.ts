@@ -118,6 +118,56 @@ describe("startSandbox", () => {
     expect(worker.terminated).toBe(true);
   });
 
+  it("rejects the calls a disposed worker had not answered, and any made later", async () => {
+    const { worker, api, dispose } = await startActivated();
+    worker.emit({ type: "register-dictionary", language: "en", label: "English" });
+    worker.emit({ type: "register-exporter", id: "e1", label: "Text", extension: "txt" });
+    const [dictionary] = vi.mocked(api.registerDictionary).mock.calls[0] as [
+      DictionaryContribution,
+    ];
+    const [exporter] = vi.mocked(api.registerExporter).mock.calls[0] as [ExporterContribution];
+    const doc = { title: "", css: "", dark: false };
+    const loading = dictionary.load();
+    const building = exporter.build("a", doc);
+
+    dispose();
+    await expect(loading).rejects.toThrow("Sandboxed plugin com.x.boxed stopped");
+    await expect(building).rejects.toThrow("Sandboxed plugin com.x.boxed stopped");
+
+    // A posted call would wait on a worker that can no longer answer.
+    const posted = worker.posted.length;
+    await expect(dictionary.load()).rejects.toThrow("stopped");
+    await expect(exporter.build("b", doc)).rejects.toThrow("stopped");
+    expect(worker.posted).toHaveLength(posted);
+  });
+
+  it("rejects a dictionary load in flight when activation fails", async () => {
+    const { worker, api, promise } = start();
+    worker.emit({ type: "register-dictionary", language: "en", label: "English" });
+    const [dictionary] = vi.mocked(api.registerDictionary).mock.calls[0] as [
+      DictionaryContribution,
+    ];
+    const loading = dictionary.load();
+
+    worker.onerror?.("script error");
+    await expect(loading).rejects.toThrow("stopped");
+    await expect(promise).rejects.toThrow("sandbox worker failed");
+  });
+
+  it("ignores whatever a stopped worker still sends", async () => {
+    const { worker, api, dispose } = await startActivated();
+    dispose();
+    worker.emit({ type: "register-dictionary", language: "en", label: "English" });
+    worker.emit({ type: "register-command", id: "c1", title: "Late" });
+    worker.emit({ type: "settings-set", key: "a", value: 1 });
+    worker.emit({ type: "workspace-list", callId: 1 });
+
+    expect(api.registerDictionary).not.toHaveBeenCalled();
+    expect(api.registerCommand).not.toHaveBeenCalled();
+    expect(api.settingsSet).not.toHaveBeenCalled();
+    expect(api.workspaceList).not.toHaveBeenCalled();
+  });
+
   it("bridges register-command; running it posts run-command", async () => {
     const { worker, api } = await startActivated();
     worker.emit({ type: "register-command", id: "c1", title: "Do it" });

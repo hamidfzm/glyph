@@ -165,17 +165,77 @@ describe("sandboxed plugins", () => {
     errors.mockRestore();
   });
 
-  it("propagates activation errors and loads nothing", async () => {
+  it("rolls back what a plugin registered before its activation failed", async () => {
+    clearDictionarySources();
     const worker = new FakeWorker();
-    const spawn = () => {
-      queueMicrotask(() => worker.emit({ type: "error", message: "broken plugin" }));
-      return worker;
-    };
-    const host = createPluginHost(vi.fn(), undefined, undefined, undefined, spawn);
+    const host = createPluginHost(vi.fn(), undefined, undefined, undefined, () => worker);
 
-    await expect(host.load(boxed())).rejects.toThrow("broken plugin");
+    const loading = host.load(boxed());
+    await vi.waitFor(() => expect(worker.onmessage).not.toBeNull());
+    worker.emit({ type: "register-dictionary", language: "en", label: "English" });
+    worker.emit({ type: "register-command", id: "c1", title: "Boxed cmd" });
+    const dictionary = getDictionarySource("en")?.load();
+    worker.emit({ type: "error", message: "broken plugin" });
+
+    await expect(dictionary).rejects.toThrow("stopped");
+    await expect(loading).rejects.toThrow("broken plugin");
+    // A leaked "en" would hide the bundled English for the rest of the session.
+    expect(getDictionarySource("en")).toBeUndefined();
+    expect(host.commands.list()).toHaveLength(0);
     expect(host.listLoaded()).toHaveLength(0);
     expect(worker.terminated).toBe(true);
+  });
+
+  it("settles the calls the worker owed when the host unmounts, and ignores it afterwards", async () => {
+    clearDictionarySources();
+    const worker = new FakeWorker();
+    const notify = vi.fn();
+    const backend = { load: vi.fn().mockResolvedValue({}), save: vi.fn() };
+    const host = createPluginHost(notify, undefined, undefined, backend, spawnerFor(worker));
+
+    await host.load(boxed());
+    worker.emit({ type: "register-dictionary", language: "en", label: "English" });
+    worker.emit({ type: "register-exporter", id: "e1", label: "E", extension: "txt" });
+    const dictionary = getDictionarySource("en")?.load();
+    const exported = host.exporters.list()[0].build("<p/>", { title: "", css: "", dark: false });
+    host.unloadAll();
+
+    await expect(dictionary).rejects.toThrow("stopped");
+    await expect(exported).rejects.toThrow("stopped");
+    expect(getDictionarySource("en")).toBeUndefined();
+
+    worker.emit({ type: "notify", message: "still here" });
+    worker.emit({ type: "settings-set", key: "theme", value: "dark" });
+    expect(notify).not.toHaveBeenCalled();
+    expect(backend.save).not.toHaveBeenCalled();
+  });
+
+  it("a failed load rolls back only its own registrations, not a newer instance's", async () => {
+    const first = new FakeWorker();
+    const second = new FakeWorker();
+    const workers = [first, second];
+    const host = createPluginHost(
+      vi.fn(),
+      undefined,
+      undefined,
+      undefined,
+      () => workers.shift() as FakeWorker,
+    );
+
+    const failing = host.load(boxed());
+    await vi.waitFor(() => expect(first.onmessage).not.toBeNull());
+    first.emit({ type: "register-command", id: "a", title: "Old" });
+    const replacing = host.load(boxed({ version: "2.0.0" }));
+    await vi.waitFor(() => expect(second.onmessage).not.toBeNull());
+    second.emit({ type: "activated" });
+    await expect(replacing).resolves.toBe(true);
+    second.emit({ type: "register-command", id: "b", title: "New" });
+
+    first.emit({ type: "error", message: "broken plugin" });
+    await expect(failing).rejects.toThrow("broken plugin");
+    expect(host.commands.list().map((c) => c.id)).toEqual(["b"]);
+    expect(host.listLoaded().map((p) => p.version)).toEqual(["2.0.0"]);
+    expect(second.terminated).toBe(false);
   });
 
   it("a sandbox load resolving after unloadAll rolls back and terminates", async () => {
