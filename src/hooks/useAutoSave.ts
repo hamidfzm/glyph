@@ -8,6 +8,8 @@ export interface SavableDocument {
   id: string;
   /** Monotonic edit counter; a fresh value means new edits to (re)schedule. */
   revision: number;
+  /** A rename or move keeps the revision, so a fresh path reschedules too. */
+  path: string;
 }
 
 interface UseAutoSaveOptions {
@@ -20,13 +22,13 @@ interface UseAutoSaveOptions {
 /**
  * Per-document debounced autosave. Each listed tab owns its own timer, so
  * switching tabs never cancels another document's pending save. A save fires
- * once per revision: a new edit bumps the revision and reschedules; a completed
- * or failed save leaves the revision recorded, so it won't re-fire until the
- * next edit (retry-on-edit rather than a tight retry loop).
+ * once per revision and path: a new edit, or a rename or move of a dirty tab,
+ * reschedules; a completed or failed save leaves both recorded, so it won't
+ * re-fire until the next edit (retry-on-edit rather than a tight retry loop).
  */
 export function useAutoSave({ documents, save }: UseAutoSaveOptions) {
   const timers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
-  const scheduled = useRef<Map<string, number>>(new Map());
+  const scheduled = useRef<Map<string, SavableDocument>>(new Map());
   const saveRef = useRef(save);
   saveRef.current = save;
 
@@ -42,10 +44,11 @@ export function useAutoSave({ documents, save }: UseAutoSaveOptions) {
     for (const id of scheduled.current.keys()) {
       if (!live.has(id)) scheduled.current.delete(id);
     }
-    // (Re)schedule a debounce whenever a document's revision advances.
+    // (Re)schedule a debounce whenever a document's revision or path changes.
     for (const doc of documents) {
-      if (scheduled.current.get(doc.id) === doc.revision) continue;
-      scheduled.current.set(doc.id, doc.revision);
+      const last = scheduled.current.get(doc.id);
+      if (last?.revision === doc.revision && last.path === doc.path) continue;
+      scheduled.current.set(doc.id, doc);
       const existing = timers.current.get(doc.id);
       if (existing) clearTimeout(existing);
       timers.current.set(
