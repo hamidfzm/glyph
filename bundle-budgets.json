@@ -10,7 +10,9 @@
     "docx": { "prefix": "docx-", "budgetGzip": 134000 },
     "katex": { "prefix": "katex-", "budgetGzip": 93000 },
     "epub": { "prefix": "epub-", "budgetGzip": 34000 },
-    "html2canvas": { "prefix": "html2canvas.esm-", "budgetGzip": 52000 }
+    "html2canvas": { "prefix": "html2canvas.esm-", "budgetGzip": 52000 },
+    "hunspell": { "prefix": "hunspell-", "budgetGzip": 497000 },
+    "dictionaryEn": { "prefix": "dictionary-en-", "budgetGzip": 214000 }
   },
   "unbudgetedChunkGzipLimit": 200000
 }

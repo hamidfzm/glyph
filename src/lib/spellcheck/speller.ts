@@ -1,57 +1,64 @@
-import nspell from "nspell";
 import { getDictionarySource, subscribeDictionarySources } from "./dictionarySources";
+import { createHunspellSpeller, type Speller } from "./hunspellSpeller";
 
-// A loaded spell checker instance for one language.
-export type Speller = ReturnType<typeof nspell>;
+export type { Speller };
 
-// Dictionaries are served as static assets from public/dictionaries/<lang>/,
-// so they stay out of the JS bundle and load only when spell check is turned
-// on. The app origin serves the built dist/ root in both dev and Tauri, so an
-// absolute path resolves the same in each.
-const DICTIONARY_BASE = "/dictionaries";
+// Plugins supply the dictionary text, so it is refused before parsing past this
+// many characters. The largest official dictionary (Persian) is 1.7 million.
+const MAX_DICTIONARY_LENGTH = 32_000_000;
 
-// One shared promise per language: the ~550 KB dictionary is fetched and parsed
-// once, and every editor reuses the same instance. Personal/added words mutate
-// this instance, so all open editors see them (session-scoped, in memory).
+// One shared promise per language: a dictionary is parsed once and every editor
+// reuses it. Added words mutate that instance, so all open editors see them
+// (session-scoped, in memory).
 const cache = new Map<string, Promise<Speller>>();
 
-async function fetchText(url: string): Promise<string> {
-  const res = await fetch(url);
-  // fetch only rejects on network failure, so a missing/misconfigured
-  // dictionary would otherwise hand nspell a 404 HTML body as if it were valid.
-  if (!res.ok) throw new Error(`Failed to load ${url}: ${res.status}`);
-  return res.text();
-}
+// A plugin failing to hand over its text may succeed next time (an asset read),
+// so only this failure is retried; a missing, refused or unparseable dictionary
+// fails the same way until its source changes.
+class DictionaryReadError extends Error {}
 
 async function loadSpeller(language: string): Promise<Speller> {
-  // A plugin-registered dictionary wins over the bundled assets, so plugins
-  // can both add new languages and override a shipped one.
   const source = getDictionarySource(language);
-  if (source) {
-    const { aff, dic } = await source.load();
-    return nspell(aff, dic);
+  if (!source) throw new Error(`no dictionary is registered for "${language}"`);
+  const { aff, dic } = await source.load().catch((error: unknown) => {
+    throw new DictionaryReadError(`the "${language}" dictionary could not be read`, {
+      cause: error,
+    });
+  });
+  // A sandboxed plugin's result crosses a worker boundary unchecked.
+  if (typeof aff !== "string" || typeof dic !== "string") {
+    throw new Error(`the "${language}" dictionary is not text`);
   }
-  const base = `${DICTIONARY_BASE}/${language}`;
-  const [aff, dic] = await Promise.all([
-    fetchText(`${base}/index.aff`),
-    fetchText(`${base}/index.dic`),
-  ]);
-  return nspell(aff, dic);
+  if (aff.length + dic.length > MAX_DICTIONARY_LENGTH) {
+    throw new Error(`the "${language}" dictionary is over the size limit`);
+  }
+  return createHunspellSpeller(aff, dic);
 }
 
-// When a plugin registers, replaces, or removes a language, any cached checker
-// for it is stale; drop it so the next request rebuilds from the new source.
-subscribeDictionarySources((language) => cache.delete(language));
+// When a language's source is registered, replaced or removed, its cached
+// checker is stale: drop it, and free it once any pending load settles. This
+// subscription is registered before any editor's, so an editor reloading on the
+// same notification already gets a fresh load.
+subscribeDictionarySources((language) => {
+  const pending = cache.get(language);
+  if (!pending) return;
+  cache.delete(language);
+  pending.then(
+    (speller) => speller.dispose(),
+    () => {},
+  );
+});
 
 export function getSpeller(language: string): Promise<Speller> {
   let pending = cache.get(language);
   if (!pending) {
     pending = loadSpeller(language);
-    // Never cache a failed load: drop it so the next call retries instead of
-    // handing back the rejected promise for the rest of the session. A stopped
-    // plugin's load fails after a newer source replaced it: keep the newer one.
-    pending.catch(() => {
-      if (cache.get(language) === pending) cache.delete(language);
+    // Any other failure stays cached, so it is logged once, and the registry
+    // listener above drops it when a new source arrives.
+    pending.catch((error) => {
+      console.error(`The "${language}" spell-check dictionary failed to load:`, error);
+      const retryable = error instanceof DictionaryReadError;
+      if (retryable && cache.get(language) === pending) cache.delete(language);
     });
     cache.set(language, pending);
   }

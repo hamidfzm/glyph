@@ -36,10 +36,41 @@ describe("dictionarySources", () => {
     const disposeFirst = registerDictionarySource(contribution({ label: "First" }));
     registerDictionarySource(contribution({ label: "Second" }));
     expect(getDictionarySource("fa")?.label).toBe("Second");
+    expect(listDictionarySources().map((d) => d.label)).toEqual(["Second"]);
 
     // Disposing the superseded registration must not remove the newer one.
+    const listener = vi.fn();
+    subscribeDictionarySources(listener);
     disposeFirst();
     expect(getDictionarySource("fa")?.label).toBe("Second");
+    expect(listener).not.toHaveBeenCalled();
+  });
+
+  it("disposing the newest registration brings back the one before it", () => {
+    registerDictionarySource(contribution({ label: "First" }));
+    const disposeSecond = registerDictionarySource(contribution({ label: "Second" }));
+    const listener = vi.fn();
+    subscribeDictionarySources(listener);
+
+    disposeSecond();
+    expect(getDictionarySource("fa")?.label).toBe("First");
+    expect(listDictionarySources().map((d) => d.label)).toEqual(["First"]);
+    expect(listener).toHaveBeenCalledWith("fa");
+  });
+
+  it("a disposer called twice removes only its own registration", () => {
+    registerDictionarySource(contribution({ label: "First" }));
+    const disposeSecond = registerDictionarySource(contribution({ label: "Second" }));
+    disposeSecond();
+    disposeSecond();
+    expect(getDictionarySource("fa")?.label).toBe("First");
+  });
+
+  it("keeps other languages when one language's last registration goes", () => {
+    registerDictionarySource(contribution({ language: "de", label: "Deutsch" }));
+    const disposeFa = registerDictionarySource(contribution());
+    disposeFa();
+    expect(listDictionarySources().map((d) => d.language)).toEqual(["de"]);
   });
 
   it("notifies subscribers with the language on register and dispose", () => {

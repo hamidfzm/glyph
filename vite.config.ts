@@ -60,9 +60,11 @@ export default defineConfig(async ({ mode }) => ({
         // its lazy chunk would otherwise be named `index-<hash>.js` and collide
         // with the entry chunk in bundle-size diffs. Give it a stable name; it
         // stays lazy (only the dynamic import in the D2 core plugin's d2Render.ts
-        // references it).
+        // references it). The English dictionary's text would be `en-<hash>.js`,
+        // which reads like a locale; it too stays lazy, behind its `load`.
         manualChunks(id) {
           if (id.includes("@terrastruct/d2")) return "d2";
+          if (/dictionary-en[\\/]en\.(aff|dic)\?raw$/.test(id)) return "dictionary-en";
         },
       },
     },
@@ -80,6 +82,10 @@ export default defineConfig(async ({ mode }) => ({
       "@": path.resolve(__dirname, "src"),
     },
   },
+  // hunspell-wasm finds its .wasm next to its own module (`new URL(...,
+  // import.meta.url)`); pre-bundling moves the module, and the dev server then
+  // answers the WASM request with index.html.
+  optimizeDeps: { exclude: ["hunspell-wasm"] },
   server: {
     port: 1420,
     strictPort: true,

@@ -1,115 +1,154 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { expectConsole } from "@/test/consoleGuard";
+import { deferred } from "@/test/deferred";
 
-const { nspellMock } = vi.hoisted(() => ({
-  nspellMock: vi.fn(() => ({ correct: () => true, suggest: () => [], add: vi.fn() })),
+const { createHunspellSpeller } = vi.hoisted(() => ({
+  createHunspellSpeller: vi.fn((aff: string, _dic: string) =>
+    Promise.resolve({
+      aff,
+      correct: () => true,
+      suggest: () => [],
+      add: vi.fn(),
+      dispose: vi.fn(),
+    }),
+  ),
 }));
-vi.mock("nspell", () => ({ default: nspellMock }));
+vi.mock("./hunspellSpeller", () => ({ createHunspellSpeller }));
 
 import { clearDictionarySources, registerDictionarySource } from "./dictionarySources";
 import { clearSpellerCache, getSpeller } from "./speller";
 
-function okResponse() {
-  return Promise.resolve({ ok: true, text: () => Promise.resolve("dictionary-data") });
+type FakeSpeller = Awaited<ReturnType<typeof createHunspellSpeller>>;
+
+function register(aff: string, load = () => Promise.resolve({ aff, dic: "DIC" })) {
+  return registerDictionarySource({ language: "fa", label: "Persian", load });
+}
+
+async function loadFa(): Promise<FakeSpeller> {
+  return (await getSpeller("fa")) as unknown as FakeSpeller;
+}
+
+// Let the cache's dispose-on-settle callbacks run.
+function flush() {
+  return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
 describe("getSpeller", () => {
   beforeEach(() => {
     clearDictionarySources();
     clearSpellerCache();
-    nspellMock.mockClear();
-    vi.stubGlobal("fetch", vi.fn(okResponse));
-  });
-
-  afterEach(() => {
-    vi.unstubAllGlobals();
+    createHunspellSpeller.mockClear();
   });
 
   it("loads and parses a language once, then reuses it", async () => {
-    const first = getSpeller("en");
-    const second = getSpeller("en");
-    expect(first).toBe(second);
+    const load = vi.fn(() => Promise.resolve({ aff: "AFF", dic: "DIC" }));
+    register("AFF", load);
+    const first = getSpeller("fa");
+    expect(getSpeller("fa")).toBe(first);
     await first;
-    // one aff + one dic fetch, a single nspell construction
-    expect(fetch).toHaveBeenCalledTimes(2);
-    expect(nspellMock).toHaveBeenCalledTimes(1);
-  });
-
-  it("reloads a language after the cache is cleared", async () => {
-    await getSpeller("en");
-    clearSpellerCache();
-    await getSpeller("en");
-    expect(nspellMock).toHaveBeenCalledTimes(2);
-  });
-
-  it("rejects on a non-ok response instead of building from an error body", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(() =>
-        Promise.resolve({ ok: false, status: 404, text: () => Promise.resolve("<html>") }),
-      ),
-    );
-    await expect(getSpeller("en")).rejects.toThrow();
-    expect(nspellMock).not.toHaveBeenCalled();
-  });
-
-  it("does not cache a failed load, so the next call retries", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(() => Promise.resolve({ ok: false, status: 500, text: () => Promise.resolve("") })),
-    );
-    await expect(getSpeller("en")).rejects.toThrow();
-
-    const recovered = vi.fn(okResponse);
-    vi.stubGlobal("fetch", recovered);
-    await getSpeller("en");
-    expect(recovered).toHaveBeenCalled();
-  });
-
-  it("prefers a registered dictionary source over the bundled assets", async () => {
-    const load = vi.fn(() => Promise.resolve({ aff: "FA-AFF", dic: "FA-DIC" }));
-    registerDictionarySource({ language: "fa", label: "Persian", load });
-
-    await getSpeller("fa");
     expect(load).toHaveBeenCalledTimes(1);
-    expect(fetch).not.toHaveBeenCalled();
-    expect(nspellMock).toHaveBeenCalledWith("FA-AFF", "FA-DIC");
+    expect(createHunspellSpeller).toHaveBeenCalledWith("AFF", "DIC");
+    expect(createHunspellSpeller).toHaveBeenCalledTimes(1);
   });
 
-  it("drops the cached checker when the language's source changes", async () => {
-    const dispose = registerDictionarySource({
-      language: "fa",
-      label: "Persian",
-      load: () => Promise.resolve({ aff: "A1", dic: "D1" }),
-    });
-    await getSpeller("fa");
-    expect(nspellMock).toHaveBeenCalledTimes(1);
-
-    // Unregistering invalidates; the next request falls back to bundled assets.
-    dispose();
-    await getSpeller("fa");
-    expect(fetch).toHaveBeenCalledTimes(2); // aff + dic from public/
-    expect(nspellMock).toHaveBeenCalledTimes(2);
+  it("rejects without parsing when no dictionary is registered", async () => {
+    expectConsole(/"fa" spell-check dictionary failed to load/);
+    await expect(getSpeller("fa")).rejects.toThrow(/no dictionary is registered/);
+    expect(createHunspellSpeller).not.toHaveBeenCalled();
   });
 
-  it("keeps the newer checker cached when an older load fails after it", async () => {
-    let failOld!: (err: Error) => void;
-    registerDictionarySource({
-      language: "fa",
-      label: "Persian",
-      load: () =>
-        new Promise((_, reject) => {
-          failOld = reject;
-        }),
+  it("logs a failed read and retries it on the next call", async () => {
+    expectConsole(/"fa" spell-check dictionary failed to load/);
+    let attempt = 0;
+    register("AFF", () => {
+      attempt += 1;
+      return attempt === 1
+        ? Promise.reject(new Error("asset missing"))
+        : Promise.resolve({ aff: "AFF", dic: "DIC" });
     });
-    const old = getSpeller("fa");
+    await expect(getSpeller("fa")).rejects.toThrow(/could not be read/);
+    await flush();
+    await expect(loadFa()).resolves.toMatchObject({ aff: "AFF" });
+  });
+
+  it("rejects a dictionary that is not text without parsing it", async () => {
+    expectConsole(/"fa" spell-check dictionary failed to load/);
+    register("AFF", () => Promise.resolve({ aff: 42, dic: "DIC" } as never));
+    await expect(getSpeller("fa")).rejects.toThrow(/not text/);
+    expect(createHunspellSpeller).not.toHaveBeenCalled();
+  });
+
+  it("rejects an oversized dictionary once, without parsing or reading it again", async () => {
+    expectConsole(/"fa" spell-check dictionary failed to load/);
+    const load = vi.fn(() => Promise.resolve({ aff: "", dic: "x".repeat(32_000_001) }));
+    register("AFF", load);
+    const refused = getSpeller("fa");
+    await expect(refused).rejects.toThrow(/size limit/);
+    await flush();
+    expect(getSpeller("fa")).toBe(refused);
+    expect(load).toHaveBeenCalledTimes(1);
+    expect(createHunspellSpeller).not.toHaveBeenCalled();
+  });
+
+  it("keeps a dictionary that fails to parse failed until its source changes", async () => {
+    expectConsole(/"fa" spell-check dictionary failed to load/);
+    createHunspellSpeller.mockRejectedValueOnce(new Error("Aborted()"));
+    register("FIRST");
+    const failed = getSpeller("fa");
+    await expect(failed).rejects.toThrow("Aborted()");
+    await flush();
+    expect(getSpeller("fa")).toBe(failed);
+    expect(createHunspellSpeller).toHaveBeenCalledTimes(1);
+
+    register("SECOND");
+    await expect(loadFa()).resolves.toMatchObject({ aff: "SECOND" });
+  });
+
+  it("frees the cached checker and loads the new source when it is replaced", async () => {
+    register("FIRST");
+    const first = await loadFa();
+    register("SECOND");
+    await flush();
+    expect(first.dispose).toHaveBeenCalled();
+    await expect(loadFa()).resolves.toMatchObject({ aff: "SECOND" });
+  });
+
+  it("frees a checker whose load finishes after its source was replaced", async () => {
+    const slow = deferred<{ aff: string; dic: string }>();
+    register("FIRST", () => slow.promise);
+    const stale = getSpeller("fa");
+    register("SECOND");
+    const fresh = await loadFa();
+
+    slow.resolve({ aff: "FIRST", dic: "DIC" });
+    const settled = (await stale) as unknown as FakeSpeller;
+    await flush();
+    expect(settled.dispose).toHaveBeenCalled();
+    expect(fresh.dispose).not.toHaveBeenCalled();
+    expect(await loadFa()).toBe(fresh);
+  });
+
+  it("a stale load failing does not evict the newer source's checker", async () => {
+    expectConsole(/"fa" spell-check dictionary failed to load/);
+    const slow = deferred<{ aff: string; dic: string }>();
+    register("FIRST", () => slow.promise);
+    const stale = getSpeller("fa");
     // A plugin update registers again; its instance's checker replaces the old one.
-    const load = vi.fn(() => Promise.resolve({ aff: "A2", dic: "D2" }));
-    registerDictionarySource({ language: "fa", label: "Persian", load });
-    const current = getSpeller("fa");
+    const freshLoad = vi.fn(() => Promise.resolve({ aff: "SECOND", dic: "DIC" }));
+    register("SECOND", freshLoad);
+    const fresh = getSpeller("fa");
 
-    failOld(new Error("plugin stopped"));
-    await expect(old).rejects.toThrow("plugin stopped");
-    expect(getSpeller("fa")).toBe(current);
-    expect(load).toHaveBeenCalledTimes(1);
+    slow.reject(new Error("plugin stopped"));
+    await expect(stale).rejects.toThrow(/could not be read/);
+    expect(getSpeller("fa")).toBe(fresh);
+    expect(freshLoad).toHaveBeenCalledTimes(1);
+  });
+
+  it("frees the checker when its source is removed", async () => {
+    const dispose = register("FIRST");
+    const speller = await loadFa();
+    dispose();
+    await flush();
+    expect(speller.dispose).toHaveBeenCalled();
   });
 });

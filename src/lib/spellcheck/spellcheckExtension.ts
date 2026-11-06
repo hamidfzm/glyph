@@ -1,6 +1,6 @@
 import { type Extension, RangeSetBuilder, StateEffect, StateField } from "@codemirror/state";
 import { Decoration, type DecorationSet, EditorView, ViewPlugin } from "@codemirror/view";
-import { getDictionarySource } from "./dictionarySources";
+import { getDictionarySource, subscribeDictionarySources } from "./dictionarySources";
 import { scriptCoverage, scriptsForLanguage } from "./scripts";
 import { getSpeller, type Speller } from "./speller";
 import { mergedSuggestions, openSuggestionMenu, type SuggestionMenuLabels } from "./suggestionMenu";
@@ -72,30 +72,53 @@ interface LoadedDictionary extends Checker {
 }
 
 class SpellcheckPlugin {
-  loaded: LoadedDictionary[] = [];
+  private loaded = new Map<string, LoadedDictionary>();
+  // Bumped per language on every (re)load, so a slow load for a source that
+  // has since been replaced never lands.
+  private generations = new Map<string, number>();
   private timer: ReturnType<typeof setTimeout> | undefined;
   private destroyed = false;
+  private readonly languages: readonly string[];
+  private readonly unsubscribe: () => void;
 
   constructor(view: EditorView, languages: readonly string[]) {
+    this.languages = languages;
     // Clear leftovers from a previous configuration even if nothing loads
     // (e.g. every language was disabled); each arriving dictionary then
     // repaints progressively without waiting for the slowest one.
     this.schedule(view, 0);
-    for (const language of languages) {
-      getSpeller(language)
-        .then((speller) => {
-          // A load resolving after this configuration was replaced must not
-          // paint stale marks onto the live view.
-          if (this.destroyed) return;
-          this.loaded.push({
-            covers: coverageFor(language),
-            correct: (word) => speller.correct(word),
-            speller,
-          });
-          this.rescan(view);
-        })
-        .catch(() => {});
-    }
+    for (const language of languages) this.load(view, language);
+    // Dictionaries come from plugins, which can register after the editor
+    // mounts (core plugins load asynchronously), or replace or remove theirs.
+    this.unsubscribe = subscribeDictionarySources((language) => {
+      if (!languages.includes(language)) return;
+      const hadDictionary = this.loaded.delete(language);
+      // Clear the old dictionary's marks now; the reload repaints with the new one.
+      if (hadDictionary) this.schedule(view, 0);
+      this.load(view, language);
+    });
+  }
+
+  private load(view: EditorView, language: string): void {
+    const generation = (this.generations.get(language) ?? 0) + 1;
+    this.generations.set(language, generation);
+    // No dictionary yet: the subscription loads it once a plugin registers one.
+    if (!getDictionarySource(language)) return;
+    getSpeller(language).then(
+      (speller) => {
+        // A load resolving after this configuration was replaced, or after a
+        // newer source took over, must not paint stale marks onto the view.
+        if (this.destroyed || this.generations.get(language) !== generation) return;
+        this.loaded.set(language, {
+          covers: coverageFor(language),
+          correct: (word) => speller.correct(word),
+          speller,
+        });
+        this.rescan(view);
+      },
+      // The speller logs the failure; this language just stays unchecked.
+      () => {},
+    );
   }
 
   update(update: { docChanged: boolean; viewportChanged: boolean; view: EditorView }): void {
@@ -109,8 +132,13 @@ class SpellcheckPlugin {
     this.timer = setTimeout(() => this.rescan(view), delay);
   }
 
+  // In the configured language order, so merged suggestions do not depend on
+  // which dictionary happened to load first.
   checkersFor(word: string): LoadedDictionary[] {
-    return this.loaded.filter((dictionary) => dictionary.covers(word));
+    return this.languages.flatMap((language) => {
+      const dictionary = this.loaded.get(language);
+      return dictionary?.covers(word) ? [dictionary] : [];
+    });
   }
 
   rescan(view: EditorView): void {
@@ -118,7 +146,7 @@ class SpellcheckPlugin {
     const decorations = buildMisspellings(
       view.state,
       view.visibleRanges,
-      this.loaded,
+      [...this.loaded.values()],
       ignoredWords,
     );
     view.dispatch({ effects: setMisspellings.of(decorations) });
@@ -127,6 +155,7 @@ class SpellcheckPlugin {
   destroy(): void {
     this.destroyed = true;
     clearTimeout(this.timer);
+    this.unsubscribe();
   }
 }
 

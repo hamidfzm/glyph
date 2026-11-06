@@ -856,8 +856,18 @@ exist on desktop only, like `glyph mcp`.
   script to the exported page (EPUB and the website export write the
   styles to a separate `style.css`). A plugin of either kind may not register translations
   under one of the app's own namespaces, which the consent dialog and the
-  external-link prompt read; any other namespace is its to fill. A plugin
-  that declares
+  external-link prompt read; any other namespace is its to fill. A
+  spell-check dictionary a plugin of either kind registers is untrusted text:
+  it is refused unless both files are strings under 32 million characters
+  together, then parsed by Hunspell compiled to WebAssembly, whose only file
+  system is in memory and which has no network. Every dictionary shares that
+  module's heap, which grows to at most 2 GB and never shrinks. The word count
+  a `.dic` file states is replaced by the number of lines it holds, so a
+  dictionary takes memory in proportion to its text, not to a number it
+  claims, but a large one keeps that memory for the session after it is
+  removed. A memory-safety bug in Hunspell stays inside the WebAssembly
+  sandbox but could corrupt the other dictionaries' answers, and a dictionary
+  that fails to parse fails only its own language. A plugin that declares
   `"sandbox": false` still executes in the app context and sees everything the
   renderer sees (the host's own Escape handling and close button on a plugin
   overlay guard against a plugin's bugs, not against a hostile one); that mode
@@ -881,11 +891,12 @@ exist on desktop only, like `glyph mcp`.
   boundary itself: the first never replaces a file and refuses hidden paths
   such as `.git/hooks`, the second writes one size-capped block keyed by the
   plugin's id. Sandboxed plugins get none of it. Core plugins (the compiled-in
-  `CORE_PLUGINS` list: D2, Mermaid, math, tags, backlinks, daily notes, and
-  theme presets today) are app code shipped in the signed binary: they load
-  with full trust and no consent prompt, take the permissions they need
-  (`workspace:read` for tags and backlinks, and `workspace:write` as well for
-  daily notes) from that same list rather than from disk, and only their on/off
+  `CORE_PLUGINS` list: D2, Mermaid, math, tags, backlinks, daily notes, theme
+  presets, and the English dictionary today) are app code shipped in the
+  signed binary: they load with full trust and no consent prompt, take the
+  permissions they need (`workspace:read` for tags and backlinks, and
+  `workspace:write` as well for daily notes) from that same list rather than
+  from disk, and only their on/off
   state lives in `settings.json`. The picked color scheme (theme presets
   offers three) is an app setting there too: the stored id is only looked up
   among the schemes loaded plugins registered, anything malformed reads as the
