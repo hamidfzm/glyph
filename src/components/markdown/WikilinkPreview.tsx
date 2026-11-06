@@ -10,9 +10,10 @@ const VIEWPORT_MARGIN = 8;
 const ANCHOR_GAP = 6;
 
 // `wikilink-preview` (markdown.css) adds the materialize-in transition and its
-// transform-origin follows the flip via the inline style below.
+// transform-origin follows the flip via the inline style below. Stacked above
+// the lightbox (z-index 200), whose tables can hold wikilinks.
 const SURFACE_CLASS =
-  "wikilink-preview fixed z-50 overflow-y-auto overscroll-contain rounded-[var(--glyph-radius)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 shadow-[0_10px_30px_rgba(0,0,0,0.22)] text-[var(--color-text-primary)]";
+  "wikilink-preview fixed z-[300] overflow-y-auto overscroll-contain rounded-[var(--glyph-radius)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 shadow-[0_10px_30px_rgba(0,0,0,0.22)] text-[var(--color-text-primary)]";
 
 interface WikilinkPreviewProps {
   /** The hovered anchor; the popover positions itself against its rect. */

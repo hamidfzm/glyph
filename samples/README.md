@@ -61,6 +61,8 @@ The Tags panel is a core plugin: switch it off under **Settings → Plugins → 
 | Footnotes | Done | Medium |
 | Strikethrough | Done | Medium |
 
+Hover a table and click the **expand button** in its top corner (always shown on touch screens) to open it full-screen in the lightbox: the header row stays in view while you scroll, zoom reflows the table instead of blurring it, and the text stays selectable.
+
 ### Task Lists
 
 - [x] GitHub Flavored Markdown

@@ -191,7 +191,9 @@
     "zoomIn": "Vergrößern (+)",
     "fit": "An den Bildschirm anpassen (0)",
     "actualSize": "Tatsächliche Größe (1)",
-    "diagram": "Diagramm"
+    "diagram": "Diagramm",
+    "expandTable": "Tabelle maximieren",
+    "tableViewer": "Tabellenansicht"
   },
   "mdxNotice": {
     "body": "MDX-Datei: JSX-Komponenten werden nicht gerendert; nur der Markdown-Inhalt wird angezeigt."

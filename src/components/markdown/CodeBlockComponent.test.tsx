@@ -89,7 +89,7 @@ describe("CodeBlockComponent", () => {
     const openSrc = vi.fn();
     render(
       <PluginsContext.Provider value={plugins}>
-        <LightboxContext.Provider value={{ open: vi.fn(), openSrc }}>
+        <LightboxContext.Provider value={{ open: vi.fn(), openSrc, openTable: vi.fn() }}>
           {block}
         </LightboxContext.Provider>
       </PluginsContext.Provider>,
