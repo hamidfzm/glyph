@@ -55,14 +55,17 @@ const defaultSpawner: WorkerSpawner = (source) =>
 /**
  * Run a sandboxed plugin in a dedicated worker and bridge its protocol
  * messages onto the host API. Resolves once the worker reports `activated`;
- * rejects on `error` or worker failure. The returned disposer terminates the
- * worker (the host's DisposerBag removes the registered contributions).
+ * rejects on `error`, worker failure, or `signal` aborting first. The returned
+ * disposer terminates the worker (the host's DisposerBag removes the
+ * registered contributions). Once stopped, by any of these, the calls it had
+ * not answered and any made later reject, and its messages are ignored.
  */
 export function startSandbox(
   plugin: InstalledPlugin,
   settings: Record<string, unknown>,
   api: SandboxHostApi,
   spawn: WorkerSpawner = defaultSpawner,
+  signal?: AbortSignal,
 ): Promise<Disposer> {
   const worker = spawn(buildWorkerBootstrap());
   let exportSeq = 0;
@@ -75,11 +78,23 @@ export function startSandbox(
     number,
     { resolve: (v: { aff: string; dic: string }) => void; reject: (e: Error) => void }
   >();
+  let stopped: Error | undefined;
+
+  // A terminated worker never answers, so nothing may be left waiting on it.
+  const stop = () => {
+    stopped ??= new Error(`Sandboxed plugin ${plugin.id} stopped`);
+    worker.terminate();
+    for (const pending of [...pendingExports.values(), ...pendingDictionaries.values()]) {
+      pending.reject(stopped);
+    }
+    pendingExports.clear();
+    pendingDictionaries.clear();
+  };
 
   return new Promise<Disposer>((resolve, reject) => {
     let activated = false;
     const fail = (err: Error) => {
-      worker.terminate();
+      stop();
       reject(err);
     };
 
@@ -87,11 +102,17 @@ export function startSandbox(
       if (!activated) fail(new Error(`sandbox worker failed: ${String(event)}`));
     };
 
+    // An activate that never settles would otherwise keep the worker running.
+    signal?.addEventListener("abort", () => {
+      if (!activated) fail(new Error(`Sandboxed plugin ${plugin.id} was stopped while activating`));
+    });
+
     worker.onmessage = ({ data }) => {
+      if (stopped) return;
       switch (data.type) {
         case "activated":
           activated = true;
-          resolve(() => worker.terminate());
+          resolve(stop);
           break;
         case "error":
           if (!activated) fail(new Error(data.message));
@@ -148,6 +169,7 @@ export function startSandbox(
             extension: String(data.extension),
             build: (bodyHtml, doc) =>
               new Promise((res, rej) => {
+                if (stopped) return rej(stopped);
                 const callId = ++exportSeq;
                 pendingExports.set(callId, { resolve: res, reject: rej });
                 worker.postMessage({ type: "build-export", callId, id: data.id, bodyHtml, doc });
@@ -174,6 +196,7 @@ export function startSandbox(
             scripts: data.scripts,
             load: () =>
               new Promise((res, rej) => {
+                if (stopped) return rej(stopped);
                 const callId = ++dictionarySeq;
                 pendingDictionaries.set(callId, { resolve: res, reject: rej });
                 worker.postMessage({ type: "load-dictionary", callId, language: data.language });
