@@ -54,7 +54,7 @@ The [`samples/`](samples) directory is a tiny demo workspace. Open it as a folde
 - Export a whole workspace as a static website, in-app or headless from the CLI
 
 ### Sync (experimental)
-- Per-workspace, Git-backed Cloud Sync to any remote you control, with a status-bar ahead/behind/dirty pill
+- Per-workspace, Git-backed Cloud Sync to any remote you control, with a status-bar ahead/behind/dirty pill, and a settings repo that carries your settings and plugin list to every machine you use
 
 ### Appearance
 - System / Light / Dark themes, Sepia, Solarized, and High contrast presets, and platform-native styling (macOS vibrancy, Windows Mica)
@@ -244,7 +244,7 @@ Note on "WYSIWYG / inline preview": Glyph's editor has split-view live preview a
 
 ## Privacy & Error Reporting
 
-Glyph is local-first: your documents are read and written on your machine. Nothing is uploaded anywhere unless you opt into Cloud Sync for a workspace, which pushes that workspace to a Git remote you control.
+Glyph is local-first: your documents are read and written on your machine. Nothing is uploaded anywhere unless you opt into Cloud Sync for a workspace, which pushes that workspace to a Git remote you control, or connect a settings repo, which pushes your settings and plugin list (never API keys, recent files, or plugin permissions) to a Git remote you control.
 
 Crash and error reporting is **opt-in and off by default**. Nothing is sent until you turn it on in **Settings → Privacy → Send crash reports**, and even then it is only active in production builds (never during development).
 

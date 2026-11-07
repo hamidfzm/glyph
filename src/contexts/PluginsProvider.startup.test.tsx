@@ -4,7 +4,7 @@ import { act, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PluginsProvider } from "@/contexts/PluginsProvider";
 import { pickPluginDir } from "@/lib/pickers";
-import { loadPluginSettings, savePluginSettings } from "@/lib/plugins/settingsStore";
+import { loadPluginSettings, savePluginSetting } from "@/lib/plugins/settingsStore";
 import {
   grantedStore,
   InstallProbe,
@@ -28,7 +28,7 @@ vi.mock("@/hooks/useCorePlugins", () => ({
 
 vi.mock("@/lib/plugins/settingsStore", () => ({
   loadPluginSettings: vi.fn(() => Promise.resolve({})),
-  savePluginSettings: vi.fn(() => Promise.resolve()),
+  savePluginSetting: vi.fn(() => Promise.resolve()),
 }));
 
 beforeEach(() => {
@@ -107,7 +107,7 @@ describe("PluginsProvider startup", () => {
     );
 
     await waitFor(() =>
-      expect(vi.mocked(savePluginSettings)).toHaveBeenCalledWith("com.x.demo", { size: 13 }),
+      expect(vi.mocked(savePluginSetting)).toHaveBeenCalledWith("com.x.demo", "size", 13),
     );
   });
 
