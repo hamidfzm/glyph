@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { ModalCloseIcon } from "@/components/icons/ModalCloseIcon";
 import { PluginsTab } from "@/components/plugins/PluginsTab";
 import { useSettings } from "@/hooks/useSettings";
+import { isMobilePlatform } from "@/lib/platform";
 import { AITab } from "./AITab";
 import { AppearanceTab } from "./AppearanceTab";
 import { BehaviorTab } from "./BehaviorTab";
@@ -12,6 +13,7 @@ import { LayoutTab } from "./LayoutTab";
 import { MarkdownTab } from "./MarkdownTab";
 import { PrintTab } from "./PrintTab";
 import { PrivacyTab } from "./PrivacyTab";
+import { SettingsSyncTab } from "./SettingsSyncTab";
 
 export type SettingsTabId =
   | "appearance"
@@ -23,7 +25,8 @@ export type SettingsTabId =
   | "ai"
   | "print"
   | "privacy"
-  | "plugins";
+  | "plugins"
+  | "sync";
 
 interface SettingsModalProps {
   open: boolean;
@@ -70,6 +73,8 @@ export function SettingsModal({ open, onClose, tab, onTabChange }: SettingsModal
     { id: "privacy", label: t("modal.tabs.privacy") },
     { id: "plugins", label: t("modal.tabs.plugins") },
   ];
+  // The settings repo runs on the desktop git engine, which mobile builds lack.
+  if (!isMobilePlatform()) tabs.push({ id: "sync", label: t("modal.tabs.sync") });
 
   return (
     <div
@@ -121,11 +126,13 @@ export function SettingsModal({ open, onClose, tab, onTabChange }: SettingsModal
             {tab === "print" && <PrintTab />}
             {tab === "privacy" && <PrivacyTab />}
             {tab === "plugins" && <PluginsTab />}
+            {tab === "sync" && <SettingsSyncTab />}
           </div>
         </div>
 
-        {/* Reset touches app settings only, so it would mislead under the plugin list. */}
-        {tab !== "plugins" && (
+        {/* Reset touches app settings only, so it would mislead under the plugin
+            list and the settings repo. */}
+        {tab !== "plugins" && tab !== "sync" && (
           <div className="settings-footer">
             <button type="button" className="settings-reset-btn" onClick={resetSettings}>
               {t("modal.reset")}

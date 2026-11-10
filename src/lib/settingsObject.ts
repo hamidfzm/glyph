@@ -4,7 +4,7 @@ import { DEFAULT_SETTINGS } from "./settings";
 // These are pure and have no React/Tauri dependencies, so they live here next to
 // the settings schema rather than inside the provider.
 
-const FORBIDDEN_OBJECT_KEYS = new Set(["__proto__", "constructor", "prototype"]);
+export const FORBIDDEN_OBJECT_KEYS = new Set(["__proto__", "constructor", "prototype"]);
 
 export function isSafePlainObject(value: unknown): value is Record<string, unknown> {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {

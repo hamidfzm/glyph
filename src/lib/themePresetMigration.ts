@@ -1,4 +1,4 @@
-import { loadPluginSettings, savePluginSettings } from "@/lib/plugins/settingsStore";
+import { loadPluginSettings, removePluginSetting } from "@/lib/plugins/settingsStore";
 import type { ColorSchemeChoice } from "@/lib/settings";
 import { getNestedValue } from "@/lib/settingsObject";
 
@@ -40,8 +40,7 @@ export async function carriedOverColorScheme(
 export async function removeLegacyPresetOnceWritten(write: Promise<boolean>): Promise<void> {
   try {
     if (!(await write)) return;
-    const { preset: _carriedOver, ...rest } = await loadPluginSettings(PLUGIN_ID);
-    await savePluginSettings(PLUGIN_ID, rest);
+    await removePluginSetting(PLUGIN_ID, "preset");
   } catch (err) {
     console.error("Failed to remove the carried-over theme preset:", err);
   }

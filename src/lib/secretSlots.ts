@@ -5,8 +5,9 @@ import { KEYED_PROVIDERS, type KeyedProvider } from "@/lib/aiKeys";
  * a secret can live; whether one is stored is asked of the backend per slot, and
  * the value itself never reaches this layer.
  *
- * Only app-wide secrets belong here. The Cloud Sync token is keyed by workspace
- * path, so it is managed in that workspace's own Sync settings tab instead.
+ * Only the AI provider keys belong here. A sync token is managed beside its
+ * remote: a workspace's in that workspace's own Sync settings tab, the
+ * settings repo's in the Sync tab of Settings.
  */
 export interface SecretSlot {
   id: `ai-${KeyedProvider}`;

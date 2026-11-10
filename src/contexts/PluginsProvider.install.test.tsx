@@ -24,7 +24,7 @@ vi.mock("@/hooks/useCorePlugins", () => ({ useCorePlugins: () => ({ ready: true,
 
 vi.mock("@/lib/plugins/settingsStore", () => ({
   loadPluginSettings: vi.fn(() => Promise.resolve({})),
-  savePluginSettings: vi.fn(() => Promise.resolve()),
+  savePluginSetting: vi.fn(() => Promise.resolve()),
 }));
 
 beforeEach(resetPluginsMocks);

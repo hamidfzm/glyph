@@ -22,16 +22,25 @@ pub(crate) const MAX_PACKAGE_FILES: usize = 256;
 pub(crate) const MAX_FILE_BYTES: u64 = 20 * 1024 * 1024;
 pub(crate) const MAX_TOTAL_BYTES: u64 = 50 * 1024 * 1024;
 
+/// The file an install writes into a plugin's folder after the plugin's own
+/// files, recording where it came from (see `store::write_install_marker`).
+/// No manifest may declare it, so a package cannot ship one of its own.
+pub(crate) const INSTALL_MARKER: &str = ".glyph-install.json";
+
 /// A declared file path must stay inside the plugin folder on every platform:
-/// relative, `/`-separated, no empty/`.`/`..` segments, no drive colons.
+/// relative, `/`-separated, no empty/`.`/`..` segments, no drive colons, and
+/// never the install marker.
 pub(crate) fn validate_file_path(path: &str) -> Result<(), String> {
     let ok = !path.is_empty()
         && !path.contains('\\')
         && !path.contains(':')
         && !path.starts_with('/')
-        && path
-            .split('/')
-            .all(|seg| !seg.is_empty() && seg != "." && seg != "..");
+        && path.split('/').all(|seg| {
+            !seg.is_empty()
+                && seg != "."
+                && seg != ".."
+                && !seg.eq_ignore_ascii_case(INSTALL_MARKER)
+        });
     if ok {
         Ok(())
     } else {
@@ -320,16 +329,18 @@ mod tests {
         assert_eq!(legacy.install_files(), ["main.js"]);
 
         for bad in [
-            r#"["assets/fa.dic"]"#,       // must include main
-            r#"["main.js","../escape"]"#, // traversal
-            r#"["main.js","/abs"]"#,      // absolute
-            r#"["main.js","a\\b"]"#,      // backslash
-            r#"["main.js","c:evil"]"#,    // drive colon
-            r#"["main.js",""]"#,          // empty
-            r#"["main.js","a//b"]"#,      // empty segment
-            r#"["main.js","./x"]"#,       // dot segment
-            r#""main.js""#,               // not an array
-            r#"[1]"#,                     // not strings
+            r#"["assets/fa.dic"]"#,                   // must include main
+            r#"["main.js","../escape"]"#,             // traversal
+            r#"["main.js","/abs"]"#,                  // absolute
+            r#"["main.js","a\\b"]"#,                  // backslash
+            r#"["main.js","c:evil"]"#,                // drive colon
+            r#"["main.js",""]"#,                      // empty
+            r#"["main.js","a//b"]"#,                  // empty segment
+            r#"["main.js","./x"]"#,                   // dot segment
+            r#"["main.js",".glyph-install.json"]"#,   // the install marker
+            r#"["main.js","a/.GLYPH-INSTALL.json"]"#, // in any case or folder
+            r#""main.js""#,                           // not an array
+            r#"[1]"#,                                 // not strings
         ] {
             assert!(
                 parse_manifest(&with_files(bad)).is_err(),

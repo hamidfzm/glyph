@@ -15,7 +15,7 @@ export interface AppearanceSettings {
 
 // A plugin's color scheme, or the app's own palette ("default"). The label is
 // kept so the picker can name the scheme while its plugin is off. Read it
-// through readColorSchemeChoice: the stored value is not type-checked.
+// through readColorSchemeChoice: loading checks its types, not the id's form.
 export interface ColorSchemeChoice {
   /** "default", or `<pluginId>:<schemeId>`. */
   id: string;

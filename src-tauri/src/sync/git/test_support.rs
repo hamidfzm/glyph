@@ -46,6 +46,9 @@ impl Fixture {
         let mut cfg = git2::Config::open(&cfg_path).unwrap();
         cfg.set_str("user.name", "Test User").unwrap();
         cfg.set_str("user.email", "test@example.com").unwrap();
+        // Windows runners set `core.autocrlf=true` system-wide, which would
+        // check files out with CRLF and break the content assertions.
+        cfg.set_bool("core.autocrlf", false).unwrap();
         Self {
             _tmp: tmp,
             workspace,
@@ -65,5 +68,19 @@ impl Fixture {
 
     pub(super) fn write_file(&self, name: &str, contents: &str) {
         fs::write(self.workspace.join(name), contents).unwrap();
+    }
+
+    /// A second clone of the remote under `name`, standing in for another
+    /// machine, with a backend that syncs it as a different author.
+    pub(super) fn other_clone(&self, name: &str) -> (PathBuf, GitBackend) {
+        let other = self._tmp.path().join(name);
+        Repository::clone(self.remote.to_str().unwrap(), &other).unwrap();
+        let mut cfg = WorkspaceSyncConfig::new_git(other.to_string_lossy());
+        cfg.remote_url = self.remote.to_string_lossy().into();
+        cfg.author = Some(super::super::config::CommitIdentity {
+            name: "Other".into(),
+            email: "o@e.com".into(),
+        });
+        (other, GitBackend::new(cfg))
     }
 }
