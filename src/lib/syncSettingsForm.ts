@@ -1,4 +1,10 @@
-import { type ConflictPolicy, defaultConfigFor, type WorkspaceSyncConfig } from "@/lib/sync";
+import type { ConnectRequest } from "@/lib/settingsSyncCommands";
+import {
+  type CommitIdentity,
+  type ConflictPolicy,
+  defaultConfigFor,
+  type WorkspaceSyncConfig,
+} from "@/lib/sync";
 
 // The editable shape behind the cloud-sync settings form, and the two
 // operations that cross it: turning a stored config into form values, and
@@ -40,18 +46,31 @@ export function formFromConfig(config: WorkspaceSyncConfig): FormState {
   };
 }
 
+/** The author the form names; blank fields leave it to git's own config. */
+function authorFromForm(form: FormState): CommitIdentity | null {
+  const name = form.authorName.trim();
+  const email = form.authorEmail.trim();
+  return name || email ? { name, email } : null;
+}
+
 function configFromForm(workspacePath: string, form: FormState): WorkspaceSyncConfig {
-  const author =
-    form.authorName.trim() || form.authorEmail.trim()
-      ? { name: form.authorName.trim(), email: form.authorEmail.trim() }
-      : null;
   return {
     workspacePath,
     backend: "git",
     remoteUrl: form.remoteUrl.trim(),
     remoteBranch: form.remoteBranch.trim() || "main",
     conflictPolicy: form.conflictPolicy,
-    author,
+    author: authorFromForm(form),
+  };
+}
+
+/** The settings repo's connect request from the same form. */
+export function connectRequestFromForm(form: FormState): ConnectRequest {
+  return {
+    remoteUrl: form.remoteUrl.trim(),
+    branch: form.remoteBranch.trim() || "main",
+    author: authorFromForm(form),
+    token: form.token.trim() || null,
   };
 }
 

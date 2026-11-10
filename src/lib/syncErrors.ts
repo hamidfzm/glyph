@@ -30,6 +30,12 @@ export function describeSyncError(err: unknown, t: TFunction<"sync">): string {
         : t("error.invalidState");
     case "invalid-remote-url":
       return t("error.invalidRemoteUrl");
+    case "push-rejected":
+      return e.message
+        ? t("error.pushRejectedDetail", { message: String(e.message) })
+        : t("error.pushRejected");
+    case "busy":
+      return t("error.busy");
     case "io":
       return e.message ? t("error.ioDetail", { message: String(e.message) }) : t("error.io");
     case "backend":

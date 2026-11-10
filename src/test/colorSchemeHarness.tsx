@@ -9,7 +9,7 @@ import { type ColorSchemeChoice, type CorePluginSettings, DEFAULT_SETTINGS } fro
 import { pluginsContextValue } from "@/test/fixtures/pluginsContext";
 
 interface ColorSchemeHarnessOptions {
-  /** The stored `appearance.colorScheme`, typed loosely: the store is not type-checked. */
+  /** The stored `appearance.colorScheme`, typed loosely so tests can store a malformed one. */
   saved?: unknown;
   corePlugins?: Partial<CorePluginSettings>;
   plugins?: Partial<PluginsContextValue>;
