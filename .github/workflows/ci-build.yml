@@ -251,7 +251,9 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 2
-      # iOS-only files, the manifests whose bumps can break its link, and the job.
+      # The Apple project, the files Tauri merges into it, the Cargo manifests
+      # and the Tauri CLI (whose bumps can break its link or regenerate it), and
+      # the job's own files.
       - name: Check the changed paths
         id: diff
         env:
@@ -261,20 +263,21 @@ jobs:
             echo "build=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          # --no-renames: a file moved out of an iOS path lists its old path too.
-          changed=$(git diff --name-only --no-renames HEAD^1 HEAD)
-          if grep -E \
-            -e '^src-tauri/gen/apple/' \
-            -e '^src-tauri/capabilities/mobile\.json$' \
-            -e '^src-tauri/tauri\.conf\.json$' \
-            -e '^src-tauri/Cargo\.(toml|lock)$' \
-            -e '^\.github/workflows/ci-build\.yml$' \
-            -e '^\.github/actions/(rust|pnpm)-setup/' \
-            <<< "$changed"; then
-            echo "build=true" >> "$GITHUB_OUTPUT"
-          else
+          # Exit 0 means nothing listed changed; any other status, a git error
+          # included, builds.
+          if git diff --quiet HEAD^1 HEAD -- \
+              src-tauri/gen/apple/ \
+              src-tauri/capabilities/mobile.json \
+              src-tauri/tauri.conf.json src-tauri/tauri.ios.conf.json \
+              src-tauri/Info.plist src-tauri/Info.ios.plist \
+              src-tauri/Cargo.toml src-tauri/Cargo.lock \
+              .github/workflows/ci-build.yml \
+              .github/actions/rust-setup/ .github/actions/pnpm-setup/ &&
+            git diff --quiet -G'@tauri-apps/cli' HEAD^1 HEAD -- package.json pnpm-lock.yaml; then
             echo "No iOS paths changed."
             echo "build=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "build=true" >> "$GITHUB_OUTPUT"
           fi
 
   build-ios:
@@ -284,7 +287,7 @@ jobs:
     # The shared `cfg(mobile)` code is already covered by the Android job; what
     # this catches is Xcode-project, Info.plist and Objective-C glue drift,
     # which nothing else compiles. Every push to main runs it; a pull request
-    # only when `ios-changes` finds one of its paths.
+    # only when `ios-changes` finds a change that can affect it.
     needs: ios-changes
     if: needs.ios-changes.outputs.build == 'true'
     runs-on: macos-latest
