@@ -1,7 +1,8 @@
 //! Secret storage in the OS credential manager (macOS Keychain, Windows
 //! Credential Manager, Linux Secret Service). One keychain service, namespaced
-//! accounts: AI provider keys use `ai-api-key-<provider>`, sync tokens use
-//! `sync-token-<workspace path>`. Secrets never touch settings.json or any
+//! accounts: AI provider keys use `ai-api-key-<provider>`, workspace sync tokens
+//! use `sync-token-<workspace path>`, and the settings repo's token uses
+//! `settings-sync-token`. Secrets never touch settings.json or any
 //! other on-disk store, and error strings must never contain the value.
 
 use keyring::Entry;

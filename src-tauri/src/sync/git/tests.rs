@@ -209,15 +209,7 @@ fn sync_fast_forwards_when_remote_advanced() {
     f.backend().sync(None).unwrap();
 
     // Clone a second working copy from the same bare remote.
-    let other = f._tmp.path().join("other");
-    Repository::clone(f.remote.to_str().unwrap(), &other).unwrap();
-    let mut other_cfg = WorkspaceSyncConfig::new_git(other.to_string_lossy());
-    other_cfg.remote_url = f.remote.to_string_lossy().into();
-    other_cfg.author = Some(super::super::config::CommitIdentity {
-        name: "Other User".into(),
-        email: "other@example.com".into(),
-    });
-    let other_backend = GitBackend::new(other_cfg);
+    let (other, other_backend) = f.other_clone("other");
 
     // Now write a new file in A, push it.
     f.write_file("b.md", "# b\n");
@@ -298,15 +290,7 @@ fn sync_merges_when_local_and_remote_have_diverged() {
     f.backend().sync(None).unwrap();
 
     // Second working copy off the same remote, sharing the seed commit.
-    let other = f._tmp.path().join("other");
-    Repository::clone(f.remote.to_str().unwrap(), &other).unwrap();
-    let mut other_cfg = WorkspaceSyncConfig::new_git(other.to_string_lossy());
-    other_cfg.remote_url = f.remote.to_string_lossy().into();
-    other_cfg.author = Some(super::super::config::CommitIdentity {
-        name: "Other User".into(),
-        email: "other@example.com".into(),
-    });
-    let other_backend = GitBackend::new(other_cfg);
+    let (other, other_backend) = f.other_clone("other");
 
     // A advances the remote with a.md.
     f.write_file("a.md", "# a\n");
@@ -396,16 +380,9 @@ fn sync_merges_non_conflicting_remote_changes() {
     f.write_file("base.md", "base\n");
     f.backend().sync(None).unwrap();
 
-    let other = f._tmp.path().join("other");
-    Repository::clone(f.remote.to_str().unwrap(), &other).unwrap();
-    let mut other_cfg = WorkspaceSyncConfig::new_git(other.to_string_lossy());
-    other_cfg.remote_url = f.remote.to_string_lossy().into();
-    other_cfg.author = Some(super::super::config::CommitIdentity {
-        name: "Other".into(),
-        email: "o@e.com".into(),
-    });
+    let (other, other_backend) = f.other_clone("other");
     fs::write(other.join("other-only.md"), "from other\n").unwrap();
-    GitBackend::new(other_cfg).sync(None).unwrap();
+    other_backend.sync(None).unwrap();
 
     // Now the first workspace edits a different file and syncs.
     f.write_file("first-only.md", "from first\n");
@@ -427,15 +404,7 @@ fn sync_surfaces_conflicts_and_does_not_push() {
     f.backend().sync(None).unwrap();
 
     // Second clone, edits the same line.
-    let other = f._tmp.path().join("other");
-    Repository::clone(f.remote.to_str().unwrap(), &other).unwrap();
-    let mut other_cfg = WorkspaceSyncConfig::new_git(other.to_string_lossy());
-    other_cfg.remote_url = f.remote.to_string_lossy().into();
-    other_cfg.author = Some(super::super::config::CommitIdentity {
-        name: "Other".into(),
-        email: "o@e.com".into(),
-    });
-    let other_backend = GitBackend::new(other_cfg);
+    let (other, other_backend) = f.other_clone("other");
     fs::write(other.join("notes.md"), "line one\nFROM OTHER\n").unwrap();
     other_backend.sync(None).unwrap();
 
@@ -459,19 +428,26 @@ fn sync_refuses_to_run_while_workspace_still_has_unresolved_conflicts() {
     f.write_file("notes.md", "line one\n");
     f.backend().sync(None).unwrap();
 
-    let other = f._tmp.path().join("other");
-    Repository::clone(f.remote.to_str().unwrap(), &other).unwrap();
-    let mut other_cfg = WorkspaceSyncConfig::new_git(other.to_string_lossy());
-    other_cfg.remote_url = f.remote.to_string_lossy().into();
-    other_cfg.author = Some(super::super::config::CommitIdentity {
-        name: "Other".into(),
-        email: "o@e.com".into(),
-    });
+    let (other, other_backend) = f.other_clone("other");
     fs::write(other.join("notes.md"), "OTHER\n").unwrap();
-    GitBackend::new(other_cfg).sync(None).unwrap();
+    other_backend.sync(None).unwrap();
 
     f.write_file("notes.md", "MINE\n");
     f.backend().sync(None).unwrap(); // leaves conflict in index
     let err = f.backend().sync(None).unwrap_err();
     assert!(matches!(err, SyncError::Conflict(_)), "got {err:?}");
+}
+
+#[test]
+fn sync_reports_a_push_the_remote_refuses() {
+    let f = Fixture::new();
+    f.write_file("a.md", "a\n");
+    f.backend().sync(None).unwrap();
+    // A held lock on the remote's branch makes it refuse the update the way
+    // a server-side hook or a protected branch does: the push call itself
+    // returns, and only the per-ref status says no.
+    fs::write(f.remote.join("refs/heads/main.lock"), "").unwrap();
+    f.write_file("b.md", "b\n");
+    let err = f.backend().sync(None).unwrap_err();
+    assert!(matches!(err, SyncError::PushRejected(_)), "got {err:?}");
 }

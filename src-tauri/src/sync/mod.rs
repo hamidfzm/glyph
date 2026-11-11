@@ -2,7 +2,8 @@
 //! backend must honour, and [`git::GitBackend`] for the Git-over-libgit2
 //! implementation that ships in v1. [`commands`] holds the Tauri command
 //! surface; [`state::SyncState`] is the managed-state struct the commands
-//! read and write through.
+//! read and write through. [`settings_repo`] reuses the same engine for the
+//! app-wide settings repo, which belongs to no workspace.
 
 #![allow(dead_code, unused_imports)]
 
@@ -17,6 +18,8 @@ mod error;
 pub mod git;
 #[cfg(desktop)]
 mod ops;
+#[cfg(desktop)]
+pub mod settings_repo;
 #[cfg(desktop)]
 mod state;
 
