@@ -1,7 +1,7 @@
 import { useTranslation } from "react-i18next";
-import { presenceStatusKey } from "@/lib/secretSlots";
 import type { ConflictPolicy } from "@/lib/sync";
 import type { FormState } from "@/lib/syncSettingsForm";
+import { SyncTokenField } from "./SyncTokenField";
 
 const CONFLICT_POLICIES: { id: ConflictPolicy; labelKey: string; descKey: string }[] = [
   {
@@ -28,13 +28,16 @@ interface SyncConfigFormProps {
    *  `null` when it failed or no folder is open. Drives the placeholder and
    *  the Remove button. */
   tokenStored: boolean | null | undefined;
-  onRemoveToken: () => void;
+  onRemoveToken?: () => void;
   busy: boolean;
   defaultAuthorName?: string | null;
   defaultAuthorEmail?: string | null;
+  /** A workspace's sync, or the app-wide settings repo, which needs a remote
+   *  and resolves conflicts per file rather than by policy. */
+  variant?: "workspace" | "settings";
 }
 
-/** The editable fields of the cloud-sync settings modal. */
+/** The editable fields of a git sync setup. */
 export function SyncConfigForm({
   form,
   onChange,
@@ -43,23 +46,24 @@ export function SyncConfigForm({
   busy,
   defaultAuthorName,
   defaultAuthorEmail,
+  variant = "workspace",
 }: SyncConfigFormProps) {
   const { t } = useTranslation("sync");
-  // The keychain status and Remove wording are shared with the app-wide Saved
-  // Secrets list, so they come from the settings bundle rather than being
-  // duplicated into every locale's sync bundle.
-  const { t: ts } = useTranslation("settings");
+  const isWorkspace = variant === "workspace";
 
   return (
     <>
       <label className="settings-field">
         <span className="settings-field-label">
-          {t("remoteUrl.label")} <span className="settings-field-hint">{t("remoteUrl.hint")}</span>
+          {t("remoteUrl.label")}{" "}
+          {isWorkspace && <span className="settings-field-hint">{t("remoteUrl.hint")}</span>}
         </span>
         <input
           type="url"
           className="settings-input"
-          placeholder={t("remoteUrl.placeholder")}
+          placeholder={
+            isWorkspace ? t("remoteUrl.placeholder") : t("settingsRepo.remotePlaceholder")
+          }
           value={form.remoteUrl}
           onChange={(e) => onChange("remoteUrl", e.target.value)}
           spellCheck={false}
@@ -80,23 +84,25 @@ export function SyncConfigForm({
         />
       </label>
 
-      <fieldset className="settings-field">
-        <legend className="settings-field-label">{t("conflictPolicy.legend")}</legend>
-        <div className="settings-segmented">
-          {CONFLICT_POLICIES.map((p) => (
-            <button
-              type="button"
-              key={p.id}
-              className="settings-segmented-option"
-              data-active={form.conflictPolicy === p.id}
-              onClick={() => onChange("conflictPolicy", p.id)}
-              title={t(p.descKey)}
-            >
-              {t(p.labelKey)}
-            </button>
-          ))}
-        </div>
-      </fieldset>
+      {isWorkspace && (
+        <fieldset className="settings-field">
+          <legend className="settings-field-label">{t("conflictPolicy.legend")}</legend>
+          <div className="settings-segmented">
+            {CONFLICT_POLICIES.map((p) => (
+              <button
+                type="button"
+                key={p.id}
+                className="settings-segmented-option"
+                data-active={form.conflictPolicy === p.id}
+                onClick={() => onChange("conflictPolicy", p.id)}
+                title={t(p.descKey)}
+              >
+                {t(p.labelKey)}
+              </button>
+            ))}
+          </div>
+        </fieldset>
+      )}
 
       <label className="settings-field">
         <span className="settings-field-label">{t("authorName.label")}</span>
@@ -124,49 +130,30 @@ export function SyncConfigForm({
         />
       </label>
 
-      <label className="settings-field">
-        <span className="settings-field-label">
-          {t("token.label")} <span className="settings-field-hint">{t("token.hint")}</span>
-        </span>
-        <input
-          type="password"
-          className="settings-input"
-          placeholder={tokenStored ? t("token.placeholderSaved") : t("token.placeholderNew")}
-          value={form.token}
-          onChange={(e) => onChange("token", e.target.value)}
-          autoComplete="off"
-        />
-        <span className="settings-field-hint">{t("token.note")}</span>
-        {/* The token is per-workspace, so its audit row lives here rather than
-            in the app-wide Saved Secrets list. Presence only: the stored value
-            is never read back. */}
-        <div className="settings-secret-actions">
-          <span className="settings-field-hint">{ts(presenceStatusKey(tokenStored))}</span>
-          <button
-            type="button"
-            className="settings-danger-btn"
-            aria-label={ts("secrets.removeSlot", { slot: t("token.label") })}
-            disabled={busy || tokenStored === undefined || tokenStored === false}
-            onClick={onRemoveToken}
-          >
-            {ts("secrets.remove")}
-          </button>
-        </div>
-      </label>
+      <SyncTokenField
+        value={form.token}
+        onChange={(value) => onChange("token", value)}
+        tokenStored={tokenStored}
+        onRemove={onRemoveToken}
+        busy={busy}
+        note={isWorkspace ? t("token.note") : t("settingsRepo.tokenNote")}
+      />
 
-      <label className="settings-field">
-        <span className="settings-field-label">
-          {t("commitMessage.label")}{" "}
-          <span className="settings-field-hint">{t("commitMessage.hint")}</span>
-        </span>
-        <input
-          type="text"
-          className="settings-input"
-          placeholder={t("commitMessage.placeholder")}
-          value={form.commitMessage}
-          onChange={(e) => onChange("commitMessage", e.target.value)}
-        />
-      </label>
+      {isWorkspace && (
+        <label className="settings-field">
+          <span className="settings-field-label">
+            {t("commitMessage.label")}{" "}
+            <span className="settings-field-hint">{t("commitMessage.hint")}</span>
+          </span>
+          <input
+            type="text"
+            className="settings-input"
+            placeholder={t("commitMessage.placeholder")}
+            value={form.commitMessage}
+            onChange={(e) => onChange("commitMessage", e.target.value)}
+          />
+        </label>
+      )}
     </>
   );
 }

@@ -8,7 +8,7 @@ import { importPluginModule, type ModuleImporter } from "./loader";
 import { buildPluginContext, type ContextRegistries, tracked } from "./pluginContext";
 import { cssReachesOutside, isAppNamespace } from "./pluginNamespace";
 import { createRegistry, type Registry } from "./registry";
-import { startSandbox, type WorkerSpawner } from "./sandbox/sandbox";
+import { type SandboxHostApi, startSandbox, type WorkerSpawner } from "./sandbox/sandbox";
 import type {
   ColorSchemeEntry,
   CommandEntry,
@@ -35,7 +35,7 @@ import { createWorkspaceApi } from "./workspaceApi";
  */
 export interface PluginSettingsBackend {
   load(pluginId: string): Promise<Record<string, unknown>>;
-  save(pluginId: string, settings: Record<string, unknown>): void;
+  save(pluginId: string, key: string, value: unknown): void;
 }
 
 const noopSettingsBackend: PluginSettingsBackend = {
@@ -88,6 +88,9 @@ export interface PluginHost {
   unload(id: string): void;
   /** Tear down every loaded plugin (app shutdown / provider unmount). */
   unloadAll(): void;
+  /** Load these plugins again if they are loaded, so they read settings a
+   *  settings sync rewrote. A plugin that fails to come back is reported. */
+  reload(ids: readonly string[]): Promise<void>;
   listLoaded(): LoadedPluginInfo[];
 }
 
@@ -95,6 +98,11 @@ interface LoadedPlugin {
   info: LoadedPluginInfo;
   module: PluginModule;
   bag: DisposerBag;
+  /** What it was loaded from, for a reload. */
+  source: InstalledPlugin;
+  importer?: ModuleImporter;
+  /** The load generation that committed it. */
+  generation: number | undefined;
 }
 
 /**
@@ -147,16 +155,20 @@ export function createPluginHost(
     siteThemes,
   };
 
+  const deactivate = (id: string, module: PluginModule) => {
+    try {
+      module.deactivate?.();
+    } catch (err) {
+      console.error(`Plugin ${id} threw in deactivate():`, err);
+    }
+  };
+
   const teardown = (id: string) => {
     const plugin = loaded.get(id);
     if (!plugin) return;
     loaded.delete(id);
     plugin.bag.dispose();
-    try {
-      plugin.module.deactivate?.();
-    } catch (err) {
-      console.error(`Plugin ${id} threw in deactivate():`, err);
-    }
+    deactivate(id, plugin.module);
   };
 
   // Guards against overlapping load() calls for the same id (rapid re-enable
@@ -166,14 +178,121 @@ export function createPluginHost(
   // so a disable during an in-flight enable wins, and a StrictMode remount
   // (same host instance) can still load plugins afterwards.
   const loadGeneration = new Map<string, number>();
-  const invalidate = (id: string) => loadGeneration.set(id, (loadGeneration.get(id) ?? 0) + 1);
+  // Activations still in flight, by their bag. invalidate disposes them at
+  // once: an activate that never settles would otherwise keep what it
+  // registered, and a sandboxed one its worker.
+  const activating = new Map<DisposerBag, string>();
+  const invalidate = (id: string) => {
+    loadGeneration.set(id, (loadGeneration.get(id) ?? 0) + 1);
+    for (const [bag, owner] of activating) {
+      if (owner === id) bag.dispose();
+    }
+  };
 
   const unload = (id: string) => {
     invalidate(id);
     teardown(id);
   };
 
-  return {
+  // Translations land in i18next's live bundles, where a key overwrites the
+  // app's own: a plugin may fill any namespace but the app's.
+  const translationsFor =
+    (pluginId: string): GlyphPluginContext["registerTranslations"] =>
+    (lng, ns, resources) => {
+      if (isAppNamespace(ns)) {
+        console.error(`Plugin ${pluginId} may not register translations under "${ns}"`);
+        return;
+      }
+      registerTranslations(lng, ns, resources);
+    };
+
+  const activateTrusted = async (
+    plugin: InstalledPlugin,
+    importer: ModuleImporter | undefined,
+    bag: DisposerBag,
+  ): Promise<PluginModule> => {
+    const [module, settings] = await Promise.all([
+      importPluginModule(plugin.mainSource, importer),
+      settingsBackend.load(plugin.id),
+    ]);
+    try {
+      await module.activate(
+        buildPluginContext({
+          registries,
+          bag,
+          plugin,
+          settings,
+          notify,
+          registerTranslations: translationsFor(plugin.id),
+          getWorkspaceRoot,
+          settingsBackend,
+        }),
+      );
+    } catch (err) {
+      bag.dispose(); // roll back anything registered before the throw
+      throw err;
+    }
+    return module;
+  };
+
+  /** Resolves undefined when the load went stale before the worker activated. */
+  const activateSandboxed = async (
+    plugin: InstalledPlugin,
+    bag: DisposerBag,
+  ): Promise<PluginModule | undefined> => {
+    const settings = await settingsBackend.load(plugin.id);
+    if (bag.isDisposed) return undefined; // stale already: spawn no worker
+    const workspace = createWorkspaceApi(getWorkspaceRoot, plugin.permissions ?? [], plugin.id);
+    const api: SandboxHostApi = {
+      registerCommand(command) {
+        tracked(commands.register, bag)({ ...command, pluginId: plugin.id });
+      },
+      addStyles(css) {
+        // The worker's fetch is fenced; a stylesheet that makes requests
+        // would be a way around it.
+        if (cssReachesOutside(css)) {
+          console.error(`Plugin ${plugin.id} styles were dropped: they reference URLs`);
+          return;
+        }
+        tracked(styles.register, bag)({ css });
+      },
+      addColorScheme(scheme) {
+        const entry = colorSchemeEntry(plugin.id, scheme);
+        if (cssReachesOutside(entry.css)) {
+          console.error(`Plugin ${plugin.id} color scheme was dropped: it references URLs`);
+          return;
+        }
+        tracked(colorSchemes.register, bag)(entry);
+      },
+      registerExporter(exporter) {
+        tracked(exporters.register, bag)({ ...exporter, pluginId: plugin.id });
+      },
+      registerSiteTheme: tracked(siteThemes.register, bag),
+      registerFileType: tracked(registerFileType, bag),
+      registerDictionary: tracked(registerDictionarySource, bag),
+      notify,
+      registerTranslations: translationsFor(plugin.id),
+      settingsSet(key, value) {
+        settings[key] = value;
+        settingsBackend.save(plugin.id, key, value);
+      },
+      workspaceRead: workspace.readFile,
+      workspaceList: workspace.listFiles,
+      assetRead: createAssetsApi(plugin.id).readBinary,
+    };
+    const activation = new AbortController();
+    bag.add(() => activation.abort());
+    try {
+      bag.add(await startSandbox(plugin, settings, api, workerSpawner, activation.signal));
+    } catch (err) {
+      if (bag.isDisposed) return undefined; // went stale, which stopped the worker
+      bag.dispose(); // roll back anything the worker registered before it failed
+      throw err;
+    }
+    return { activate: () => {} };
+  };
+
+  const host: PluginHost = {
     commands,
     statusBarItems,
     remarkPlugins,
@@ -195,72 +314,22 @@ export function createPluginHost(
       }
       invalidate(plugin.id);
       const generation = loadGeneration.get(plugin.id);
-
-      // Translations land in i18next's live bundles, where a key overwrites
-      // the app's own: a plugin may fill any namespace but the app's.
-      const registerOwnTranslations: GlyphPluginContext["registerTranslations"] = (
-        lng,
-        ns,
-        resources,
-      ) => {
-        if (isAppNamespace(ns)) {
-          console.error(`Plugin ${plugin.id} may not register translations under "${ns}"`);
-          return;
-        }
-        registerTranslations(lng, ns, resources);
-      };
-
-      if (plugin.sandbox) {
-        const settings = await settingsBackend.load(plugin.id);
-        const bag = new DisposerBag();
-        const workspace = createWorkspaceApi(getWorkspaceRoot, plugin.permissions ?? [], plugin.id);
-        const terminate = await startSandbox(
-          plugin,
-          settings,
-          {
-            registerCommand(command) {
-              tracked(commands.register, bag)({ ...command, pluginId: plugin.id });
-            },
-            addStyles(css) {
-              // The worker's fetch is fenced; a stylesheet that makes requests
-              // would be a way around it.
-              if (cssReachesOutside(css)) {
-                console.error(`Plugin ${plugin.id} styles were dropped: they reference URLs`);
-                return;
-              }
-              tracked(styles.register, bag)({ css });
-            },
-            addColorScheme(scheme) {
-              const entry = colorSchemeEntry(plugin.id, scheme);
-              if (cssReachesOutside(entry.css)) {
-                console.error(`Plugin ${plugin.id} color scheme was dropped: it references URLs`);
-                return;
-              }
-              tracked(colorSchemes.register, bag)(entry);
-            },
-            registerExporter(exporter) {
-              tracked(exporters.register, bag)({ ...exporter, pluginId: plugin.id });
-            },
-            registerSiteTheme: tracked(siteThemes.register, bag),
-            registerFileType: tracked(registerFileType, bag),
-            registerDictionary: tracked(registerDictionarySource, bag),
-            notify,
-            registerTranslations: registerOwnTranslations,
-            settingsSet(key, value) {
-              settings[key] = value;
-              settingsBackend.save(plugin.id, settings);
-            },
-            workspaceRead: workspace.readFile,
-            workspaceList: workspace.listFiles,
-            assetRead: createAssetsApi(plugin.id).readBinary,
-          },
-          workerSpawner,
-        );
-        bag.add(terminate);
+      const bag = new DisposerBag();
+      activating.set(bag, plugin.id);
+      try {
+        const module = plugin.sandbox
+          ? await activateSandboxed(plugin, bag)
+          : await activateTrusted(plugin, importer, bag);
+        if (!module) return false;
+        // Superseded by a newer load, or the host has been torn down: undo this
+        // activation instead of committing a leaked instance.
         if (loadGeneration.get(plugin.id) !== generation) {
           bag.dispose();
+          deactivate(plugin.id, module);
           return false;
         }
+        // The previous instance stays live while the new one downloads and
+        // activates; swap only at commit time.
         teardown(plugin.id);
         loaded.set(plugin.id, {
           info: {
@@ -269,59 +338,16 @@ export function createPluginHost(
             version: plugin.version,
             description: plugin.description,
           },
-          module: { activate: () => {} },
+          module,
           bag,
+          source: plugin,
+          importer,
+          generation,
         });
         return true;
+      } finally {
+        activating.delete(bag);
       }
-
-      const [module, settings] = await Promise.all([
-        importPluginModule(plugin.mainSource, importer),
-        settingsBackend.load(plugin.id),
-      ]);
-      const bag = new DisposerBag();
-      try {
-        await module.activate(
-          buildPluginContext({
-            registries,
-            bag,
-            plugin,
-            settings,
-            notify,
-            registerTranslations: registerOwnTranslations,
-            getWorkspaceRoot,
-            settingsBackend,
-          }),
-        );
-      } catch (err) {
-        bag.dispose(); // roll back anything registered before the throw
-        throw err;
-      }
-      // Superseded by a newer load, or the host has been torn down: undo this
-      // activation instead of committing a leaked instance.
-      if (loadGeneration.get(plugin.id) !== generation) {
-        bag.dispose();
-        try {
-          module.deactivate?.();
-        } catch (err) {
-          console.error(`Plugin ${plugin.id} threw in deactivate():`, err);
-        }
-        return false;
-      }
-      // The previous instance stays live while the new one downloads and
-      // activates; swap only at commit time.
-      teardown(plugin.id);
-      loaded.set(plugin.id, {
-        info: {
-          id: plugin.id,
-          name: plugin.name,
-          version: plugin.version,
-          description: plugin.description,
-        },
-        module,
-        bag,
-      });
-      return true;
     },
     unload,
     unloadAll() {
@@ -332,5 +358,19 @@ export function createPluginHost(
     listLoaded() {
       return [...loaded.values()].map((p) => p.info);
     },
+    async reload(ids) {
+      for (const id of ids) {
+        const current = loaded.get(id);
+        // A newer load in flight (an update, an enable) reads the settings
+        // itself; reloading the committed instance would cancel it.
+        if (!current || loadGeneration.get(id) !== current.generation) continue;
+        try {
+          await host.load(current.source, current.importer);
+        } catch (err) {
+          console.error(`Plugin ${id} failed to reload:`, err);
+        }
+      }
+    },
   };
+  return host;
 }
