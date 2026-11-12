@@ -5,9 +5,11 @@ import { type Deferred, deferred } from "@/test/deferred";
 import {
   defaultOptions,
   fileOf,
+  holdWrites,
   mockWriteFile,
   openEditable,
   resetTabsMocks,
+  writesOf,
 } from "@/test/tabsHarness";
 import { useTabs } from "./useTabs";
 
@@ -113,6 +115,54 @@ describe("useTabs saving", () => {
     expect(fileOf(result).content).toBe("V1");
     expect(fileOf(result).editContent).toBe("V2");
     expect(fileOf(result).dirty).toBe(true);
+  });
+
+  it("keeps the tab dirty when it is renamed while its write is in flight", async () => {
+    const { writeFile, started, release } = holdWrites(1, {
+      rename_path: async () => ({ newPath: "/p/ws/b.md", files: [], failed: null }),
+    });
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+    await act(async () => {
+      await result.current.openFolder("/p/ws");
+    });
+    await act(async () => {
+      await result.current.openFile("/p/ws/a.md");
+    });
+    const tabId = result.current.tabs[0].id;
+    act(() => {
+      result.current.setTabMode(tabId, "edit");
+    });
+    act(() => {
+      result.current.updateEditContent(tabId, "EDITED");
+    });
+
+    let saving: Promise<boolean> | undefined;
+    await act(async () => {
+      saving = result.current.saveDocument(tabId);
+      await started[0].promise;
+    });
+    await act(async () => {
+      await result.current.renamePath("/p/ws/a.md", "b");
+    });
+    await act(async () => {
+      release[0].resolve();
+      await saving;
+    });
+
+    // The write went to the old path, so the renamed file may not hold the edit.
+    expect(fileOf(result).path).toBe("/p/ws/b.md");
+    expect(fileOf(result).dirty).toBe(true);
+
+    await act(async () => {
+      await result.current.saveDocument(tabId);
+    });
+
+    expect(writesOf(writeFile)).toEqual([
+      { path: "/p/ws/a.md", content: "EDITED" },
+      { path: "/p/ws/b.md", content: "EDITED" },
+    ]);
+    expect(fileOf(result).dirty).toBe(false);
   });
 
   it("serializes writes for the same path so they can't complete out of order", async () => {
