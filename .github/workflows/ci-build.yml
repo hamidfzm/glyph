@@ -58,10 +58,8 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/pnpm-setup
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
+      - uses: ./.github/actions/rust-setup
         with:
-          toolchain: "1.97.0" # src-tauri/rust-toolchain.toml
           targets: ${{ github.event_name == 'pull_request' && matrix.targets_pr || matrix.targets_full }}
       - name: Install Linux dependencies
         if: startsWith(matrix.platform, 'ubuntu')
@@ -70,9 +68,6 @@ jobs:
         with:
           cache-key: apt-webkit-${{ matrix.platform }}-v1
           extra-packages: xdg-utils xvfb desktop-file-utils rpm
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-        with:
-          workspaces: src-tauri
       - run: pnpm install --frozen-lockfile
       # The Quick Look extension's Swift, which no other job compiles.
       - name: Quick Look self-check
@@ -241,13 +236,60 @@ jobs:
           path: src-tauri/gen/android/app/build/outputs/apk/universal/debug/*.apk
           retention-days: 14
 
+  # Lets a pull request skip the iOS build: GitHub runs at most five macOS jobs
+  # at once, and the required macOS leg already takes one per pull request.
+  ios-changes:
+    name: iOS changes
+    runs-on: ubuntu-24.04
+    outputs:
+      build: ${{ steps.diff.outputs.build }}
+    steps:
+      # Depth 2 fetches the merge commit's parents; its diff against the first
+      # is what the pull request changes.
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        if: github.event_name == 'pull_request'
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      # The Apple project, the files Tauri merges into it, the Cargo manifests
+      # and the Tauri CLI (whose bumps can break its link or regenerate it), and
+      # the job's own files.
+      - name: Check the changed paths
+        id: diff
+        env:
+          EVENT: ${{ github.event_name }}
+        run: |
+          if [ "$EVENT" != pull_request ]; then
+            echo "build=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Exit 0 means nothing listed changed; any other status, a git error
+          # included, builds.
+          if git diff --quiet HEAD^1 HEAD -- \
+              src-tauri/gen/apple/ \
+              src-tauri/capabilities/mobile.json \
+              src-tauri/tauri.conf.json src-tauri/tauri.ios.conf.json \
+              src-tauri/Info.plist src-tauri/Info.ios.plist \
+              src-tauri/Cargo.toml src-tauri/Cargo.lock \
+              .github/workflows/ci-build.yml \
+              .github/actions/rust-setup/ .github/actions/pnpm-setup/ &&
+            git diff --quiet -G'@tauri-apps/cli' HEAD^1 HEAD -- package.json pnpm-lock.yaml; then
+            echo "No iOS paths changed."
+            echo "build=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          fi
+
   build-ios:
     name: iOS
     # Simulator only: unsigned, so it needs no Apple Developer account. Device
     # builds and IPAs require a paid signing identity and stay out of CI.
     # The shared `cfg(mobile)` code is already covered by the Android job; what
     # this catches is Xcode-project, Info.plist and Objective-C glue drift,
-    # which nothing else compiles.
+    # which nothing else compiles. Every push to main runs it; a pull request
+    # only when `ios-changes` finds a change that can affect it.
+    needs: ios-changes
+    if: needs.ios-changes.outputs.build == 'true'
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
