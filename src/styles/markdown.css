@@ -338,7 +338,8 @@
   margin: 0;
 }
 
-.markdown-body .code-copy-button {
+.markdown-body .code-copy-button,
+.markdown-body .table-expand-button {
   position: absolute;
   top: 8px;
   inset-inline-end: 8px;
@@ -359,11 +360,21 @@
 }
 
 .markdown-body .code-block-wrapper:hover .code-copy-button,
-.markdown-body .code-copy-button:focus-visible {
+.markdown-body .code-copy-button:focus-visible,
+.markdown-body .markdown-table:hover .table-expand-button,
+.markdown-body .table-expand-button:focus-visible {
   opacity: 1;
 }
 
-.markdown-body .code-copy-button:hover {
+/* Nothing hovers on touch, so the expand button stays visible there. */
+@media (hover: none) {
+  .markdown-body .table-expand-button {
+    opacity: 1;
+  }
+}
+
+.markdown-body .code-copy-button:hover,
+.markdown-body .table-expand-button:hover {
   background: var(--color-surface);
   color: var(--color-text-primary);
 }
@@ -392,9 +403,13 @@
 /* The wrapper scrolls, not the page. The table sizes to its content so columns
    keep their width instead of being crushed, but still fills the measure when
    it is narrow enough. */
+.markdown-body .markdown-table {
+  position: relative;
+  margin: 0 0 1em;
+}
+
 .markdown-body .markdown-table-wrapper {
   overflow-x: auto;
-  margin: 0 0 1em;
   overscroll-behavior-x: contain;
 }
 

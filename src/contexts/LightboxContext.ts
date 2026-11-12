@@ -1,6 +1,6 @@
-import { createContext, useContext } from "react";
+import { createContext, type ReactNode, useContext } from "react";
 
-// Context + hook for the image lightbox. Kept in a component-free module so the
+// Context + hook for the lightbox. Kept in a component-free module so the
 // provider file stays Fast-Refresh-eligible (a file that exports a component
 // plus a hook/context bails out of React Fast Refresh). The provider lives in
 // `LightboxProvider.tsx`.
@@ -10,6 +10,8 @@ export interface LightboxContextValue {
   open: (img: HTMLImageElement) => void;
   /** Open the lightbox on a single image source (e.g. a rendered diagram). */
   openSrc: (src: string, alt?: string) => void;
+  /** Open a table's rows alone; focus returns to `trigger` on close. */
+  openTable: (content: ReactNode, trigger: HTMLElement) => void;
 }
 
 export const LightboxContext = createContext<LightboxContextValue | null>(null);
