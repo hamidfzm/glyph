@@ -87,6 +87,13 @@ export function activeFileOf(tab: Tab | null | undefined): FileState | null {
   return tab.file;
 }
 
+/** Where tab `id` is now if it was renamed or moved off `path`; null while it is there or closed. */
+export function tabMovedTo(state: TabsState, id: string, path: string): string | null {
+  const file = activeFileOf(state.tabs.find((tab) => tab.id === id));
+  if (!file || file.path === path) return null;
+  return file.path;
+}
+
 /**
  * The text a tab shows and edits: its edit buffer once it has one, else the
  * text loaded from disk. Whatever writes `content` keeps a clean buffer equal

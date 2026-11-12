@@ -67,7 +67,8 @@ export function WikilinkPreviewBody({
   }
 
   // filePath=path resolves the preview's own wikilinks against the target and
-  // extends EmbedContext.chain, so an embed inside it can't recurse forever.
+  // extends EmbedContext.chain, so an embed inside it can't recurse forever. No
+  // lightbox: the preview closes on any press outside it, taking one along.
   return (
     <div className="markdown-body markdown-preview-body" dir="auto">
       <MarkdownContent
@@ -75,6 +76,7 @@ export function WikilinkPreviewBody({
         filePath={path}
         workspaceFiles={workspaceFiles}
         showFrontmatter={false}
+        lightbox={false}
       />
     </div>
   );

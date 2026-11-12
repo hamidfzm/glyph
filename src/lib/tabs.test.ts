@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { EDITOR_MODE } from "@/lib/settings";
-import { liveContentOf, makeFileState, type TabsState, updateFiles } from "./tabs";
+import { liveContentOf, makeFileState, type TabsState, tabMovedTo, updateFiles } from "./tabs";
 
 describe("liveContentOf", () => {
   it("is the loaded content while the tab has no edit buffer", () => {
@@ -55,5 +55,28 @@ describe("updateFiles", () => {
     });
 
     expect(seen).toEqual(["a", "b"]);
+  });
+});
+
+describe("tabMovedTo", () => {
+  const state: TabsState = {
+    activeTabId: "a",
+    tabs: [
+      { id: "a", kind: "file", file: makeFileState("/p/b.md", EDITOR_MODE.view) },
+      { id: "g", kind: "graph", root: "/p", file: null },
+    ],
+  };
+
+  it("is the tab's new path once it left the one given", () => {
+    expect(tabMovedTo(state, "a", "/p/a.md")).toBe("/p/b.md");
+  });
+
+  it("is null while the tab is still at the path", () => {
+    expect(tabMovedTo(state, "a", "/p/b.md")).toBeNull();
+  });
+
+  it("is null for a closed tab and for a graph tab", () => {
+    expect(tabMovedTo(state, "closed", "/p/a.md")).toBeNull();
+    expect(tabMovedTo(state, "g", "/p/a.md")).toBeNull();
   });
 });

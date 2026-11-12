@@ -121,6 +121,11 @@ export function holdWrites(count: number, overrides: Partial<Record<string, Invo
   return { writeFile, started, release };
 }
 
+/** A `rename_path` that rewrites no links, so the rename waits on no save. */
+export function renamesTo(newPath: string): Invoker {
+  return async () => ({ newPath, files: [], failed: null });
+}
+
 /** What each `write_file` call carried, in order. */
 export function writesOf(writeFile: ReturnType<typeof vi.fn>) {
   return writeFile.mock.calls.map((call) => call[1]);
@@ -212,6 +217,18 @@ export async function openEditable(result: TabsHook) {
     result.current.setTabMode(tabId, "edit");
   });
   return tabId;
+}
+
+/** Open the workspace /p/ws and its note a.md, in the default view mode, and return the tab id. */
+export async function openWorkspaceNote(result: TabsHook) {
+  await waitFor(() => expect(result.current.initializing).toBe(false));
+  await act(async () => {
+    await result.current.openFolder("/p/ws");
+  });
+  await act(async () => {
+    await result.current.openFile("/p/ws/a.md");
+  });
+  return result.current.tabs[0].id;
 }
 
 export function fileOf(result: TabsHook, index = 0) {

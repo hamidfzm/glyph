@@ -32,9 +32,15 @@ export function useSyncedScroll(
     // `data-line`, so the value is not guaranteed to parse. A NaN line poisons
     // every interpolation it touches and reaches CodeMirror's `doc.line`, which
     // walks past the end of the document rather than throwing a RangeError.
+    // Measured from the scroller rather than offsetTop, which a block in a
+    // positioned frame (a table's, a code block's) reports from that frame.
     const measureAnchors = (preview: HTMLElement) => {
+      const contentTop = preview.getBoundingClientRect().top - preview.scrollTop;
       anchors = [...preview.querySelectorAll<HTMLElement>(ANCHORS)]
-        .map((el) => ({ line: Number(el.dataset.line), top: el.offsetTop }))
+        .map((el) => ({
+          line: Number(el.dataset.line),
+          top: el.getBoundingClientRect().top - contentTop,
+        }))
         .filter((anchor) => Number.isFinite(anchor.line));
     };
 

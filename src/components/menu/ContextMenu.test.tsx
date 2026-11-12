@@ -57,6 +57,20 @@ describe("ContextMenu", () => {
     expect(onClose).toHaveBeenCalled();
   });
 
+  it("claims the Escape it closes on, so what it opened over stays open", () => {
+    const onEscapeBehind = vi.fn();
+    window.addEventListener("keydown", onEscapeBehind);
+    render(
+      <ContextMenu
+        menu={menu([{ kind: "action", label: "Copy", onSelect: vi.fn() }])}
+        onClose={vi.fn()}
+      />,
+    );
+    fireEvent.keyDown(document.body, { key: "Escape" });
+    window.removeEventListener("keydown", onEscapeBehind);
+    expect(onEscapeBehind).not.toHaveBeenCalled();
+  });
+
   // The anchor usually sits in an inner scroller (the tab strip, the file
   // tree), whose scroll event does not bubble.
   it("closes when a scroller under the anchor moves", () => {

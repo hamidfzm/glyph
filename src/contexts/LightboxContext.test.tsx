@@ -85,6 +85,60 @@ describe("LightboxProvider", () => {
     expect(screen.getByRole("dialog")).toBeInTheDocument();
   });
 
+  it("opens a table via openTable in its trigger's direction, refocusing the trigger on close", () => {
+    const rows = (
+      <tbody>
+        <tr>
+          <td>cell</td>
+        </tr>
+      </tbody>
+    );
+    render(
+      <LightboxProvider>
+        <Probe
+          onClick={(lightbox) =>
+            lightbox?.openTable(rows, screen.getByRole("button", { name: "probe" }))
+          }
+        />
+      </LightboxProvider>,
+    );
+    const trigger = screen.getByRole("button", { name: "probe" });
+    // happy-dom does not resolve dir="auto"; the document body would.
+    trigger.style.direction = "rtl";
+    fireEvent.click(trigger);
+
+    const dialog = screen.getByRole("dialog", { name: "Table viewer" });
+    expect(dialog.querySelector(".lightbox-table-scroller")).toHaveAttribute("dir", "rtl");
+    expect(screen.getByRole("cell", { name: "cell" })).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+  });
+
+  it("starts a fresh lightbox at actual size for each open", () => {
+    renderDoc();
+    fireEvent.click(screen.getByAltText("first"));
+    fireEvent.keyDown(window, { key: "+" });
+    expect(screen.getByText("125%")).toBeInTheDocument();
+
+    // Reached by Tab behind the overlay: the dialog does not trap focus.
+    fireEvent.click(screen.getByAltText("second"));
+    expect(screen.getByText("100%")).toBeInTheDocument();
+    expect(screen.getByText("2 / 2")).toBeInTheDocument();
+  });
+
+  it("leaves focus alone when an image lightbox closes", () => {
+    renderDoc();
+    const other = document.createElement("button");
+    document.body.append(other);
+    fireEvent.click(screen.getByAltText("first"));
+    other.focus();
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(other).toHaveFocus();
+    other.remove();
+  });
+
   it("does nothing when opening an image that isn't in the document", () => {
     render(
       <LightboxProvider>
