@@ -33,6 +33,7 @@ vi.mock("./speller", () => ({ getSpeller }));
 import { deferred } from "@/test/deferred";
 import { clearDictionarySources, registerDictionarySource } from "./dictionarySources";
 import { scriptCoverage } from "./scripts";
+import { clearSpellcheckEngines, registerSpellcheckEngine } from "./spellcheckEngines";
 import {
   buildMisspellings,
   buildSpellcheck,
@@ -382,6 +383,7 @@ describe("buildSpellcheck (dictionary registry changes)", () => {
     getSpeller.mockClear();
     getSpeller.mockImplementation(defaultGetSpeller);
     clearDictionarySources();
+    clearSpellcheckEngines();
     registerLanguage("en");
   });
 
@@ -470,7 +472,32 @@ describe("buildSpellcheck (dictionary registry changes)", () => {
     view.destroy();
     getSpeller.mockClear();
     registerLanguage("en");
+    registerSpellcheckEngine({ create: vi.fn() });
     expect(getSpeller).not.toHaveBeenCalled();
+  });
+
+  it("reloads every language when an engine comes or goes", async () => {
+    registerLanguage("fa");
+    spellers.set("fa", makeSpeller([SALAM]));
+    const doc = `helo world ${GHALAT}`;
+    const view = mount(doc, ["en", "fa"]);
+    await flushMicrotasks();
+    expect(isFlagged(view, 2)).toBe(true);
+    expect(isFlagged(view, doc.length - 1)).toBe(true);
+
+    spellers.set("en", makeSpeller(["helo"]));
+    spellers.set("fa", makeSpeller([GHALAT]));
+    const removeEngine = registerSpellcheckEngine({ create: vi.fn() });
+    await flushMicrotasks();
+    expect(isFlagged(view, 2)).toBe(false);
+    expect(isFlagged(view, 7)).toBe(true);
+    expect(isFlagged(view, doc.length - 1)).toBe(false);
+
+    spellers.set("en", makeSpeller(["world"]));
+    removeEngine();
+    await flushMicrotasks();
+    expect(isFlagged(view, 2)).toBe(true);
+    view.destroy();
   });
 
   it("orders merged suggestions by the configured languages, not load order", async () => {

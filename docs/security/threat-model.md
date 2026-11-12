@@ -909,15 +909,11 @@ exist on desktop only, like `glyph mcp`.
   external-link prompt read; any other namespace is its to fill. A
   spell-check dictionary a plugin of either kind registers is untrusted text:
   it is refused unless both files are strings under 32 million characters
-  together, then parsed by Hunspell compiled to WebAssembly, whose only file
-  system is in memory and which has no network. Every dictionary shares that
-  module's heap, which grows to at most 2 GB and never shrinks. The word count
-  a `.dic` file states is replaced by the number of lines it holds, so a
-  dictionary takes memory in proportion to its text, not to a number it
-  claims, but a large one keeps that memory for the session after it is
-  removed. A memory-safety bug in Hunspell stays inside the WebAssembly
-  sandbox but could corrupt the other dictionaries' answers, and a dictionary
-  that fails to parse fails only its own language. A plugin that declares
+  together, then parsed by the built-in engine (nspell, plain JavaScript), and
+  a dictionary that fails to parse fails only its own language. A spell-check
+  engine replaces that parser for every dictionary, and only a plugin running
+  in the app context, described next, can register one; the app frees a
+  replaced engine's dictionaries and stops calling them. A plugin that declares
   `"sandbox": false` still executes in the app context and sees everything the
   renderer sees (the host's own Escape handling and close button on a plugin
   overlay guard against a plugin's bugs, not against a hostile one); that mode

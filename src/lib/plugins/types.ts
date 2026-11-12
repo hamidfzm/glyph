@@ -1,10 +1,12 @@
 import type { ComponentType } from "react";
 import type { Options } from "react-markdown";
 import type { DictionaryContribution } from "@/lib/spellcheck/dictionarySources";
+import type { SpellcheckEngine } from "@/lib/spellcheck/spellcheckEngines";
 import type { Backlink, GraphEdge, GraphNode, TagCount } from "@/lib/vault";
 import type { Disposer } from "./disposer";
 
 export type { DictionaryContribution } from "@/lib/spellcheck/dictionarySources";
+export type { SpellChecker, SpellcheckEngine } from "@/lib/spellcheck/spellcheckEngines";
 export type { Backlink, GraphEdge, GraphNode, TagCount } from "@/lib/vault";
 export type { Disposer } from "./disposer";
 
@@ -432,6 +434,16 @@ export interface SpellcheckRegistryApi {
    * and restores the one it replaced.
    */
   registerDictionary(dictionary: DictionaryContribution): Disposer;
+  /**
+   * 0.28.0: Check every dictionary with this engine instead of the built-in
+   * one, which reads common Hunspell rules but not compounding. Open
+   * dictionaries are rebuilt with it, and the disposer frees what it built and
+   * restores the previous engine. The app frees a checker (its optional
+   * `dispose`) once its dictionary or engine is replaced, and never calls it
+   * again. Not available to sandboxed plugins: the editor checks each word
+   * synchronously.
+   */
+  registerEngine(engine: SpellcheckEngine): Disposer;
 }
 
 export interface MarkdownRegistryApi {

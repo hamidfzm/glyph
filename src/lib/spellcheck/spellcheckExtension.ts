@@ -2,6 +2,7 @@ import { type Extension, RangeSetBuilder, StateEffect, StateField } from "@codem
 import { Decoration, type DecorationSet, EditorView, ViewPlugin } from "@codemirror/view";
 import { getDictionarySource, subscribeDictionarySources } from "./dictionarySources";
 import { scriptCoverage, scriptsForLanguage } from "./scripts";
+import { subscribeSpellcheckEngine } from "./spellcheckEngines";
 import { getSpeller, type Speller } from "./speller";
 import { mergedSuggestions, openSuggestionMenu, type SuggestionMenuLabels } from "./suggestionMenu";
 import { scanWords } from "./wordScanner";
@@ -88,15 +89,25 @@ class SpellcheckPlugin {
     // repaints progressively without waiting for the slowest one.
     this.schedule(view, 0);
     for (const language of languages) this.load(view, language);
-    // Dictionaries come from plugins, which can register after the editor
-    // mounts (core plugins load asynchronously), or replace or remove theirs.
-    this.unsubscribe = subscribeDictionarySources((language) => {
-      if (!languages.includes(language)) return;
-      const hadDictionary = this.loaded.delete(language);
-      // Clear the old dictionary's marks now; the reload repaints with the new one.
-      if (hadDictionary) this.schedule(view, 0);
-      this.load(view, language);
+    // Dictionaries and engines come from plugins, which can register after the
+    // editor mounts (core plugins load asynchronously), or replace or remove theirs.
+    const stopSources = subscribeDictionarySources((language) => {
+      if (languages.includes(language)) this.reload(view, language);
     });
+    const stopEngine = subscribeSpellcheckEngine(() => {
+      for (const language of languages) this.reload(view, language);
+    });
+    this.unsubscribe = () => {
+      stopSources();
+      stopEngine();
+    };
+  }
+
+  private reload(view: EditorView, language: string): void {
+    const hadDictionary = this.loaded.delete(language);
+    // Clear the old dictionary's marks now; the reload repaints with the new one.
+    if (hadDictionary) this.schedule(view, 0);
+    this.load(view, language);
   }
 
   private load(view: EditorView, language: string): void {

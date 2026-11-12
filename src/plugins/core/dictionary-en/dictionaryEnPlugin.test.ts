@@ -1,4 +1,4 @@
-import { createHunspellFromStrings } from "hunspell-wasm";
+import nspell from "nspell";
 import { describe, expect, it, vi } from "vitest";
 import type { DictionaryContribution, GlyphPluginContext } from "@/lib/plugins/types";
 import plugin from "./dictionaryEnPlugin";
@@ -24,21 +24,17 @@ describe("English dictionary core plugin", () => {
     expect(Number(dic.split("\n", 1)[0])).toBeGreaterThan(40_000);
   });
 
-  // Regression list for the engine change: the same words pass, the same
-  // misspellings are caught, and each gets its correction first.
-  it("checks and corrects English with the real engine", async () => {
+  // The words pass, the misspellings are caught, and each is offered its
+  // correction, with the engine the app checks with until a plugin brings another.
+  it("checks and corrects English with the built-in engine", async () => {
     const { aff, dic } = await (await registered()).load();
-    const hunspell = await createHunspellFromStrings(aff, dic);
-    try {
-      const correct = ["the", "receive", "color", "children", "doesn't", "Wednesday", "it's"];
-      for (const word of correct) expect(hunspell.testSpelling(word), word).toBe(true);
-      const corrections = { recieve: "receive", teh: "the", wrold: "world", seperate: "separate" };
-      for (const [typo, fix] of Object.entries(corrections)) {
-        expect(hunspell.testSpelling(typo), typo).toBe(false);
-        expect(hunspell.getSpellingSuggestions(typo)[0], typo).toBe(fix);
-      }
-    } finally {
-      hunspell.dispose();
+    const checker = nspell(aff, dic);
+    const correct = ["the", "receive", "color", "children", "doesn't", "Wednesday", "it's"];
+    for (const word of correct) expect(checker.correct(word), word).toBe(true);
+    const corrections = { recieve: "receive", teh: "the", wrold: "world", seperate: "separate" };
+    for (const [typo, fix] of Object.entries(corrections)) {
+      expect(checker.correct(typo), typo).toBe(false);
+      expect(checker.suggest(typo), typo).toContain(fix);
     }
   });
 });

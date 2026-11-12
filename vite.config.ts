@@ -82,10 +82,6 @@ export default defineConfig(async ({ mode }) => ({
       "@": path.resolve(__dirname, "src"),
     },
   },
-  // hunspell-wasm finds its .wasm next to its own module (`new URL(...,
-  // import.meta.url)`); pre-bundling moves the module, and the dev server then
-  // answers the WASM request with index.html.
-  optimizeDeps: { exclude: ["hunspell-wasm"] },
   server: {
     port: 1420,
     strictPort: true,
