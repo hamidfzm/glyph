@@ -8,6 +8,8 @@ import {
   holdWrites,
   mockWriteFile,
   openEditable,
+  openWorkspaceNote,
+  renamesTo,
   resetTabsMocks,
   writesOf,
 } from "@/test/tabsHarness";
@@ -119,17 +121,10 @@ describe("useTabs saving", () => {
 
   it("keeps the tab dirty when it is renamed while its write is in flight", async () => {
     const { writeFile, started, release } = holdWrites(1, {
-      rename_path: async () => ({ newPath: "/p/ws/b.md", files: [], failed: null }),
+      rename_path: renamesTo("/p/ws/b.md"),
     });
     const { result } = renderHook(() => useTabs(defaultOptions()));
-    await waitFor(() => expect(result.current.initializing).toBe(false));
-    await act(async () => {
-      await result.current.openFolder("/p/ws");
-    });
-    await act(async () => {
-      await result.current.openFile("/p/ws/a.md");
-    });
-    const tabId = result.current.tabs[0].id;
+    const tabId = await openWorkspaceNote(result);
     act(() => {
       result.current.setTabMode(tabId, "edit");
     });
@@ -163,6 +158,97 @@ describe("useTabs saving", () => {
       { path: "/p/ws/b.md", content: "EDITED" },
     ]);
     expect(fileOf(result).dirty).toBe(false);
+  });
+
+  it("does not write the old path when a save queued behind its write runs after a rename", async () => {
+    const { writeFile, started, release } = holdWrites(1, {
+      rename_path: renamesTo("/p/ws/b.md"),
+    });
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    const tabId = await openWorkspaceNote(result);
+    act(() => {
+      result.current.setTabMode(tabId, "edit");
+    });
+    act(() => {
+      result.current.updateEditContent(tabId, "ONE");
+    });
+
+    let first: Promise<boolean> | undefined;
+    await act(async () => {
+      first = result.current.saveDocument(tabId);
+      await started[0].promise;
+    });
+    act(() => {
+      result.current.updateEditContent(tabId, "ONE TWO");
+    });
+    let second: Promise<boolean> | undefined;
+    act(() => {
+      second = result.current.saveDocument(tabId);
+    });
+    await act(async () => {
+      await result.current.renamePath("/p/ws/a.md", "b");
+    });
+    let saved: boolean[] = [];
+    await act(async () => {
+      release[0].resolve();
+      saved = await Promise.all([first, second] as Promise<boolean>[]);
+    });
+
+    // The queued save would bring a.md back beside the renamed note.
+    expect(saved).toEqual([true, true]);
+    expect(writesOf(writeFile)).toEqual([{ path: "/p/ws/a.md", content: "ONE" }]);
+    expect(fileOf(result).path).toBe("/p/ws/b.md");
+    expect(fileOf(result).dirty).toBe(true);
+
+    await act(async () => {
+      await result.current.saveDocument(tabId);
+    });
+
+    expect(writesOf(writeFile)).toEqual([
+      { path: "/p/ws/a.md", content: "ONE" },
+      { path: "/p/ws/b.md", content: "ONE TWO" },
+    ]);
+    expect(fileOf(result).dirty).toBe(false);
+  });
+
+  it("a close during a rename saves the tab at its new path, not the one its queued save captured", async () => {
+    const { writeFile, started, release } = holdWrites(1, {
+      rename_path: renamesTo("/p/ws/b.md"),
+    });
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    const tabId = await openWorkspaceNote(result);
+    act(() => {
+      result.current.setTabMode(tabId, "edit");
+    });
+    act(() => {
+      result.current.updateEditContent(tabId, "ONE");
+    });
+
+    let first: Promise<boolean> | undefined;
+    await act(async () => {
+      first = result.current.saveDocument(tabId);
+      await started[0].promise;
+    });
+    act(() => {
+      result.current.updateEditContent(tabId, "ONE TWO");
+    });
+    let closing: Promise<unknown> | undefined;
+    act(() => {
+      closing = result.current.closeTab(tabId);
+    });
+    await act(async () => {
+      await result.current.renamePath("/p/ws/a.md", "b");
+    });
+    await act(async () => {
+      release[0].resolve();
+      await Promise.all([first, closing]);
+    });
+
+    expect(writesOf(writeFile)).toEqual([
+      { path: "/p/ws/a.md", content: "ONE" },
+      { path: "/p/ws/b.md", content: "ONE TWO" },
+    ]);
+    expect(result.current.tabs).toHaveLength(0);
   });
 
   it("serializes writes for the same path so they can't complete out of order", async () => {

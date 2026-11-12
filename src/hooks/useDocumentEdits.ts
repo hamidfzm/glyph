@@ -9,7 +9,13 @@ import {
 } from "@/lib/fencedBlockEdit";
 import { EDITOR_MODE } from "@/lib/settings";
 import { isFencedDocument } from "@/lib/sourceDocuments";
-import { activeFileOf, type FileState, liveContentOf, type TabsState } from "@/lib/tabs";
+import {
+  activeFileOf,
+  type FileState,
+  liveContentOf,
+  type TabsState,
+  tabMovedTo,
+} from "@/lib/tabs";
 import { toggleTaskAtLine } from "@/lib/taskList";
 
 interface UseDocumentEditsOptions {
@@ -42,10 +48,24 @@ export function useDocumentEdits({
     [stateRef],
   );
 
+  // Write `content` at `path` in its turn, unless the tab left it (that would bring the
+  // old file back). Returns the tab's new path if it moved before or during the write.
+  const writeForTab = useCallback(
+    (id: string, path: string, content: string) =>
+      enqueueWrite(path, async (): Promise<string | null> => {
+        const movedBefore = tabMovedTo(stateRef.current, id, path);
+        if (movedBefore) return movedBefore;
+        await invoke("write_file", { path, content });
+        markSelfSave(path);
+        return tabMovedTo(stateRef.current, id, path);
+      }),
+    [enqueueWrite, markSelfSave, stateRef],
+  );
+
   // Apply a programmatic edit. A tab in edit/split mode, or one still holding
   // unsaved edits, takes it in the buffer so the save path writes everything
-  // together; only a clean view-mode tab writes straight to disk (marked as
-  // the app's own, so a reload reading meanwhile reads again).
+  // together; only a clean view-mode tab writes straight to disk, following the
+  // tab when it is renamed or moved, since no buffer holds the edit.
   const applyProgrammaticEdit = useCallback(
     async (id: string, file: FileState, next: string): Promise<boolean> => {
       if (file.mode !== EDITOR_MODE.view || file.dirty) {
@@ -58,10 +78,12 @@ export function useDocumentEdits({
         return true;
       }
 
-      const { path, revision } = file;
+      const { revision } = file;
       try {
-        await enqueueWrite(path, () => invoke("write_file", { path, content: next }));
-        markSelfSave(path);
+        let target: string | null = file.path;
+        while (target !== null) {
+          target = await writeForTab(id, target, next);
+        }
         updateActiveFile(id, (f) => {
           // Text typed while the write was in flight owns the buffer now.
           if (f.revision !== revision) return { ...f, content: next };
@@ -79,7 +101,7 @@ export function useDocumentEdits({
         return false;
       }
     },
-    [enqueueWrite, markSelfSave, updateActiveFile],
+    [updateActiveFile, writeForTab],
   );
 
   // Apply an edit and push one undo entry for it.

@@ -7,15 +7,15 @@ function fileTab(id: string, over: Partial<FileState>): Tab {
 }
 
 describe("autoSaveDocuments", () => {
-  it("lists every dirty file tab with its revision, active or not", () => {
+  it("lists every dirty file tab with its revision and path, active or not", () => {
     const tabs = [
       fileTab("a", { dirty: true, revision: 3 }),
       fileTab("b", { dirty: true, revision: 1 }),
     ];
 
     expect(autoSaveDocuments(tabs)).toEqual([
-      { id: "a", revision: 3 },
-      { id: "b", revision: 1 },
+      { id: "a", revision: 3, path: "/p/a.md" },
+      { id: "b", revision: 1, path: "/p/b.md" },
     ]);
   });
 
@@ -34,7 +34,7 @@ describe("autoSaveDocuments", () => {
       fileTab("named", { dirty: true, revision: 2 }),
     ];
 
-    expect(autoSaveDocuments(tabs)).toEqual([{ id: "named", revision: 2 }]);
+    expect(autoSaveDocuments(tabs)).toEqual([{ id: "named", revision: 2, path: "/p/named.md" }]);
   });
 
   it("lists a once-untitled document after Save As gave it a path", () => {
@@ -42,6 +42,6 @@ describe("autoSaveDocuments", () => {
       fileTab("saved", { path: "/p/saved.md", virtual: false, dirty: true, revision: 5 }),
     ];
 
-    expect(autoSaveDocuments(tabs)).toEqual([{ id: "saved", revision: 5 }]);
+    expect(autoSaveDocuments(tabs)).toEqual([{ id: "saved", revision: 5, path: "/p/saved.md" }]);
   });
 });

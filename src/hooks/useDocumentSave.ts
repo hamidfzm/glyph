@@ -9,7 +9,7 @@ import { shownInAnotherWindow } from "@/lib/documentWindow";
 import { MARKDOWN_EXTENSIONS } from "@/lib/markdownExtensions";
 import { basename, isPathInside } from "@/lib/paths";
 import { pickSaveDocument } from "@/lib/pickers";
-import type { FileState, FileTab, TabsState } from "@/lib/tabs";
+import { type FileState, type FileTab, type TabsState, tabMovedTo } from "@/lib/tabs";
 import { setWorkspaceLastFile } from "@/lib/workspace";
 
 interface UseDocumentSaveOptions {
@@ -195,8 +195,8 @@ export function useDocumentSave({
   // dirty flag is cleared only when the written revision is still current and
   // the tab is still at the written path, so a slow write completing after a
   // newer edit never strands that edit. Resolves false when the write or Save As
-  // failed, true otherwise, including when an edit, rename or move during the
-  // write leaves the tab dirty: `saveUntilClean` checks that.
+  // failed, true otherwise, including when an edit during the write, or a rename
+  // or move before or during it, leaves the tab dirty: `saveUntilClean` checks that.
   const saveDocument = useCallback(
     (id: string): Promise<boolean> => {
       const tab = stateRef.current.tabs.find((candidate) => candidate.id === id);
@@ -215,6 +215,9 @@ export function useDocumentSave({
       const { path, editContent: content, revision } = file;
 
       return enqueueWrite(path, async (): Promise<boolean> => {
+        // Writing a path the tab left while this waited would bring the old file
+        // back; the tab stays dirty, so the next save writes its new path.
+        if (tabMovedTo(stateRef.current, id, path)) return true;
         try {
           await invoke("write_file", { path, content });
           markSelfSave(path);

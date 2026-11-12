@@ -7,10 +7,14 @@ import { deferred } from "@/test/deferred";
 import {
   defaultOptions,
   fileOf,
+  holdWrites,
   mockWriteFile,
   openEditable,
+  openWorkspaceNote,
+  renamesTo,
   resetTabsMocks,
   type TabsHook,
+  writesOf,
 } from "@/test/tabsHarness";
 import { useTabs } from "./useTabs";
 
@@ -170,6 +174,79 @@ describe("Auto Save and untitled documents", () => {
     });
     await wait(DEBOUNCE * 2);
     expect(writeFile).toHaveBeenCalledTimes(1);
+    expect(fileOf(result).dirty).toBe(false);
+  });
+});
+
+describe("Auto Save and a renamed note", () => {
+  it("saves a note at its new path when it was renamed while its write was in flight", async () => {
+    const { writeFile, started, release } = holdWrites(1, {
+      rename_path: renamesTo("/p/ws/b.md"),
+    });
+    const { result } = renderHook(useTabsWithAutoSave);
+    const tabId = await openWorkspaceNote(result);
+    act(() => {
+      result.current.setTabMode(tabId, "edit");
+    });
+    vi.useFakeTimers();
+    act(() => {
+      result.current.updateEditContent(tabId, "EDITED");
+    });
+
+    await wait(DEBOUNCE);
+    await act(async () => {
+      await started[0].promise;
+    });
+    await act(async () => {
+      await result.current.renamePath("/p/ws/a.md", "b");
+    });
+    await act(async () => {
+      release[0].resolve();
+    });
+    await wait(DEBOUNCE);
+
+    expect(writesOf(writeFile)).toEqual([
+      { path: "/p/ws/a.md", content: "EDITED" },
+      { path: "/p/ws/b.md", content: "EDITED" },
+    ]);
+    expect(fileOf(result).path).toBe("/p/ws/b.md");
+    expect(fileOf(result).dirty).toBe(false);
+  });
+
+  it("saves a note at its new path when a save queued behind its write was left out by the rename", async () => {
+    const { writeFile, started, release } = holdWrites(1, {
+      rename_path: renamesTo("/p/ws/b.md"),
+    });
+    const { result } = renderHook(useTabsWithAutoSave);
+    const tabId = await openWorkspaceNote(result);
+    act(() => {
+      result.current.setTabMode(tabId, "edit");
+    });
+    vi.useFakeTimers();
+    act(() => {
+      result.current.updateEditContent(tabId, "ONE");
+    });
+
+    await wait(DEBOUNCE);
+    await act(async () => {
+      await started[0].promise;
+    });
+    act(() => {
+      result.current.updateEditContent(tabId, "ONE TWO");
+    });
+    await wait(DEBOUNCE);
+    await act(async () => {
+      await result.current.renamePath("/p/ws/a.md", "b");
+    });
+    await act(async () => {
+      release[0].resolve();
+    });
+    await wait(DEBOUNCE);
+
+    expect(writesOf(writeFile)).toEqual([
+      { path: "/p/ws/a.md", content: "ONE" },
+      { path: "/p/ws/b.md", content: "ONE TWO" },
+    ]);
     expect(fileOf(result).dirty).toBe(false);
   });
 });
