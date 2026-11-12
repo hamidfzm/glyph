@@ -2,7 +2,7 @@ import type { EditorView } from "@codemirror/view";
 import { renderHook } from "@testing-library/react";
 import type { RefObject } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { captureResizeObserver, sizeScroller, stubOffsetTop } from "@/test/scrollMetrics";
+import { captureResizeObserver, sizeScroller, stubContentTop } from "@/test/scrollMetrics";
 import { useSyncedScroll } from "./useSyncedScroll";
 
 const LINE_HEIGHT = 20;
@@ -68,7 +68,7 @@ function buildSplit({
   for (const [index, line] of anchors.entries()) {
     const block = document.createElement("p");
     block.dataset.line = String(line);
-    stubOffsetTop(block, index * 500);
+    stubContentTop(block, preview, index * 500);
     content.append(block);
   }
 
@@ -126,6 +126,23 @@ describe("useSyncedScroll", () => {
     scroll(preview, 500);
 
     expect(editor.scrollTop).toBe(5 * LINE_HEIGHT);
+  });
+
+  it("places a block in a positioned frame (a table) by where it sits in the scroller", () => {
+    const { rootRef, editor, preview, content, view } = buildSplit({ anchors: [1] });
+    const frame = document.createElement("div");
+    const table = document.createElement("table");
+    table.dataset.line = "11";
+    // Its offsetTop counts from the frame, not the scroller.
+    Object.defineProperty(table, "offsetTop", { value: 0 });
+    stubContentTop(table, preview, 500);
+    frame.append(table);
+    content.append(frame);
+    renderHook(() => useSyncedScroll(rootRef, view, true));
+
+    scroll(editor, 5 * LINE_HEIGHT);
+
+    expect(preview.scrollTop).toBe(250);
   });
 
   it("falls back to matching scroll ratios when the preview has no anchors", () => {
@@ -255,7 +272,7 @@ describe("useSyncedScroll", () => {
 
     // An image above line 11 finishes loading and pushes its anchor down.
     const [, second] = [...content.querySelectorAll<HTMLElement>("[data-line]")];
-    stubOffsetTop(second, 900);
+    stubContentTop(second, preview, 900);
     fireResize();
 
     expect(preview.scrollTop).toBe(450);
@@ -270,7 +287,7 @@ describe("useSyncedScroll", () => {
     expect(editor.scrollTop).toBe(5 * LINE_HEIGHT);
 
     const [, second] = [...content.querySelectorAll<HTMLElement>("[data-line]")];
-    stubOffsetTop(second, 1000);
+    stubContentTop(second, preview, 1000);
     fireResize();
 
     expect(editor.scrollTop).toBe(Math.round(2.5 * LINE_HEIGHT));

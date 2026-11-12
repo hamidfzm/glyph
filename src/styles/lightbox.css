@@ -43,6 +43,55 @@
   transition: opacity 0.1s ease-out;
 }
 
+/* A table scrolls in a box filling the overlay inside its padding, so its sticky
+   header row has an edge to stick to and nothing scrolls into view above it.
+   The stable gutter keeps the width the fit measured when a scrollbar appears. */
+.lightbox-table-scroller {
+  display: flex;
+  flex: 1;
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+
+.lightbox-table-scroller:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* At its own width, centered like an image. CSS zoom reflows it, so zoomed
+   text stays sharp and selectable. */
+.lightbox-overlay .lightbox-table {
+  margin: auto;
+  flex-shrink: 0;
+  max-width: none;
+  padding: 0;
+  background: var(--color-surface);
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.5);
+}
+
+/* Collapsed borders stay behind when a sticky header moves, so they are
+   separate: each cell draws its end and bottom edges, the table the others. */
+.lightbox-overlay .lightbox-table table {
+  width: max-content;
+  margin: 0;
+  border-collapse: separate;
+  border-top: 1px solid var(--color-border);
+  border-inline-start: 1px solid var(--color-border);
+}
+
+.lightbox-overlay .lightbox-table :is(th, td) {
+  border-width: 0 0 1px;
+  border-inline-end-width: 1px;
+}
+
+/* The whole head sticks, so a multi-row header keeps its rows apart. */
+.lightbox-overlay .lightbox-table thead {
+  position: sticky;
+  top: 0;
+  /* Above positioned content in the body cells (inline math) scrolling under it. */
+  z-index: 1;
+}
+
 /* Pan affordance (set by useDragPan): open hand over a pannable image, closed
    hand anywhere on the stage while dragging. */
 .lightbox-overlay[data-pannable] .lightbox-image {

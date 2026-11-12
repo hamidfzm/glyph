@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { LightboxItem } from "@/lib/lightbox";
 import { Lightbox } from "./Lightbox";
 
 const { isFullscreen, invoke } = vi.hoisted(() => ({
@@ -23,16 +24,16 @@ vi.mock("@/lib/svgSizeFromUrl", async (importOriginal) => {
   };
 });
 
-const IMAGES = [
-  { src: "a.png", alt: "first" },
-  { src: "b.png", alt: "second" },
-  { src: "c.png", alt: "third" },
+const IMAGES: LightboxItem[] = [
+  { kind: "image", src: "a.png", alt: "first" },
+  { kind: "image", src: "b.png", alt: "second" },
+  { kind: "image", src: "c.png", alt: "third" },
 ];
 
 // Drives the controlled `index` so navigation can be asserted end to end.
 function Harness({ onClose = () => {}, start = 0 }: { onClose?: () => void; start?: number }) {
   const [index, setIndex] = useState(start);
-  return <Lightbox images={IMAGES} index={index} onIndexChange={setIndex} onClose={onClose} />;
+  return <Lightbox items={IMAGES} index={index} onIndexChange={setIndex} onClose={onClose} />;
 }
 
 describe("Lightbox", () => {
@@ -129,7 +130,7 @@ describe("Lightbox", () => {
     )}`;
     render(
       <Lightbox
-        images={[{ src, alt: "diagram" }]}
+        items={[{ kind: "image", src, alt: "diagram" }]}
         index={0}
         onIndexChange={() => {}}
         onClose={() => {}}
@@ -150,7 +151,7 @@ describe("Lightbox", () => {
   it("sizes a viewBox-only SVG served from a URL via the aspect probe", async () => {
     render(
       <Lightbox
-        images={[{ src: "http://asset.localhost/diagram.svg", alt: "asset svg" }]}
+        items={[{ kind: "image", src: "http://asset.localhost/diagram.svg", alt: "asset svg" }]}
         index={0}
         onIndexChange={() => {}}
         onClose={() => {}}
@@ -254,7 +255,7 @@ describe("Lightbox", () => {
   it("ignores arrow keys and hides nav when there is a single image", () => {
     render(
       <Lightbox
-        images={[{ src: "only.png", alt: "only" }]}
+        items={[{ kind: "image", src: "only.png", alt: "only" }]}
         index={0}
         onIndexChange={() => {}}
         onClose={() => {}}
@@ -276,7 +277,7 @@ describe("Lightbox", () => {
 
   it("renders nothing when the index is out of range", () => {
     const { container } = render(
-      <Lightbox images={IMAGES} index={99} onIndexChange={() => {}} onClose={() => {}} />,
+      <Lightbox items={IMAGES} index={99} onIndexChange={() => {}} onClose={() => {}} />,
     );
     expect(container).toBeEmptyDOMElement();
   });
@@ -284,7 +285,7 @@ describe("Lightbox", () => {
   it("uses a generic label when the image has no alt text", () => {
     render(
       <Lightbox
-        images={[{ src: "a.png", alt: "" }]}
+        items={[{ kind: "image", src: "a.png", alt: "" }]}
         index={0}
         onIndexChange={() => {}}
         onClose={() => {}}
