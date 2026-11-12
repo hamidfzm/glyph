@@ -93,6 +93,7 @@ export function useTabs(options: UseTabsOptions) {
 
   // Re-point every open file tab under `oldPath` to its location under
   // `newPath`, moving the file watchers along. Used by rename and move.
+  // Call only inside a relocation's write-queue turn (useRelocation): saves rely on no path changing mid-write.
   const repointOpenFiles = useCallback(
     (oldPath: string, newPath: string) => {
       repointHistoryRef.current(oldPath, newPath);
@@ -168,9 +169,9 @@ export function useTabs(options: UseTabsOptions) {
 
   const getWorkspaceRoot = useCallback(() => workspaceRef.current?.root ?? null, [workspaceRef]);
 
-  // One queue for every document write, so a save and a programmatic edit of
-  // the same file can never overlap.
-  const { enqueueWrite, writesSettled } = useWriteQueue();
+  // One queue for every document write and every rename or move, so a save, a
+  // programmatic edit and a relocation of the same file can never overlap.
+  const { enqueueWrite, enqueueRelocation, writesSettled } = useWriteQueue();
 
   const { saveDocument, saveUntilClean } = useDocumentSave({
     stateRef,
@@ -197,6 +198,7 @@ export function useTabs(options: UseTabsOptions) {
     stateRef,
     workspaceRef,
     saveUntilClean,
+    enqueueRelocation,
     markSelfSave,
     reloadFromDisk,
     refreshIndexes,
