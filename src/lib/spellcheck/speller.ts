@@ -20,27 +20,67 @@ const MAX_DICTIONARY_LENGTH = 32_000_000;
 // (session-scoped, in memory).
 const cache = new Map<string, Promise<Speller>>();
 
+// Words added this session, per language, so a dictionary rebuilt for a new
+// source or engine still accepts them.
+const addedWords = new Map<string, Set<string>>();
+
 // A plugin failing to hand over its text may succeed next time (an asset read),
 // so only this failure is retried; a missing, refused or unparseable dictionary
 // fails the same way until its source or the engine changes.
 class DictionaryReadError extends Error {}
 
-// A replaced dictionary is freed while a suggestion menu may still be open on
-// it, so once disposed it accepts every word and suggests nothing, whatever
-// engine built it.
-function inertOnceDisposed(checker: SpellChecker): Speller {
+function isChecker(value: unknown): value is SpellChecker {
+  const candidate = value as Partial<SpellChecker> | null | undefined;
+  return (
+    typeof candidate?.correct === "function" &&
+    typeof candidate.suggest === "function" &&
+    typeof candidate.add === "function"
+  );
+}
+
+function wordsAddedTo(language: string): Set<string> {
+  let words = addedWords.get(language);
+  if (!words) {
+    words = new Set();
+    addedWords.set(language, words);
+  }
+  return words;
+}
+
+// An engine is plugin code, so a checker that throws is freed and from then on
+// accepts every word and suggests nothing, as a replaced one does while a
+// suggestion menu is still open on it: one broken engine cannot stop the editor
+// checking the other languages.
+function guarded(language: string, checker: SpellChecker): Speller {
   let disposed = false;
-  return {
-    correct: (word) => disposed || checker.correct(word),
-    suggest: (word) => (disposed ? [] : checker.suggest(word)),
-    add: (word) => {
-      if (!disposed) checker.add(word);
-    },
-    dispose: () => {
-      if (disposed) return;
-      disposed = true;
+  const dispose = () => {
+    if (disposed) return;
+    disposed = true;
+    try {
       checker.dispose?.();
+    } catch (error) {
+      console.error(`The "${language}" spell checker failed to free its dictionary:`, error);
+    }
+  };
+  const call = <T>(fallback: T, run: () => T): T => {
+    if (disposed) return fallback;
+    try {
+      return run();
+    } catch (error) {
+      console.error(`The "${language}" spell checker failed and stopped checking:`, error);
+      dispose();
+      return fallback;
+    }
+  };
+  return {
+    correct: (word) => call(true, () => checker.correct(word) === true),
+    suggest: (word) =>
+      call([], () => checker.suggest(word).filter((suggestion) => typeof suggestion === "string")),
+    add: (word) => {
+      wordsAddedTo(language).add(word);
+      call(undefined, () => checker.add(word));
     },
+    dispose,
   };
 }
 
@@ -60,7 +100,13 @@ async function loadSpeller(language: string): Promise<Speller> {
     throw new Error(`the "${language}" dictionary is over the size limit`);
   }
   const engine = getSpellcheckEngine() ?? nspellEngine;
-  return inertOnceDisposed(await engine.create(aff, dic));
+  const checker: unknown = await engine.create(aff, dic);
+  if (!isChecker(checker)) {
+    throw new Error(`the spell-check engine built no checker for "${language}"`);
+  }
+  const speller = guarded(language, checker);
+  for (const word of addedWords.get(language) ?? []) speller.add(word);
+  return speller;
 }
 
 // Drop a language's cached checker, and free it once any pending load settles.
@@ -99,7 +145,8 @@ export function getSpeller(language: string): Promise<Speller> {
   return pending;
 }
 
-// Test seam: drop cached spellers so a fresh load runs next time.
+// Test seam: drop cached spellers and added words so a fresh load runs next time.
 export function clearSpellerCache(): void {
   cache.clear();
+  addedWords.clear();
 }

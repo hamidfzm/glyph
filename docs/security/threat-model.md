@@ -209,7 +209,9 @@ feature:
   16 MiB, a line no further than 1 MiB, and an error body no further than
   64 KiB, so a host the user named cannot grow the renderer without end.
 - `script-src data: blob: 'wasm-unsafe-eval'` is required by the Mermaid and
-  D2 WASM renderers.
+  D2 WASM renderers, and by app-context plugins that import their bundles
+  from blob URLs and compile WebAssembly in the page (the Hunspell
+  spell-check engine plugin).
 - `script-src 'unsafe-eval'` is required by D2 alone: its blob-URL worker
   loads the ELK layout engine via `new Function(...)`, and WebKit (WebKitGTK
   on Linux, WKWebView on macOS) enforces the page CSP inside blob workers, so
@@ -909,11 +911,14 @@ exist on desktop only, like `glyph mcp`.
   external-link prompt read; any other namespace is its to fill. A
   spell-check dictionary a plugin of either kind registers is untrusted text:
   it is refused unless both files are strings under 32 million characters
-  together, then parsed by the built-in engine (nspell, plain JavaScript), and
-  a dictionary that fails to parse fails only its own language. A spell-check
-  engine replaces that parser for every dictionary, and only a plugin running
-  in the app context, described next, can register one; the app frees a
-  replaced engine's dictionaries and stops calling them. A plugin that declares
+  together, then parsed by the built-in engine (nspell, plain JavaScript) on
+  the main thread. A dictionary that fails to parse fails only its own
+  language, but one built to expand into a vast number of word forms can
+  stall the renderer or exhaust its memory once the user turns its language
+  on. A spell-check engine replaces that parser for every dictionary, and
+  only a plugin running in the app context, described next, can register
+  one; the app frees a replaced engine's dictionaries and stops calling them,
+  and frees a checker that throws. A plugin that declares
   `"sandbox": false` still executes in the app context and sees everything the
   renderer sees (the host's own Escape handling and close button on a plugin
   overlay guard against a plugin's bugs, not against a hostile one); that mode

@@ -183,6 +183,58 @@ describe("getSpeller", () => {
     expect(checker.add).toHaveBeenCalledTimes(1);
     expect(checker.dispose).toHaveBeenCalledTimes(1);
   });
+
+  it("refuses an engine that builds no checker, once", async () => {
+    expectConsole(/"fa" spell-check dictionary failed to load/);
+    engine.create.mockResolvedValueOnce({ correct: () => true } as never);
+    register("FIRST");
+    const refused = getSpeller("fa");
+    await expect(refused).rejects.toThrow(/built no checker/);
+    await flush();
+    expect(getSpeller("fa")).toBe(refused);
+  });
+
+  it("frees a checker that throws, which then accepts everything", async () => {
+    expectConsole(/"fa" spell checker failed and stopped checking/);
+    register("FIRST");
+    const speller = await getSpeller("fa");
+    const checker = engine.built[0];
+    checker.correct.mockImplementation(() => {
+      throw new Error("engine crashed");
+    });
+
+    expect(speller.correct("word")).toBe(true);
+    expect(checker.dispose).toHaveBeenCalledTimes(1);
+    expect(speller.suggest("word")).toEqual([]);
+    expect(speller.correct("other")).toBe(true);
+    expect(checker.correct).toHaveBeenCalledTimes(1);
+  });
+
+  it("logs a checker that fails to free its dictionary instead of throwing", async () => {
+    expectConsole(/"fa" spell checker failed to free its dictionary/);
+    register("FIRST");
+    const speller = await getSpeller("fa");
+    engine.built[0].dispose.mockImplementation(() => {
+      throw new Error("double free");
+    });
+    expect(() => speller.dispose()).not.toThrow();
+    expect(speller.correct("word")).toBe(true);
+  });
+
+  it("passes on only the suggestions that are text", async () => {
+    register("FIRST");
+    const speller = await getSpeller("fa");
+    engine.built[0].suggest.mockReturnValue(["fix", 7, null, "other"] as never);
+    expect(speller.suggest("word")).toEqual(["fix", "other"]);
+  });
+
+  it("keeps the words added this session when the dictionary is rebuilt", async () => {
+    register("FIRST");
+    (await getSpeller("fa")).add("glyph");
+    register("SECOND");
+    await getSpeller("fa");
+    expect(engine.builtFor("SECOND")?.add).toHaveBeenCalledWith("glyph");
+  });
 });
 
 describe("getSpeller across engine changes", () => {

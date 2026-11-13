@@ -119,11 +119,11 @@ export interface PluginManifest {
    * Run in a dedicated worker instead of the app context. Sandboxed plugins
    * get no DOM and network fenced to their `network:` permissions, but only
    * the non-UI API subset: commands, styles, color schemes, exporters, file
-   * types, workspace, assets, spellcheck, settings, notify, and registering
-   * translations. No
+   * types, workspace, assets, spellcheck dictionaries, settings, notify, and
+   * registering translations. No
    * markdown pipeline, panel or overlay mounts, reading the rendered
-   * document, app state (the active document, the vault, navigation), or
-   * reading translations.
+   * document, app state (the active document, the vault, navigation),
+   * spell-check engines, or reading translations.
    *
    * Absent defaults to `true`: isolation is the default, and only an explicit
    * `false` opts into full trust, which needs a distinct user grant.
@@ -438,10 +438,11 @@ export interface SpellcheckRegistryApi {
    * 0.28.0: Check every dictionary with this engine instead of the built-in
    * one, which reads common Hunspell rules but not compounding. Open
    * dictionaries are rebuilt with it, and the disposer frees what it built and
-   * restores the previous engine. The app frees a checker (its optional
-   * `dispose`) once its dictionary or engine is replaced, and never calls it
-   * again. Not available to sandboxed plugins: the editor checks each word
-   * synchronously.
+   * restores the previous engine. Each `create` call returns a new checker,
+   * which the app owns: it calls the checker's optional `dispose` once its
+   * dictionary or engine is replaced, and never calls it again. A checker
+   * that throws is freed and stops checking its language. Not available to
+   * sandboxed plugins: the editor checks each word synchronously.
    */
   registerEngine(engine: SpellcheckEngine): Disposer;
 }
