@@ -44,6 +44,10 @@ optional loads on first use:
 - Syntax highlighting and the gemoji table load when a document first needs
   them (`lazyHighlight`, `lazyGemoji`), and so does KaTeX, through the math
   core plugin's lazy rehype contribution (`src/plugins/core/math/`).
+- Spell check loads with the editor, and a language's dictionary text on its
+  first check: for English, the `dictionary-en-*` chunk behind the English
+  dictionary core plugin's `load`. The Hunspell engine that German's
+  compound words need is a marketplace plugin, so it is not in the app.
 - The Sentry SDK loads only after the production telemetry opt-in
   (`src/lib/telemetry.ts`); error reporting before that is a no-op by design.
 - The export pipeline (`src/lib/export/*`) is reached only through dynamic

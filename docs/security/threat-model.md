@@ -209,7 +209,9 @@ feature:
   16 MiB, a line no further than 1 MiB, and an error body no further than
   64 KiB, so a host the user named cannot grow the renderer without end.
 - `script-src data: blob: 'wasm-unsafe-eval'` is required by the Mermaid and
-  D2 WASM renderers.
+  D2 WASM renderers, and by app-context plugins that import their bundles
+  from blob URLs and compile WebAssembly in the page (the Hunspell
+  spell-check engine plugin).
 - `script-src 'unsafe-eval'` is required by D2 alone: its blob-URL worker
   loads the ELK layout engine via `new Function(...)`, and WebKit (WebKitGTK
   on Linux, WKWebView on macOS) enforces the page CSP inside blob workers, so
@@ -906,8 +908,17 @@ exist on desktop only, like `glyph mcp`.
   script to the exported page (EPUB and the website export write the
   styles to a separate `style.css`). A plugin of either kind may not register translations
   under one of the app's own namespaces, which the consent dialog and the
-  external-link prompt read; any other namespace is its to fill. A plugin
-  that declares
+  external-link prompt read; any other namespace is its to fill. A
+  spell-check dictionary a plugin of either kind registers is untrusted text:
+  it is refused unless both files are strings under 32 million characters
+  together, then parsed by the built-in engine (nspell, plain JavaScript) on
+  the main thread. A dictionary that fails to parse fails only its own
+  language, but one built to expand into a vast number of word forms can
+  stall the renderer or exhaust its memory once the user turns its language
+  on. A spell-check engine replaces that parser for every dictionary, and
+  only a plugin running in the app context, described next, can register
+  one; the app frees a replaced engine's dictionaries and stops calling them,
+  and frees a checker that throws. A plugin that declares
   `"sandbox": false` still executes in the app context and sees everything the
   renderer sees (the host's own Escape handling and close button on a plugin
   overlay guard against a plugin's bugs, not against a hostile one); that mode
@@ -931,11 +942,12 @@ exist on desktop only, like `glyph mcp`.
   boundary itself: the first never replaces a file and refuses hidden paths
   such as `.git/hooks`, the second writes one size-capped block keyed by the
   plugin's id. Sandboxed plugins get none of it. Core plugins (the compiled-in
-  `CORE_PLUGINS` list: D2, Mermaid, math, tags, backlinks, daily notes, and
-  theme presets today) are app code shipped in the signed binary: they load
-  with full trust and no consent prompt, take the permissions they need
-  (`workspace:read` for tags and backlinks, and `workspace:write` as well for
-  daily notes) from that same list rather than from disk, and only their on/off
+  `CORE_PLUGINS` list: D2, Mermaid, math, tags, backlinks, daily notes, theme
+  presets, and the English dictionary today) are app code shipped in the
+  signed binary: they load with full trust and no consent prompt, take the
+  permissions they need (`workspace:read` for tags and backlinks, and
+  `workspace:write` as well for daily notes) from that same list rather than
+  from disk, and only their on/off
   state lives in `settings.json`. The picked color scheme (theme presets
   offers three) is an app setting there too: the stored id is only looked up
   among the schemes loaded plugins registered, anything malformed reads as the

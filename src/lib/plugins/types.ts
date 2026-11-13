@@ -1,10 +1,12 @@
 import type { ComponentType } from "react";
 import type { Options } from "react-markdown";
 import type { DictionaryContribution } from "@/lib/spellcheck/dictionarySources";
+import type { SpellcheckEngine } from "@/lib/spellcheck/spellcheckEngines";
 import type { Backlink, GraphEdge, GraphNode, TagCount } from "@/lib/vault";
 import type { Disposer } from "./disposer";
 
 export type { DictionaryContribution } from "@/lib/spellcheck/dictionarySources";
+export type { SpellChecker, SpellcheckEngine } from "@/lib/spellcheck/spellcheckEngines";
 export type { Backlink, GraphEdge, GraphNode, TagCount } from "@/lib/vault";
 export type { Disposer } from "./disposer";
 
@@ -117,11 +119,11 @@ export interface PluginManifest {
    * Run in a dedicated worker instead of the app context. Sandboxed plugins
    * get no DOM and network fenced to their `network:` permissions, but only
    * the non-UI API subset: commands, styles, color schemes, exporters, file
-   * types, workspace, assets, spellcheck, settings, notify, and registering
-   * translations. No
+   * types, workspace, assets, spellcheck dictionaries, settings, notify, and
+   * registering translations. No
    * markdown pipeline, panel or overlay mounts, reading the rendered
-   * document, app state (the active document, the vault, navigation), or
-   * reading translations.
+   * document, app state (the active document, the vault, navigation),
+   * spell-check engines, or reading translations.
    *
    * Absent defaults to `true`: isolation is the default, and only an explicit
    * `false` opts into full trust, which needs a distinct user grant.
@@ -425,11 +427,24 @@ export interface SpellcheckRegistryApi {
   /**
    * Contribute a spell-check dictionary for a language. It appears in the
    * Settings language picker under `label`, and `load` runs only when the user
-   * selects the language. Registering an already-known code (including the
-   * built-in "en") replaces it; the disposer removes the dictionary and drops
-   * any cached checker built from it.
+   * selects the language, returning the Hunspell `.aff`/`.dic` text (refused
+   * past 32 million characters combined). Registering an already-known code
+   * (including "en" from the core English dictionary) replaces it; the
+   * disposer removes the dictionary, drops any cached checker built from it,
+   * and restores the one it replaced.
    */
   registerDictionary(dictionary: DictionaryContribution): Disposer;
+  /**
+   * 0.28.0: Check every dictionary with this engine instead of the built-in
+   * one, which reads common Hunspell rules but not compounding. Open
+   * dictionaries are rebuilt with it, and the disposer frees what it built and
+   * restores the previous engine. Each `create` call returns a new checker,
+   * which the app owns: it calls the checker's optional `dispose` once its
+   * dictionary or engine is replaced, and never calls it again. A checker
+   * that throws is freed and stops checking its language. Not available to
+   * sandboxed plugins: the editor checks each word synchronously.
+   */
+  registerEngine(engine: SpellcheckEngine): Disposer;
 }
 
 export interface MarkdownRegistryApi {

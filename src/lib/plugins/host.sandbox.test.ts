@@ -4,6 +4,7 @@ import { createPluginHost, type PluginHost } from "@/lib/plugins/host";
 import type { ModuleImporter } from "@/lib/plugins/loader";
 import type { InstalledPlugin, PluginModule } from "@/lib/plugins/types";
 import { clearDictionarySources, getDictionarySource } from "@/lib/spellcheck/dictionarySources";
+import { clearSpellcheckEngines, getSpellcheckEngine } from "@/lib/spellcheck/spellcheckEngines";
 import { FakeWorker } from "@/test/fakeWorker";
 import { importerFor, installed } from "@/test/fixtures/pluginHost";
 
@@ -376,5 +377,22 @@ describe("spellcheck dictionary contributions", () => {
 
     host.unload("com.x.demo");
     expect(getDictionarySource("fa")).toBeUndefined();
+  });
+
+  it("registers an engine through the plugin's bag and unload removes it", async () => {
+    clearSpellcheckEngines();
+    const host = createPluginHost(vi.fn());
+    const engine = { create: vi.fn() };
+    const module: PluginModule = {
+      activate(ctx) {
+        ctx.spellcheck.registerEngine(engine);
+      },
+    };
+
+    await host.load(installed(), importerFor(module));
+    expect(getSpellcheckEngine()).toBe(engine);
+
+    host.unload("com.x.demo");
+    expect(getSpellcheckEngine()).toBeUndefined();
   });
 });
