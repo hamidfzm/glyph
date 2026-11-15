@@ -24,41 +24,49 @@ export interface DictionaryContribution {
 }
 
 // Module-level so the speller (plain module) and the settings UI (React) read
-// the same registry without threading it through props or context. Keyed by
-// language: a later registration for the same code replaces the earlier one.
-const sources = new Map<string, DictionaryContribution>();
+// the same registry without threading it through props or context. Each
+// language keeps a stack: the latest registration wins, and disposing it
+// brings back the one before (a community "en" over the bundled English).
+const sources = new Map<string, DictionaryContribution[]>();
 const listeners = new Set<(language: string) => void>();
 let snapshot: readonly DictionaryContribution[] = [];
 
 function notify(language: string): void {
-  snapshot = [...sources.values()];
+  snapshot = [...sources.values()].map((stack) => stack[stack.length - 1]);
   for (const listener of listeners) listener(language);
 }
 
 /**
- * Add a dictionary for a language; the returned disposer removes it. Both the
- * registration and its disposal notify subscribers, so the speller cache and
- * the language picker stay current across plugin load/unload/update.
+ * Add a dictionary for a language; the returned disposer removes it. Every
+ * change to the registration a language resolves to notifies subscribers, so
+ * the speller cache and the language picker stay current across plugin
+ * load/unload/update.
  */
 export function registerDictionarySource(contribution: DictionaryContribution): Disposer {
-  sources.set(contribution.language, contribution);
-  notify(contribution.language);
+  const { language } = contribution;
+  const stack = sources.get(language) ?? [];
+  stack.push(contribution);
+  sources.set(language, stack);
+  notify(language);
   return () => {
-    if (sources.get(contribution.language) === contribution) {
-      sources.delete(contribution.language);
-      notify(contribution.language);
-    }
+    const index = stack.indexOf(contribution);
+    if (index === -1) return;
+    const wasActive = index === stack.length - 1;
+    stack.splice(index, 1);
+    if (stack.length === 0) sources.delete(language);
+    if (wasActive) notify(language);
   };
 }
 
 export function getDictionarySource(language: string): DictionaryContribution | undefined {
-  return sources.get(language);
+  return sources.get(language)?.at(-1);
 }
 
 /**
- * Current contributions in registration order. The same array reference is
- * returned until the registry changes, so it is safe as a
- * `useSyncExternalStore` snapshot.
+ * The contribution each language resolves to, in the order the languages first
+ * registered (one that loses its last registration and returns goes last). The
+ * same array reference is returned until the registry changes, so it is safe as
+ * a `useSyncExternalStore` snapshot.
  */
 export function listDictionarySources(): readonly DictionaryContribution[] {
   return snapshot;
