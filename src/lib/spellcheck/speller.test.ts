@@ -145,15 +145,12 @@ describe("getSpeller", () => {
     const slow = deferred<{ aff: string; dic: string }>();
     register("FIRST", () => slow.promise);
     const stale = getSpeller("fa");
-    // A plugin update registers again; its instance's checker replaces the old one.
-    const freshLoad = vi.fn(() => Promise.resolve({ aff: "SECOND", dic: "DIC" }));
-    register("SECOND", freshLoad);
+    register("SECOND");
     const fresh = getSpeller("fa");
 
-    slow.reject(new Error("plugin stopped"));
+    slow.reject(new Error("first source broke"));
     await expect(stale).rejects.toThrow(/could not be read/);
     expect(getSpeller("fa")).toBe(fresh);
-    expect(freshLoad).toHaveBeenCalledTimes(1);
   });
 
   it("frees the checker when its source is removed", async () => {
@@ -291,5 +288,28 @@ describe("getSpeller across engine changes", () => {
     expect(getSpeller("fa")).toBe(fresh);
     await fresh;
     expect(current.built[0].dispose).not.toHaveBeenCalled();
+  });
+
+  it("keeps the newer checker cached when an older load fails after it", async () => {
+    let failOld!: (err: Error) => void;
+    registerDictionarySource({
+      language: "fa",
+      label: "Persian",
+      load: () =>
+        new Promise((_, reject) => {
+          failOld = reject;
+        }),
+    });
+    const old = getSpeller("fa");
+    // A plugin update registers again; its instance's checker replaces the old one.
+    const load = vi.fn(() => Promise.resolve({ aff: "A2", dic: "D2" }));
+    registerDictionarySource({ language: "fa", label: "Persian", load });
+    const current = getSpeller("fa");
+
+    expectConsole(/"fa" spell-check dictionary failed to load/);
+    failOld(new Error("plugin stopped"));
+    await expect(old).rejects.toThrow(/could not be read/);
+    expect(getSpeller("fa")).toBe(current);
+    expect(load).toHaveBeenCalledTimes(1);
   });
 });

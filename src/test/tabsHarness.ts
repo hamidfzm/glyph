@@ -121,10 +121,18 @@ export function holdWrites(count: number, overrides: Partial<Record<string, Invo
   return { writeFile, started, release };
 }
 
-/** A `rename_path` that rewrites no links, so the rename waits on no save. */
+/** A `rename_path` or `move_path` that rewrites no links, so the rename waits on no save. */
 export function renamesTo(newPath: string): Invoker {
   return async () => ({ newPath, files: [], failed: null });
 }
+
+/** Whether `command` ran for real rather than as a dry run. */
+export const applied = (command: string) =>
+  vi
+    .mocked(invoke)
+    .mock.calls.some(
+      ([cmd, args]) => cmd === command && (args as { dryRun?: boolean }).dryRun === false,
+    );
 
 /** What each `write_file` call carried, in order. */
 export function writesOf(writeFile: ReturnType<typeof vi.fn>) {
