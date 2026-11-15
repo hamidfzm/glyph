@@ -70,6 +70,10 @@
     "themePresets": {
       "name": "Theme presets",
       "description": "Ready-made color schemes beyond light and dark: Sepia, Solarized, and High contrast, each with a light and a dark variant. Pick one in Settings > Appearance."
+    },
+    "dictionaryEn": {
+      "name": "English dictionary",
+      "description": "US English for spell check in the editor. Turn on Check spelling and pick the languages in Settings > Editor."
     }
   }
 }

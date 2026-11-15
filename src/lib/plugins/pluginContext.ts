@@ -1,5 +1,6 @@
 import { i18n } from "@/lib/i18n";
 import { registerDictionarySource } from "@/lib/spellcheck/dictionarySources";
+import { registerSpellcheckEngine } from "@/lib/spellcheck/spellcheckEngines";
 import { PLUGIN_API_VERSION } from "./apiVersion";
 import { onPluginAppStateChange, pluginAppState } from "./appState";
 import { createAssetsApi } from "./assetsApi";
@@ -233,10 +234,13 @@ export function buildPluginContext({
       },
       registerSiteTheme: tracked(siteThemes.register, bag),
     },
-    // Dictionaries live in the spellcheck module's own registry (the speller
-    // and the settings UI read it directly); only the disposal is routed
-    // through the plugin's bag here.
-    spellcheck: { registerDictionary: tracked(registerDictionarySource, bag) },
+    // Dictionaries and engines live in the spellcheck module's own registries
+    // (the speller and the settings UI read them directly); only the disposal
+    // is routed through the plugin's bag here.
+    spellcheck: {
+      registerDictionary: tracked(registerDictionarySource, bag),
+      registerEngine: tracked(registerSpellcheckEngine, bag),
+    },
     settings: {
       get: (key) => settings[key] as never,
       set(key, value) {
