@@ -271,6 +271,10 @@ function buildContext(init) {
         });
         return () => dictionaries.delete(dictionary.language);
       },
+      registerEngine: sandboxUnavailable(
+        "spellcheck.registerEngine",
+        "the editor checks each word at once, without waiting on a worker",
+      ),
     },
     settings: {
       get(key) {

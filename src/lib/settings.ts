@@ -271,6 +271,8 @@ export interface CorePluginSettings {
   dailyNotes: boolean;
   /** Ready-made color schemes (Sepia, Solarized, High contrast), picked in Settings > Appearance. */
   themePresets: boolean;
+  /** The US English spell-check dictionary, picked in Settings > Editor. */
+  dictionaryEn: boolean;
 }
 
 export interface Settings {
@@ -377,5 +379,6 @@ export const DEFAULT_SETTINGS: Settings = {
     backlinks: true,
     dailyNotes: true,
     themePresets: true,
+    dictionaryEn: true,
   },
 };

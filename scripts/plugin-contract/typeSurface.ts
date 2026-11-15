@@ -69,6 +69,8 @@ export const dictionaryContribution: Equal<
   Host.DictionaryContribution,
   Template.DictionaryContribution
 > = true;
+export const spellChecker: Equal<Host.SpellChecker, Template.SpellChecker> = true;
+export const spellcheckEngine: Equal<Host.SpellcheckEngine, Template.SpellcheckEngine> = true;
 export const fileTypeContribution: Equal<Host.FileTypeContribution, Template.FileTypeContribution> =
   true;
 export const fencedRendererProps: Equal<Host.FencedRendererProps, Template.FencedRendererProps> =

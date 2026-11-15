@@ -49,15 +49,16 @@ export function useDocumentEdits({
   );
 
   // Write `content` at `path` in its turn, unless the tab left it (that would bring the
-  // old file back). Returns the tab's new path if it moved before or during the write.
+  // old file back). Returns the tab's new path if it moved before the write's turn;
+  // a rename or move waits for the write itself.
   const writeForTab = useCallback(
     (id: string, path: string, content: string) =>
       enqueueWrite(path, async (): Promise<string | null> => {
-        const movedBefore = tabMovedTo(stateRef.current, id, path);
-        if (movedBefore) return movedBefore;
+        const moved = tabMovedTo(stateRef.current, id, path);
+        if (moved) return moved;
         await invoke("write_file", { path, content });
         markSelfSave(path);
-        return tabMovedTo(stateRef.current, id, path);
+        return null;
       }),
     [enqueueWrite, markSelfSave, stateRef],
   );
