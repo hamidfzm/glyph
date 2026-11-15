@@ -78,6 +78,20 @@ const workerResult = await new Promise((resolve) => {
 });
 if (workerResult) failures.push(workerResult);
 
+// script-src blob: and 'wasm-unsafe-eval' in the page itself: an app-context
+// plugin imports its bundle from a blob URL and compiles WebAssembly there
+// (the Hunspell spell-check engine).
+try {
+  await import(URL.createObjectURL(new Blob(["export default 1;"], { type: "text/javascript" })));
+} catch {
+  failures.push("blob module import blocked");
+}
+try {
+  await WebAssembly.compile(new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0]));
+} catch {
+  failures.push("page WebAssembly compile blocked");
+}
+
 // connect-src https:, the AI-provider/marketplace surface.
 try {
   await fetch("${REMOTE}/ping");
@@ -112,28 +126,31 @@ function probe(page: Page, csp: string): Promise<string> {
   });
 }
 
-test("images, styles, fonts, workers, and remote fetch work under the shipped CSP", async ({
+test("images, styles, fonts, workers, page WebAssembly, and remote fetch work under the shipped CSP", async ({
   page,
 }) => {
   expect(await probe(page, shippedCsp)).toBe("CSP_OK");
 });
 
-// Calibration: strip one source from each probed directive and assert every
+// Calibration: strip the probed sources from each directive and assert every
 // probe reports its failure, proving none of them passes vacuously.
 test("the harness catches a CSP tightened on each probed directive", async ({ page }) => {
-  const removals: Record<string, string> = {
-    "img-src": " data:",
-    "style-src": " 'unsafe-inline'",
-    "script-src": " blob:",
-    "font-src": " data:",
+  const removals: Record<string, string[]> = {
+    "img-src": [" data:"],
+    "style-src": [" 'unsafe-inline'"],
+    // 'unsafe-eval' also allows a WebAssembly compile, so both go.
+    "script-src": [" blob:", " 'wasm-unsafe-eval'", " 'unsafe-eval'"],
+    "font-src": [" data:"],
   };
   const directives = shippedCsp.split(";").map((d) => d.trim());
   const tightened = directives
     .map((d) => {
-      const source = removals[d.split(" ")[0]];
-      if (!source) return d;
-      expect(d).toContain(source);
-      return d.replace(source, "");
+      let directive = d;
+      for (const source of removals[d.split(" ")[0]] ?? []) {
+        expect(directive).toContain(source);
+        directive = directive.replace(source, "");
+      }
+      return directive;
     })
     .join("; ");
 
@@ -141,5 +158,7 @@ test("the harness catches a CSP tightened on each probed directive", async ({ pa
   expect(title).toContain("data: image failed to load");
   expect(title).toContain("inline <style> not applied");
   expect(title).toContain("blob worker");
+  expect(title).toContain("blob module import blocked");
+  expect(title).toContain("page WebAssembly compile blocked");
   expect(title).toContain("data: font failed to load");
 });

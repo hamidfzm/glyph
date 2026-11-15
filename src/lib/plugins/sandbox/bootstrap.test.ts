@@ -327,6 +327,19 @@ describe("worker bootstrap", () => {
     expect(error.message).toContain("sandboxed plugins");
   });
 
+  it("refuses a spell-check engine by name", async () => {
+    const w = bootWorker();
+    await w.send(
+      init(`export default { activate(ctx) { ctx.spellcheck.registerEngine({ create() {} }); } }`),
+    );
+
+    await vi.waitFor(() => expect(w.typesPosted()).toContain("error"));
+    const error = w.posted.find((m) => m.type === "error") as { message: string };
+    expect(error.message).toContain("ctx.spellcheck.registerEngine");
+    expect(error.message).toContain("without waiting on a worker");
+    expect(error.message).toContain('"sandbox": false');
+  });
+
   it("serves ctx.assets reads via asset-read round trips", async () => {
     const w = bootWorker();
     const plugin = `export default {

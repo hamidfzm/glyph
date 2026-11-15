@@ -3,7 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { expectConsole } from "@/test/consoleGuard";
 import { type Deferred, deferred } from "@/test/deferred";
 import {
+  applied,
   defaultOptions,
+  deliver,
   fileOf,
   holdWrites,
   mockWriteFile,
@@ -119,7 +121,7 @@ describe("useTabs saving", () => {
     expect(fileOf(result).dirty).toBe(true);
   });
 
-  it("keeps the tab dirty when it is renamed while its write is in flight", async () => {
+  it("renames a note only once its write in flight has finished", async () => {
     const { writeFile, started, release } = holdWrites(1, {
       rename_path: renamesTo("/p/ws/b.md"),
     });
@@ -137,15 +139,61 @@ describe("useTabs saving", () => {
       saving = result.current.saveDocument(tabId);
       await started[0].promise;
     });
-    await act(async () => {
-      await result.current.renamePath("/p/ws/a.md", "b");
-    });
-    await act(async () => {
-      release[0].resolve();
-      await saving;
+    let renaming: Promise<string | null> | undefined;
+    await deliver(() => {
+      renaming = result.current.renamePath("/p/ws/a.md", "b");
     });
 
-    // The write went to the old path, so the renamed file may not hold the edit.
+    // Renamed now, the write could open a.md after it moved and create it again.
+    expect(applied("rename_path")).toBe(false);
+
+    await act(async () => {
+      release[0].resolve();
+      await Promise.all([saving, renaming]);
+    });
+
+    expect(applied("rename_path")).toBe(true);
+    expect(writesOf(writeFile)).toEqual([{ path: "/p/ws/a.md", content: "EDITED" }]);
+    expect(fileOf(result).path).toBe("/p/ws/b.md");
+    expect(fileOf(result).dirty).toBe(false);
+  });
+
+  it("writes only the new path for a save asked before the tab followed the rename", async () => {
+    const listing = deferred();
+    const writeFile = vi.fn(async () => {});
+    mockWriteFile(writeFile, {
+      rename_path: renamesTo("/p/ws/b.md"),
+      // The rename's own listing of the folder, held so the tab stays at a.md for now.
+      read_directory: async () => {
+        if (applied("rename_path")) await listing.promise;
+        return [];
+      },
+    });
+    const { result } = renderHook(() => useTabs(defaultOptions()));
+    const tabId = await openWorkspaceNote(result);
+    act(() => {
+      result.current.setTabMode(tabId, "edit");
+    });
+    act(() => {
+      result.current.updateEditContent(tabId, "EDITED");
+    });
+
+    let renaming: Promise<string | null> | undefined;
+    await deliver(() => {
+      renaming = result.current.renamePath("/p/ws/a.md", "b");
+    });
+    expect(applied("rename_path")).toBe(true);
+    let saving: Promise<boolean> | undefined;
+    await deliver(() => {
+      saving = result.current.saveDocument(tabId);
+    });
+    await act(async () => {
+      listing.resolve();
+      await Promise.all([renaming, saving]);
+    });
+
+    // a.md was gone: writing it would leave a clean tab over a b.md without the edit.
+    expect(writesOf(writeFile)).toEqual([]);
     expect(fileOf(result).path).toBe("/p/ws/b.md");
     expect(fileOf(result).dirty).toBe(true);
 
@@ -153,14 +201,11 @@ describe("useTabs saving", () => {
       await result.current.saveDocument(tabId);
     });
 
-    expect(writesOf(writeFile)).toEqual([
-      { path: "/p/ws/a.md", content: "EDITED" },
-      { path: "/p/ws/b.md", content: "EDITED" },
-    ]);
+    expect(writesOf(writeFile)).toEqual([{ path: "/p/ws/b.md", content: "EDITED" }]);
     expect(fileOf(result).dirty).toBe(false);
   });
 
-  it("does not write the old path when a save queued behind its write runs after a rename", async () => {
+  it("does not write the old path for a save asked while the rename waits on a write", async () => {
     const { writeFile, started, release } = holdWrites(1, {
       rename_path: renamesTo("/p/ws/b.md"),
     });
@@ -178,6 +223,10 @@ describe("useTabs saving", () => {
       first = result.current.saveDocument(tabId);
       await started[0].promise;
     });
+    let renaming: Promise<string | null> | undefined;
+    await deliver(() => {
+      renaming = result.current.renamePath("/p/ws/a.md", "b");
+    });
     act(() => {
       result.current.updateEditContent(tabId, "ONE TWO");
     });
@@ -185,16 +234,14 @@ describe("useTabs saving", () => {
     act(() => {
       second = result.current.saveDocument(tabId);
     });
-    await act(async () => {
-      await result.current.renamePath("/p/ws/a.md", "b");
-    });
     let saved: boolean[] = [];
     await act(async () => {
       release[0].resolve();
       saved = await Promise.all([first, second] as Promise<boolean>[]);
+      await renaming;
     });
 
-    // The queued save would bring a.md back beside the renamed note.
+    // The second save runs after the rename, and writing a.md would bring it back beside b.md.
     expect(saved).toEqual([true, true]);
     expect(writesOf(writeFile)).toEqual([{ path: "/p/ws/a.md", content: "ONE" }]);
     expect(fileOf(result).path).toBe("/p/ws/b.md");
@@ -229,6 +276,10 @@ describe("useTabs saving", () => {
       first = result.current.saveDocument(tabId);
       await started[0].promise;
     });
+    let renaming: Promise<string | null> | undefined;
+    await deliver(() => {
+      renaming = result.current.renamePath("/p/ws/a.md", "b");
+    });
     act(() => {
       result.current.updateEditContent(tabId, "ONE TWO");
     });
@@ -237,11 +288,8 @@ describe("useTabs saving", () => {
       closing = result.current.closeTab(tabId);
     });
     await act(async () => {
-      await result.current.renamePath("/p/ws/a.md", "b");
-    });
-    await act(async () => {
       release[0].resolve();
-      await Promise.all([first, closing]);
+      await Promise.all([first, renaming, closing]);
     });
 
     expect(writesOf(writeFile)).toEqual([
