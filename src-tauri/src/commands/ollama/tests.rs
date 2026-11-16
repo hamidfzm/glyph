@@ -299,6 +299,24 @@ async fn a_redirect_is_handed_back_not_followed() {
 }
 
 #[tokio::test]
+async fn a_request_is_read_only_after_its_status_and_sent_only_once() {
+    let server = serve(vec![("/api/tags", reply(200, &["{}"]))]);
+    let request =
+        OllamaRequest::new(build_request(&server.base, OllamaEndpoint::Tags, None).unwrap());
+
+    let no_reply = Err("the request has no reply to read".to_string());
+    assert_eq!(request.next_chunk().await, no_reply);
+    assert_eq!(request.send().await, Ok(200));
+    assert_eq!(
+        request.send().await,
+        Err("the request was already sent".to_string())
+    );
+    assert_eq!(request.next_chunk().await, no_reply);
+    assert_eq!(server.requests.recv().unwrap().path, "/api/tags");
+    assert!(server.requests.try_recv().is_err(), "it was sent twice");
+}
+
+#[tokio::test]
 async fn a_server_that_is_not_running_names_the_cause() {
     let err = exchange(&closed_port(), OllamaEndpoint::Tags, None)
         .await
