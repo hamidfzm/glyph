@@ -255,7 +255,7 @@
     },
     "ollamaUrl": {
       "label": "URL de Ollama",
-      "description": "Requiere OLLAMA_ORIGINS=* para CORS"
+      "description": "Dónde escucha tu servidor de Ollama. Por defecto es http://localhost:11434."
     },
     "model": {
       "label": "Modelo",
@@ -263,7 +263,7 @@
       "status": {
         "checking": "Comprobando el servidor de Ollama…",
         "ok": "Conectado a Ollama. Modelos instalados: {{count}}",
-        "error": "No se puede acceder al servidor de Ollama. Comprueba la URL y OLLAMA_ORIGINS."
+        "error": "No se puede acceder al servidor de Ollama. Comprueba la URL y que Ollama esté en ejecución."
       }
     },
     "tts": {

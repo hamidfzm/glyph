@@ -36,7 +36,8 @@
   "stopReading": "Stop Reading",
   "readAloud": "Read Aloud",
   "error": {
-    "notConfigured": "No AI provider configured. Open Settings to set up an AI provider."
+    "notConfigured": "No AI provider configured. Open Settings to set up an AI provider.",
+    "ollamaUnreachable": "Can't reach the Ollama server at {{url}}. Check that Ollama is running and that the Ollama URL in Settings is right. ({{reason}})"
   },
   "tools": {
     "label": "Lookups the assistant made",

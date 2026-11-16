@@ -255,7 +255,7 @@
     },
     "ollamaUrl": {
       "label": "Ollama-URL",
-      "description": "Erfordert OLLAMA_ORIGINS=* für CORS"
+      "description": "Wo dein Ollama-Server erreichbar ist. Standard ist http://localhost:11434."
     },
     "model": {
       "label": "Modell",
@@ -263,7 +263,7 @@
       "status": {
         "checking": "Ollama-Server wird geprüft…",
         "ok": "Mit Ollama verbunden. Installierte Modelle: {{count}}",
-        "error": "Ollama-Server nicht erreichbar. Prüfe die URL und OLLAMA_ORIGINS."
+        "error": "Ollama-Server nicht erreichbar. Prüfe die URL und ob Ollama läuft."
       }
     },
     "tts": {

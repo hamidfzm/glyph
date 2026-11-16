@@ -36,7 +36,8 @@
   "stopReading": "Detener lectura",
   "readAloud": "Leer en voz alta",
   "error": {
-    "notConfigured": "No hay ningún proveedor de IA configurado. Abre Ajustes para configurar un proveedor de IA."
+    "notConfigured": "No hay ningún proveedor de IA configurado. Abre Ajustes para configurar un proveedor de IA.",
+    "ollamaUnreachable": "No se puede acceder al servidor de Ollama en {{url}}. Comprueba que Ollama esté en ejecución y que la URL de Ollama en Ajustes sea correcta. ({{reason}})"
   },
   "tools": {
     "label": "Consultas del asistente",

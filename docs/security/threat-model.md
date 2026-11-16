@@ -168,6 +168,7 @@ looked up (see "Network paths" below).
 | `settings_sync_*` | no path argument. The settings repo is a folder the backend creates and owns under the app data dir (`settings-sync/`), and the stores it reads and writes are the ones the backend opened at startup, so the renderer names nothing libgit2 opens or a write lands in. `settings_sync_connect` accepts the remotes `sync_init_repo` does and refuses a token for a remote that is not `https://`; the token is bound to that remote's authority and kept, only once the connect succeeds, in two keychain accounts of its own (`settings-sync-token`, `settings-sync-token-host`), apart from the workspace tokens and off the webview allowlist. `settings_sync_set_token` refuses without a connected `https://` remote, and changing the remote means disconnecting first. One lock covers connect, sync, the first-connect choice, resolve and disconnect, and a second operation meanwhile gets `busy` rather than waiting. `settings_sync_resolve` takes one pick per conflicted path, refuses any other set of paths before the index changes, and writes no file itself: it stages the picked side's entry, commits with both parents, and lets libgit2's checkout write the picked paths |
 | `install_plugin` | consumes the pending picked folder; no path argument. Like a registry install, it records the source and time of the install in a marker written after the plugin's files, under a name no manifest may declare |
 | `install_plugin_from_registry` | takes a plugin id and nothing else. The backend fetches the registry index from its fixed URL, finds the entry, downloads the package the entry names (the marketplace hosts alone, a redirect included, 50 MiB at most), and verifies the sha256 and the manifest id before anything is written, so a package that lies about itself never lands on another installed plugin |
+| `ollama_send`, `ollama_read`, `ollama_cancel` | the AI panel's requests to the Ollama server, made in Rust because a webview request carries the page's origin and Ollama's default settings refuse `http://tauri.localhost` (Windows, Android). The renderer names the server (`ai.ollamaUrl`) and one of two endpoints, `POST /api/chat` with a JSON body or `GET /api/tags`: the method, the path below the base URL and the headers are fixed, a base URL that is not `http`/`https` or carries a query or fragment is refused, and a redirect is handed back, not followed. A reply is read one chunk per `ollama_read`, so the backend holds no more than the chunk in flight and the renderer's size caps still bound it. Open replies live in the calling webview's resource table, so another window can neither read nor cancel one |
 | `finish_cli_export` | ends the process, so it is refused unless a CLI export is in progress: the command is registered in every session, and a renderer could otherwise end an interactive one |
 | `assistant_tools`, `assistant_tool_call` | the roots and tabs are the calling window's own report, kept only where `ensure_workspace` and `ensure_readable` pass; the active note is compared with those tabs and never looked up; the tool arguments get the same checks as in `glyph mcp`, so a `vault` must be one of those roots and a note or canvas path must be readable and inside it; only read-only tools are dispatched (see [In-app assistant tools](#in-app-assistant-tools)) |
 
@@ -203,11 +204,16 @@ the export grant, which never covers `.git` below the output folder.
 `default-src 'self'` plus narrow carve-outs. Each exception exists for a
 feature:
 
-- `connect-src https: http:` stays broad only because the Ollama server URL
-  is user-configurable to arbitrary LAN hosts (plus update checks and the
-  plugin marketplace over HTTPS). A streamed reply is read no further than
-  16 MiB, a line no further than 1 MiB, and an error body no further than
-  64 KiB, so a host the user named cannot grow the renderer without end.
+- `connect-src https: http:` stays broad for the cloud AI providers, update
+  checks and the plugin marketplace (all HTTPS), for the remote images an
+  export inlines, and for plugins whose declared `network:` hosts serve plain
+  `http`. The Ollama server, which the user can point at any LAN host, is not
+  fetched from the page: Ollama's default allowed origins refuse the Windows
+  page origin (`http://tauri.localhost`), so the backend makes those requests
+  (`ollama_send` in [Gated commands](#gated-commands)). A streamed reply is
+  read no further than 16 MiB, a line no further than 1 MiB, and an error
+  body no further than 64 KiB, so a host the user named cannot grow the
+  renderer without end.
 - `script-src data: blob: 'wasm-unsafe-eval'` is required by the Mermaid and
   D2 WASM renderers, and by app-context plugins that import their bundles
   from blob URLs and compile WebAssembly in the page (the Hunspell
@@ -402,7 +408,9 @@ remaining default sets (`core`, `os`) reach no file. There is no `http`
 permission: the marketplace download runs in Rust
 (`install_plugin_from_registry` in the table above), which fetches the
 registry index from its fixed URL and follows the entry to a package on the
-marketplace hosts alone, so the renderer never names a URL.
+marketplace hosts alone, so the renderer never names a URL. The Ollama
+requests are app commands too (`ollama_send`), which take the user's server
+but fix the method, path and headers.
 
 - **Clipboard.** `clipboard-manager:allow-read-text`, for the editor's
   context-menu Paste (`src/lib/editorContextMenu.ts`): `execCommand("paste")`
@@ -882,8 +890,16 @@ exist on desktop only, like `glyph mcp`.
   it stays in the reader's history, and in history sync, like any visited
   link.
 - **`connect-src` breadth.** Arbitrary `http:`/`https:` hosts are reachable
-  for the Ollama integration, so a compromised renderer can exfiltrate what
-  it can read. The grants bound what that is.
+  from the page (see [Content Security Policy](#content-security-policy)), so
+  a compromised renderer can exfiltrate what it can read. The grants bound
+  what that is.
+- **The Ollama commands read what the page could not.** A compromised
+  renderer can point `ollama_send` at any `http`/`https` host and read its
+  answer at `<prefix>/api/chat` (a JSON `POST`) and `<prefix>/api/tags` (a
+  `GET`), with no page origin for that host to refuse, where a fetch from
+  the page gets only what CORS lets through. The method, the path suffix and
+  the headers are fixed and a redirect is not followed, so no other endpoint
+  is reached this way.
 - **`style-src 'unsafe-inline'`.** CSS injection in rendered markdown remains
   possible; it cannot reach the filesystem.
 - **Plugins.** Plugins run sandboxed by default (issue #434): a manifest

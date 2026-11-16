@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import type { ChatTurn } from "@/lib/ai/chatTurn";
 import type { ToolLoopEnd } from "@/lib/ai/toolLoop";
 import { rememberToolsRefused, toolsOffered, toolsRefusedByModel } from "@/lib/ai/toolSupport";
-import { type ToolDefinition, ToolsUnsupportedError } from "@/lib/ai/types";
+import { OllamaUnreachableError, type ToolDefinition, ToolsUnsupportedError } from "@/lib/ai/types";
 import { type AIDocContext, buildSystemPrompt } from "@/lib/aiPrompts";
 import { errorMessage } from "@/lib/errorMessage";
 import { quotedImageUrls } from "@/lib/quotedImageUrls";
@@ -111,7 +111,11 @@ export function useAIChat(aiSettings: AISettings, getDocContext: () => AIDocCont
         const toolsSkipped = Boolean(doc?.workspaceRoot) && toolsRefusedByModel(aiSettings);
         finish((turn) => ({ ...withReplyEnded(turn, ended), toolsSkipped }));
       } catch (err) {
-        setError(errorMessage(err));
+        setError(
+          err instanceof OllamaUnreachableError
+            ? t("error.ollamaUnreachable", { url: err.url, reason: err.reason })
+            : errorMessage(err),
+        );
         finish(withRunningStopped);
       } finally {
         if (abortRef.current === controller) {

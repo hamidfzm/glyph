@@ -36,7 +36,8 @@
   "stopReading": "Vorlesen stoppen",
   "readAloud": "Vorlesen",
   "error": {
-    "notConfigured": "Kein KI-Anbieter konfiguriert. Öffne die Einstellungen, um einen KI-Anbieter einzurichten."
+    "notConfigured": "Kein KI-Anbieter konfiguriert. Öffne die Einstellungen, um einen KI-Anbieter einzurichten.",
+    "ollamaUnreachable": "Der Ollama-Server unter {{url}} ist nicht erreichbar. Prüfe, ob Ollama läuft und ob die Ollama-URL in den Einstellungen stimmt. ({{reason}})"
   },
   "tools": {
     "label": "Abfragen des Assistenten",

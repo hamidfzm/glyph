@@ -1,6 +1,11 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { ChatMessage, ChatOptions, ChatReply } from "@/lib/ai/types";
+import {
+  type ChatMessage,
+  type ChatOptions,
+  type ChatReply,
+  OllamaUnreachableError,
+} from "@/lib/ai/types";
 import { createAIProvider } from "@/lib/ai-providers";
 import { DEFAULT_SETTINGS } from "@/lib/settings";
 import { useAIChat } from "./useAIChat";
@@ -135,6 +140,21 @@ describe("useAIChat", () => {
     });
 
     expect(result.current.error).toBe("socket hung up");
+  });
+
+  it("names the server and the cause when Ollama cannot be reached", async () => {
+    mockProvider(async () => {
+      throw new OllamaUnreachableError("http://localhost:11434", "connection refused");
+    });
+    const { result } = renderHook(() => useAIChat(ollamaSettings, () => null));
+
+    await act(async () => {
+      await result.current.send("hi");
+    });
+
+    expect(result.current.error).toBe(
+      "Can't reach the Ollama server at http://localhost:11434. Check that Ollama is running and that the Ollama URL in Settings is right. (connection refused)",
+    );
   });
 
   it("a new send supersedes the in-flight one without ending its streaming state", async () => {
