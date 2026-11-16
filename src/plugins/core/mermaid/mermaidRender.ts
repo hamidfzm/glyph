@@ -61,13 +61,16 @@ function renderWith(config: MermaidConfig, source: string): Promise<string> {
 const INERT_LINKS = ["a"];
 
 // The on-screen render lands in the document through `innerHTML`, so it gets
-// the same pass the page renders get (see `renderTextLabels`), keeping the
-// HTML labels the screen uses: DOMPurify sanitizes inside a `<foreignObject>`
-// as it does any HTML. Mermaid's own sanitizer is the first line, not the only.
+// the same pass the page renders get (see `renderTextLabels`); Mermaid's own
+// sanitizer is the first line, not the only. DOMPurify drops the HTML labels
+// unless `<foreignObject>` is both allowed and an HTML integration point, as
+// Mermaid's pass sets it; the label HTML inside is sanitized like any other.
 async function sanitizeLive(svg: string): Promise<string> {
   const DOMPurify = await loadPurify();
   const fragment = DOMPurify.sanitize(svg, {
     USE_PROFILES: { html: true, svg: true, svgFilters: true },
+    ADD_TAGS: ["foreignObject"],
+    HTML_INTEGRATION_POINTS: { foreignobject: true },
     FORBID_TAGS: INERT_LINKS,
     RETURN_DOM_FRAGMENT: true,
   });
