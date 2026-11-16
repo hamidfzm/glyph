@@ -107,9 +107,9 @@
     }
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.6.4",
+    "@biomejs/biome": "^2.6.6",
     "@codecov/vite-plugin": "^2.0.1",
-    "@playwright/test": "^1.64.1",
+    "@playwright/test": "^1.65.0",
     "@sentry/vite-plugin": "^5.4.1",
     "@tailwindcss/vite": "^4",
     "@tauri-apps/cli": "^2.12.4",
