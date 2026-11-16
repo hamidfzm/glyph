@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { OllamaUnreachableError } from "@/lib/ai/types";
+import { OllamaUnreachableError, OllamaUrlError } from "@/lib/ai/types";
 import { deferred } from "@/test/deferred";
 import { ollamaFetch } from "./ollamaFetch";
 
@@ -12,7 +12,7 @@ type Handler = (args: Record<string, unknown>) => unknown;
 /** Answer each command with its handler; a command without one resolves empty. */
 function backend(handlers: Record<string, Handler>) {
   mockInvoke.mockImplementation(((cmd: string, args: Record<string, unknown>) =>
-    Promise.resolve(handlers[cmd]?.(args))) as unknown as typeof invoke);
+    Promise.resolve().then(() => handlers[cmd]?.(args))) as unknown as typeof invoke);
 }
 
 const bytes = (text: string) => new TextEncoder().encode(text).buffer;
@@ -33,32 +33,52 @@ beforeEach(() => {
 });
 
 describe("ollamaFetch", () => {
-  it("sends through the backend and streams the reply until an empty chunk", async () => {
-    backend({ ollama_send: () => ({ rid: 7, status: 200 }), ollama_read: reads("ab", "c") });
+  it("opens, sends and streams the reply until an empty chunk", async () => {
+    backend({ ollama_open: () => 7, ollama_send: () => 200, ollama_read: reads("ab", "c") });
 
     const response = await ollamaFetch(BASE, "chat", { body: { model: "m" } });
 
     expect(response.status).toBe(200);
     expect(await response.text()).toBe("abc");
-    expect(callsTo("ollama_send")).toEqual([
+    expect(callsTo("ollama_open")).toEqual([
       { baseUrl: BASE, endpoint: "chat", body: { model: "m" } },
     ]);
+    expect(callsTo("ollama_send")).toEqual([{ rid: 7 }]);
     expect(callsTo("ollama_read")).toEqual([{ rid: 7 }, { rid: 7 }, { rid: 7 }]);
     expect(callsTo("ollama_cancel")).toEqual([]);
   });
 
-  it("sends no body as null and hands back an error status with its body", async () => {
-    backend({ ollama_send: () => ({ rid: 1, status: 502 }), ollama_read: reads("bad gateway") });
+  it("opens with a null body and hands back an error status with its body", async () => {
+    backend({ ollama_open: () => 1, ollama_send: () => 502, ollama_read: reads("bad gateway") });
 
     const response = await ollamaFetch(BASE, "tags");
 
-    expect(callsTo("ollama_send")[0]).toMatchObject({ endpoint: "tags", body: null });
+    expect(callsTo("ollama_open")[0]).toMatchObject({ endpoint: "tags", body: null });
     expect(response.ok).toBe(false);
     expect(await response.text()).toBe("bad gateway");
   });
 
-  it("reports a send the backend could not complete as an unreachable server", async () => {
-    mockInvoke.mockRejectedValueOnce("connection refused");
+  it("reports a refused URL before anything is sent", async () => {
+    backend({
+      ollama_open: () => {
+        throw "the URL must start with http:// or https://";
+      },
+    });
+
+    const err = await ollamaFetch("localhost:11434", "tags").catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(OllamaUrlError);
+    expect(err).toMatchObject({ url: "localhost:11434" });
+    expect(callsTo("ollama_send")).toEqual([]);
+  });
+
+  it("reports a send that got no reply as an unreachable server", async () => {
+    backend({
+      ollama_open: () => 3,
+      ollama_send: () => {
+        throw "connection refused";
+      },
+    });
 
     const err = await ollamaFetch(BASE, "chat", { body: {} }).catch((e: unknown) => e);
 
@@ -68,7 +88,8 @@ describe("ollamaFetch", () => {
 
   it("errors the body when a read fails", async () => {
     backend({
-      ollama_send: () => ({ rid: 2, status: 200 }),
+      ollama_open: () => 2,
+      ollama_send: () => 200,
       ollama_read: () => {
         throw "connection reset";
       },
@@ -79,8 +100,8 @@ describe("ollamaFetch", () => {
     await expect(response.body?.getReader().read()).rejects.toBe("connection reset");
   });
 
-  it("cancelling the body drops the reply", async () => {
-    backend({ ollama_send: () => ({ rid: 4, status: 200 }) });
+  it("cancelling the body cancels the request", async () => {
+    backend({ ollama_open: () => 4, ollama_send: () => 200 });
 
     const response = await ollamaFetch(BASE, "chat", { body: {} });
     await response.body?.cancel();
@@ -90,7 +111,7 @@ describe("ollamaFetch", () => {
 });
 
 describe("ollamaFetch cancellation", () => {
-  it("sends nothing for a signal already aborted", async () => {
+  it("opens nothing for a signal already aborted", async () => {
     const controller = new AbortController();
     controller.abort();
 
@@ -100,49 +121,66 @@ describe("ollamaFetch cancellation", () => {
     expect(mockInvoke).not.toHaveBeenCalled();
   });
 
-  it("rejects at once while the status is pending and drops the reply that comes later", async () => {
-    const sent = deferred<unknown>();
-    backend({ ollama_send: () => sent.promise });
-    const controller = new AbortController();
-
-    const response = ollamaFetch(BASE, "chat", { body: {}, signal: controller.signal });
-    controller.abort();
-
-    await expect(response).rejects.toMatchObject({ name: "AbortError" });
-    sent.resolve({ rid: 9, status: 200 });
-    await vi.waitFor(() => expect(callsTo("ollama_cancel")).toEqual([{ rid: 9 }]));
-  });
-
-  it("drops the reply when the abort lands as the status arrives", async () => {
+  it("cancels a request opened while the abort landed, without sending it", async () => {
     const controller = new AbortController();
     backend({
-      ollama_send: () => {
-        queueMicrotask(() => controller.abort());
-        return { rid: 6, status: 200 };
+      ollama_open: () => {
+        controller.abort();
+        return 8;
       },
     });
 
     await expect(
       ollamaFetch(BASE, "chat", { body: {}, signal: controller.signal }),
     ).rejects.toMatchObject({ name: "AbortError" });
-    await vi.waitFor(() => expect(callsTo("ollama_cancel")).toEqual([{ rid: 6 }]));
+    expect(callsTo("ollama_cancel")).toEqual([{ rid: 8 }]);
+    expect(callsTo("ollama_send")).toEqual([]);
+  });
+
+  it("cancels a pending send and rejects with the abort", async () => {
+    const sent = deferred<unknown>();
+    backend({ ollama_open: () => 9, ollama_send: () => sent.promise });
+    const controller = new AbortController();
+
+    const response = ollamaFetch(BASE, "chat", { body: {}, signal: controller.signal });
+    await vi.waitFor(() => expect(callsTo("ollama_send")).toHaveLength(1));
+    controller.abort();
+
+    expect(callsTo("ollama_cancel")).toEqual([{ rid: 9 }]);
+    // The backend ends the cancelled send with an error of its own.
+    sent.reject("cancelled");
+    await expect(response).rejects.toMatchObject({ name: "AbortError" });
+  });
+
+  it("rejects with the abort when it lands as the status arrives", async () => {
+    const controller = new AbortController();
+    backend({
+      ollama_open: () => 6,
+      ollama_send: () => {
+        controller.abort();
+        return 200;
+      },
+    });
+
+    await expect(
+      ollamaFetch(BASE, "chat", { body: {}, signal: controller.signal }),
+    ).rejects.toMatchObject({ name: "AbortError" });
+    expect(callsTo("ollama_cancel")).toEqual([{ rid: 6 }]);
     expect(callsTo("ollama_read")).toEqual([]);
   });
 
-  it("errors a pending read and cancels the reply when aborted during the body", async () => {
+  it("cancels a pending read and errors the body with the abort", async () => {
     const read = deferred<unknown>();
-    backend({ ollama_send: () => ({ rid: 5, status: 200 }), ollama_read: () => read.promise });
+    backend({ ollama_open: () => 5, ollama_send: () => 200, ollama_read: () => read.promise });
     const controller = new AbortController();
 
     const response = await ollamaFetch(BASE, "chat", { body: {}, signal: controller.signal });
-    const reader = response.body?.getReader();
-    const pending = reader?.read();
+    const pending = response.body?.getReader().read();
+    await vi.waitFor(() => expect(callsTo("ollama_read")).toHaveLength(1));
     controller.abort();
 
-    await expect(pending).rejects.toMatchObject({ name: "AbortError" });
     expect(callsTo("ollama_cancel")).toEqual([{ rid: 5 }]);
-    // The read answering late lands nowhere.
-    read.resolve(bytes("late"));
-    await expect(reader?.read()).rejects.toMatchObject({ name: "AbortError" });
+    read.reject("cancelled");
+    await expect(pending).rejects.toMatchObject({ name: "AbortError" });
   });
 });

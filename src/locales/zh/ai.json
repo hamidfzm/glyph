@@ -37,7 +37,8 @@
   "readAloud": "朗读",
   "error": {
     "notConfigured": "尚未配置 AI 提供商。请打开设置进行配置。",
-    "ollamaUnreachable": "无法连接位于 {{url}} 的 Ollama 服务器。请确认 Ollama 正在运行，并检查设置中的 Ollama URL 是否正确。（{{reason}}）"
+    "ollamaUnreachable": "无法连接位于 {{url}} 的 Ollama 服务器。请确认 Ollama 正在运行，并检查设置中的 Ollama URL 是否正确。（{{reason}}）",
+    "ollamaUrlInvalid": "设置中的 Ollama URL（{{url}}）无法使用。请输入不含用户名、密码、查询参数或片段的 http:// 或 https:// 地址。"
   },
   "tools": {
     "label": "助手的查阅",

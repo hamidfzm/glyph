@@ -336,6 +336,7 @@ pub fn run() {
             commands::secrets::secret_get,
             commands::secrets::secret_set,
             commands::secrets::secret_has,
+            commands::ollama::ollama_open,
             commands::ollama::ollama_send,
             commands::ollama::ollama_read,
             commands::ollama::ollama_cancel,

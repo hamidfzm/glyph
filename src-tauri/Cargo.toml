@@ -61,6 +61,9 @@ tauri-plugin-clipboard-manager = "2"
 # the reqwest client it configures, and no capability grants its commands.
 tauri-plugin-http = "2"
 sha2 = "0.10"
+# `Notify`, which cancels a pending Ollama request (commands/ollama). Already
+# in the tree with this feature through Tauri's async runtime.
+tokio = { version = "1", features = ["sync"] }
 
 [dev-dependencies]
 tauri = { version = "2", features = ["test"] }

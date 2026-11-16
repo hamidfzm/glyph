@@ -37,7 +37,8 @@
   "readAloud": "Vorlesen",
   "error": {
     "notConfigured": "Kein KI-Anbieter konfiguriert. Öffne die Einstellungen, um einen KI-Anbieter einzurichten.",
-    "ollamaUnreachable": "Der Ollama-Server unter {{url}} ist nicht erreichbar. Prüfe, ob Ollama läuft und ob die Ollama-URL in den Einstellungen stimmt. ({{reason}})"
+    "ollamaUnreachable": "Der Ollama-Server unter {{url}} ist nicht erreichbar. Prüfe, ob Ollama läuft und ob die Ollama-URL in den Einstellungen stimmt. ({{reason}})",
+    "ollamaUrlInvalid": "Die Ollama-URL in den Einstellungen ({{url}}) kann nicht verwendet werden. Gib eine http://- oder https://-Adresse ohne Benutzername, Passwort, Abfrage oder Fragment ein."
   },
   "tools": {
     "label": "Abfragen des Assistenten",

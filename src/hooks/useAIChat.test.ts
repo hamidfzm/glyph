@@ -5,6 +5,7 @@ import {
   type ChatOptions,
   type ChatReply,
   OllamaUnreachableError,
+  OllamaUrlError,
 } from "@/lib/ai/types";
 import { createAIProvider } from "@/lib/ai-providers";
 import { DEFAULT_SETTINGS } from "@/lib/settings";
@@ -140,6 +141,21 @@ describe("useAIChat", () => {
     });
 
     expect(result.current.error).toBe("socket hung up");
+  });
+
+  it("points at the Ollama URL setting when the URL is refused", async () => {
+    mockProvider(async () => {
+      throw new OllamaUrlError("localhost:11434");
+    });
+    const { result } = renderHook(() => useAIChat(ollamaSettings, () => null));
+
+    await act(async () => {
+      await result.current.send("hi");
+    });
+
+    expect(result.current.error).toBe(
+      "The Ollama URL in Settings (localhost:11434) can't be used. Enter an http:// or https:// address without a user name, password, query or fragment.",
+    );
   });
 
   it("names the server and the cause when Ollama cannot be reached", async () => {

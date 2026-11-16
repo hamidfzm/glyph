@@ -113,6 +113,11 @@ export async function fetchOllamaModels(baseUrl: string, signal?: AbortSignal): 
     await response.body?.cancel();
     throw new Error(`Ollama error (${response.status})`);
   }
-  const data = (await response.json()) as { models?: Array<{ name?: string }> };
+  // Read under the stream caps: the server is whatever host the URL names.
+  let text = "";
+  await streamLines(response, (line) => {
+    text += `${line}\n`;
+  });
+  const data = JSON.parse(text) as { models?: Array<{ name?: string }> };
   return (data.models ?? []).map((m) => m.name ?? "").filter(Boolean);
 }
