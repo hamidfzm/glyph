@@ -12,16 +12,12 @@ vi.mock("./GraphView", () => ({
   ),
 }));
 
-describe(
-  "lazyGraph",
-  () => {
-    it("lazily renders the underlying GraphView once its chunk resolves", async () => {
-      render(<GraphView graph={graphOf(["/a.md", "/b.md"])} onOpenFile={vi.fn()} />);
-      await waitFor(() => expect(screen.getByTestId("real-graph")).toBeInTheDocument(), {
-        timeout: CHUNK_LOAD_TIMEOUT_MS,
-      });
-      expect(screen.getByTestId("real-graph")).toHaveTextContent("2");
+describe("lazyGraph", { timeout: CHUNK_LOAD_TIMEOUT_MS }, () => {
+  it("lazily renders the underlying GraphView once its chunk resolves", async () => {
+    render(<GraphView graph={graphOf(["/a.md", "/b.md"])} onOpenFile={vi.fn()} />);
+    await waitFor(() => expect(screen.getByTestId("real-graph")).toBeInTheDocument(), {
+      timeout: CHUNK_LOAD_TIMEOUT_MS,
     });
-  },
-  CHUNK_LOAD_TIMEOUT_MS,
-);
+    expect(screen.getByTestId("real-graph")).toHaveTextContent("2");
+  });
+});
