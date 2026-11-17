@@ -13,8 +13,8 @@ vi.mock("mermaid", () => ({
 
 // DOMPurify does not run faithfully under happy-dom (it drops the <svg>
 // wrapper), so mock it as a pass-through that still returns a real fragment,
-// and assert the sanitize wiring instead; real stripping is its job in the
-// webview.
+// and assert the sanitize wiring instead; mermaidRender.purify.test.ts runs
+// the real one on the on-screen render under jsdom.
 const sanitizeMock = vi.fn((svg: string, _opts?: Record<string, unknown>) => {
   const parsed = new DOMParser().parseFromString(svg, "image/svg+xml");
   const fragment = document.createDocumentFragment();
@@ -186,18 +186,6 @@ describe("renderMermaid sanitizing", () => {
     });
     expect(svg).toContain("<svg");
     expect(initialize).toHaveBeenCalledWith(expect.objectContaining({ securityLevel: "strict" }));
-  });
-
-  // Mermaid keeps `click A href "..."` under its strict level as an SVG anchor,
-  // and an HTML label may hold one too. Neither goes through the link
-  // component, so a click would navigate the webview itself: the sanitizer
-  // forbids the anchor (DOMPurify keeps its content, so the label survives).
-  it("forbids the anchors a click link or an HTML label puts in the diagram", async () => {
-    renderSvg.mockResolvedValue({
-      svg: '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"><a xlink:href="https://attacker.example"><text>A</text></a><foreignObject><a href="https://attacker.example">Open</a></foreignObject></svg>',
-    });
-    await renderMermaid('graph TD; A-->B; click A href "https://attacker.example"', false);
-    expect(sanitizeMock.mock.calls[0][1]).toMatchObject({ FORBID_TAGS: ["a"] });
   });
 
   // Mermaid's default on a parse error is to draw its own error diagram into a

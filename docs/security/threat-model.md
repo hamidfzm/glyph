@@ -235,7 +235,9 @@ feature:
   chat outlives a switch to another document. A note the assistant read
   through a tool adds none (see [In-app assistant tools](#in-app-assistant-tools)).
   Any other image is shown as its alt text and URL. Mermaid's on-screen SVG goes through DOMPurify
-  before it is put in the document, as the page renders already did.
+  before it is put in the document, as the page renders already did. That pass keeps the
+  `<foreignObject>` node labels by naming it an HTML integration point, as Mermaid's own pass
+  does, and sanitizes the label HTML inside like any other.
 - `object-src 'none'`, `frame-src 'none'`, `base-uri 'self'`, and
   `form-action 'none'` close the remaining injection sinks.
 - A link a document wrote opens in the system handler only behind the
