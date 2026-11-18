@@ -7,3 +7,8 @@ minimumReleaseAgeExclude:
   - happy-dom@21.0.4
   - minimatch@11.0.3
   - path-scurry@3.0.0
+# Advisories with no patched release, reached only through dev tooling.
+auditConfig:
+  ignoreGhsas:
+    # picomatch ReDoS (<=4.0.7): matches globs from repo config, never user input.
+    - GHSA-fc5q-39xc-vjpf
