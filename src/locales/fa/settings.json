@@ -255,7 +255,7 @@
     },
     "ollamaUrl": {
       "label": "نشانی Ollama",
-      "description": "برای CORS به OLLAMA_ORIGINS=* نیاز دارد"
+      "description": "نشانی سرور Ollama شما. پیش‌فرض http://localhost:11434 است."
     },
     "model": {
       "label": "مدل",
@@ -263,7 +263,7 @@
       "status": {
         "checking": "در حال بررسی سرور Ollama…",
         "ok": "به Ollama متصل شد. مدل‌های نصب‌شده: {{count}}",
-        "error": "دسترسی به سرور Ollama ممکن نیست. آدرس و OLLAMA_ORIGINS را بررسی کنید."
+        "error": "دسترسی به سرور Ollama ممکن نیست. نشانی را بررسی کنید و مطمئن شوید Ollama در حال اجراست."
       }
     },
     "tts": {

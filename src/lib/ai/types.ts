@@ -51,3 +51,24 @@ export interface AIProvider {
 export class ToolsUnsupportedError extends Error {
   name = "ToolsUnsupportedError";
 }
+
+/** The Ollama URL is refused before anything is sent. */
+export class OllamaUrlError extends Error {
+  name = "OllamaUrlError";
+
+  constructor(readonly url: string) {
+    super(`Not a usable Ollama URL: ${url}`);
+  }
+}
+
+/** No reply came from the Ollama server. */
+export class OllamaUnreachableError extends Error {
+  name = "OllamaUnreachableError";
+
+  constructor(
+    readonly url: string,
+    readonly reason: string,
+  ) {
+    super(`Cannot reach the Ollama server at ${url}: ${reason}`);
+  }
+}

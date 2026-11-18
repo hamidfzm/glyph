@@ -33,7 +33,7 @@ export function useOllamaModels(url: string, enabled: boolean): OllamaModels {
         .then((names) => setState({ models: names, status: "ok" }))
         .catch(() => {
           // An abort means the URL changed or we unmounted; only a real
-          // failure (server down, CORS) becomes the error state.
+          // failure (server down, bad URL) becomes the error state.
           if (!controller.signal.aborted) setState({ models: [], status: "error" });
         });
     }, FETCH_DEBOUNCE_MS);

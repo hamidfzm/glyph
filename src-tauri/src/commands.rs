@@ -5,6 +5,7 @@ pub mod directory;
 pub mod export;
 pub mod export_runtime;
 pub mod file;
+pub mod ollama;
 #[cfg(desktop)]
 pub mod pick;
 pub mod plugins;

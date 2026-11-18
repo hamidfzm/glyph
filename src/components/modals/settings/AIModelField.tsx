@@ -58,8 +58,8 @@ export function AIModelField({ ollama }: AIModelFieldProps) {
             </datalist>
           </>
         )}
-        {/* Connection feedback so a wrong URL or missing OLLAMA_ORIGINS is
-            visible right here instead of failing silently. */}
+        {/* Connection feedback so a wrong URL or a stopped server is visible
+            right here instead of failing silently. */}
         {ai.provider === "ollama" && ollama.status !== "idle" && (
           <div className="settings-description" data-ollama-status={ollama.status} role="status">
             {ollama.status === "loading" && t("ai.model.status.checking")}

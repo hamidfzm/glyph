@@ -1,28 +1,31 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { ollamaFetch } from "@/lib/ai/ollamaFetch";
 import { ToolsUnsupportedError } from "@/lib/ai/types";
 import { READ_NOTE_TOOL, TOOL_CONVERSATION } from "@/test/fixtures/toolTurns";
 import { fetchOllamaModels, OllamaProvider } from "./ollama";
 
-const mockFetch = vi.fn();
-globalThis.fetch = mockFetch;
+vi.mock("@/lib/ai/ollamaFetch", () => ({ ollamaFetch: vi.fn() }));
+const mockFetch = vi.mocked(ollamaFetch);
 
 beforeEach(() => {
   mockFetch.mockReset();
 });
 
-/** Build a fetch Response whose body streams the given lines. */
+/** A Response whose body streams the given lines. */
 function streamResponse(lines: string[]) {
   const encoder = new TextEncoder();
-  return {
-    ok: true,
-    body: new ReadableStream<Uint8Array>({
+  return new Response(
+    new ReadableStream<Uint8Array>({
       start(controller) {
         for (const line of lines) controller.enqueue(encoder.encode(`${line}\n`));
         controller.close();
       },
     }),
-  };
+  );
 }
+
+/** The JSON body of the n-th request. */
+const sentBody = (n = 0) => mockFetch.mock.calls[n][2]?.body as Record<string, unknown>;
 
 describe("OllamaProvider", () => {
   const provider = new OllamaProvider("http://localhost:11434", "llama3.2");
@@ -46,15 +49,16 @@ describe("OllamaProvider", () => {
     );
 
     expect(mockFetch).toHaveBeenCalledWith(
-      "http://localhost:11434/api/chat",
-      expect.objectContaining({ method: "POST" }),
+      "http://localhost:11434",
+      "chat",
+      expect.objectContaining({ body: expect.any(Object) }),
     );
 
-    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+    const body = sentBody();
     expect(body.model).toBe("llama3.2");
     expect(body.stream).toBe(true);
     expect(body.messages).toHaveLength(4);
-    expect(body.messages[0]).toEqual({ role: "system", content: "system prompt" });
+    expect((body.messages as unknown[])[0]).toEqual({ role: "system", content: "system prompt" });
     expect(result).toEqual({ text: "Hello", toolCalls: [] });
     expect(chunks).toEqual(["Hel", "lo"]);
   });
@@ -65,17 +69,13 @@ describe("OllamaProvider", () => {
 
     await defaultProvider.chat([{ role: "user", content: "test" }]);
 
-    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+    const body = sentBody();
     expect(body.messages).toHaveLength(1);
     expect(body.model).toBe("llama3.2");
   });
 
   it("throws on HTTP error", async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: false,
-      status: 500,
-      text: () => Promise.resolve("Server error"),
-    });
+    mockFetch.mockResolvedValueOnce(new Response("Server error", { status: 500 }));
 
     await expect(provider.chat([{ role: "user", content: "test" }])).rejects.toThrow(
       "Ollama error (500)",
@@ -116,7 +116,7 @@ describe("OllamaProvider tool calls", () => {
 
     await provider.chat(TOOL_CONVERSATION, { tools: [READ_NOTE_TOOL] });
 
-    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+    const body = sentBody();
     expect(body.tools).toEqual([
       {
         type: "function",
@@ -180,12 +180,10 @@ describe("OllamaProvider tool calls", () => {
   });
 
   it("reports a model that refuses tool definitions as unable to use tools", async () => {
-    const refusal = () => ({
-      ok: false,
-      status: 400,
-      text: () =>
-        Promise.resolve('{"error":"registry.ollama.ai/library/gemma:2b does not support tools"}'),
-    });
+    const refusal = () =>
+      new Response('{"error":"registry.ollama.ai/library/gemma:2b does not support tools"}', {
+        status: 400,
+      });
     mockFetch.mockResolvedValueOnce(refusal());
     await expect(
       provider.chat([{ role: "user", content: "hi" }], { tools: [READ_NOTE_TOOL] }),
@@ -200,36 +198,39 @@ describe("OllamaProvider tool calls", () => {
 });
 
 describe("fetchOllamaModels", () => {
+  const jsonResponse = (data: unknown) => new Response(JSON.stringify(data));
+
   it("returns installed model names", async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve({ models: [{ name: "gemma2:latest" }, { name: "llama3.2:8b" }] }),
-    });
+    mockFetch.mockResolvedValueOnce(
+      jsonResponse({ models: [{ name: "gemma2:latest" }, { name: "llama3.2:8b" }] }),
+    );
 
     await expect(fetchOllamaModels("http://localhost:11434")).resolves.toEqual([
       "gemma2:latest",
       "llama3.2:8b",
     ]);
-    expect(mockFetch).toHaveBeenCalledWith("http://localhost:11434/api/tags", {
+    expect(mockFetch).toHaveBeenCalledWith("http://localhost:11434", "tags", {
       signal: undefined,
     });
   });
 
   it("returns empty list when the server reports no models", async () => {
-    mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({}) });
+    mockFetch.mockResolvedValueOnce(jsonResponse({}));
     await expect(fetchOllamaModels("http://localhost:11434")).resolves.toEqual([]);
   });
 
   it("drops entries without a name", async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve({ models: [{ name: "good:latest" }, { size: 1 }] }),
-    });
+    mockFetch.mockResolvedValueOnce(
+      jsonResponse({ models: [{ name: "good:latest" }, { size: 1 }] }),
+    );
     await expect(fetchOllamaModels("http://localhost:11434")).resolves.toEqual(["good:latest"]);
   });
 
   it("throws when the server is unreachable or errors", async () => {
-    mockFetch.mockResolvedValueOnce({ ok: false, status: 502 });
+    const cancel = vi.fn();
+    mockFetch.mockResolvedValueOnce(new Response(new ReadableStream({ cancel }), { status: 502 }));
     await expect(fetchOllamaModels("http://localhost:11434")).rejects.toThrow("Ollama error (502)");
+    // The unread body is dropped, which closes the backend's reply.
+    expect(cancel).toHaveBeenCalled();
   });
 });

@@ -1,3 +1,4 @@
+import { ollamaFetch } from "@/lib/ai/ollamaFetch";
 import { errorBody, streamLines } from "@/lib/ai/stream";
 import { functionTools, parseToolInput, toolInputObject } from "@/lib/ai/toolShapes";
 import {
@@ -59,12 +60,7 @@ export class OllamaProvider implements AIProvider {
     };
     if (tools.length) body.tools = functionTools(tools);
 
-    const response = await fetch(`${this.baseUrl}/api/chat`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-      signal: options.signal,
-    });
+    const response = await ollamaFetch(this.baseUrl, "chat", { body, signal: options.signal });
 
     if (!response.ok) {
       const err = await errorBody(response);
@@ -112,8 +108,16 @@ export class OllamaProvider implements AIProvider {
 
 /** List the model tags installed on a local Ollama server. */
 export async function fetchOllamaModels(baseUrl: string, signal?: AbortSignal): Promise<string[]> {
-  const response = await fetch(`${baseUrl}/api/tags`, { signal });
-  if (!response.ok) throw new Error(`Ollama error (${response.status})`);
-  const data = (await response.json()) as { models?: Array<{ name?: string }> };
+  const response = await ollamaFetch(baseUrl, "tags", { signal });
+  if (!response.ok) {
+    await response.body?.cancel();
+    throw new Error(`Ollama error (${response.status})`);
+  }
+  // Read under the stream caps: the server is whatever host the URL names.
+  let text = "";
+  await streamLines(response, (line) => {
+    text += `${line}\n`;
+  });
+  const data = JSON.parse(text) as { models?: Array<{ name?: string }> };
   return (data.models ?? []).map((m) => m.name ?? "").filter(Boolean);
 }

@@ -255,7 +255,7 @@
     },
     "ollamaUrl": {
       "label": "Ollama URL",
-      "description": "CORS 需要 OLLAMA_ORIGINS=*"
+      "description": "Ollama 服务器的地址，默认为 http://localhost:11434。"
     },
     "model": {
       "label": "模型",
@@ -263,7 +263,7 @@
       "status": {
         "checking": "正在检查 Ollama 服务器…",
         "ok": "已连接到 Ollama。已安装模型：{{count}}",
-        "error": "无法连接 Ollama 服务器。请检查 URL 和 OLLAMA_ORIGINS。"
+        "error": "无法连接 Ollama 服务器。请检查 URL 并确认 Ollama 正在运行。"
       }
     },
     "tts": {
