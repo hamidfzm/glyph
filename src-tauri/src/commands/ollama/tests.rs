@@ -465,6 +465,13 @@ fn a_url_or_endpoint_outside_the_contract_is_refused_on_open() {
 }
 
 #[test]
+fn a_send_or_read_without_a_request_id_is_refused() {
+    let (_app, main, _other) = windows();
+    assert!(send(&main, &json!("not an id")).is_err());
+    assert!(read(&main, &json!("not an id")).is_err());
+}
+
+#[test]
 fn cancelling_while_the_status_is_pending_closes_the_connection() {
     let server = serve(vec![("/api/chat", vec![Part::Hold])]);
     let (_app, main, _other) = windows();
