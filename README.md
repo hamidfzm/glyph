@@ -32,20 +32,20 @@ The [`samples/`](samples) directory is a tiny demo workspace. Open it as a folde
 - Wikilinks and backlinks with hover preview and inline note embeds (`[[note]]`, `![[note]]`)
 - Math (KaTeX), Mermaid and D2 diagrams, CSV/TSV tables, and syntax-highlighted code (6 themes)
 - YAML frontmatter, sanitised inline HTML, and bidirectional (RTL) text
-- Local and remote images with a zoomable lightbox, plus inline video and audio playback
+- Local and remote images and inline video and audio; images, diagrams, and tables open in a zoomable full-screen lightbox
 - Per-syntax toggles in Settings → Markdown
 
 ### Editor
-- Source, split, and live-preview modes per tab
+- Source, split (with synced scrolling), and live-preview modes per tab
 - New untitled (in-memory) documents (`Cmd/Ctrl+N`), save with `Cmd/Ctrl+S`, and an optional Auto Save toggle
-- Format toolbar, inline formatting shortcuts, and wrap-selection
+- Format toolbar, inline formatting shortcuts, wrap-selection, and pasted HTML converted to Markdown
 - Wikilink autocomplete, spell check, and Vim/VSCode keymaps
 - Undo/redo for programmatic edits (task toggles, etc.)
 
 ### Workspace & Navigation
 - Folder workspaces with a sidebar tree, tabs, and create/rename/move/delete (links follow renames and moves); create a new workspace from within the app; daily notes (`Cmd/Ctrl+Shift+T`) with a per-workspace folder, file name pattern, and template
 - Graph view (`Cmd/Ctrl+G`), command palette (`Cmd/Ctrl+K`, with `tag:` / frontmatter filters), a sidebar Tags panel, in-document search (`Cmd/Ctrl+F`), and workspace-wide full-text search with case/whole-word/regex toggles (`Cmd/Ctrl+Shift+F`)
-- Table of contents, resizable panels, zoom, and session/window restore
+- Table of contents, back/forward history, notes in their own window, resizable panels, zoom, and session/window restore
 - Drag-and-drop, file associations, Windows Explorer and macOS Quick Look previews, and a `glyph` CLI (`glyph file.md`, `glyph ~/notes/`)
 
 ### Viewer & Export
@@ -61,8 +61,9 @@ The [`samples/`](samples) directory is a tiny demo workspace. Open it as a folde
 - Localized, RTL-aware UI; customizable fonts, size, line height, and content width
 
 ### AI (optional)
-- Chat sidebar, quick actions (summarize, explain, translate, simplify), and text-to-speech
+- Chat sidebar, quick actions (summarize, explain, translate, simplify), and text-to-speech; the assistant can look up notes across the workspace (read-only)
 - Providers: Claude, OpenAI, and Ollama (local)
+- An MCP server (`glyph mcp`) that gives AI agents Glyph's view of a vault: resolved links, backlinks, tags, headings, the graph, and canvases, with tools that edit notes off until you turn each one on
 
 ### Platform
 - macOS, Windows, and Linux; native menu bar with remappable shortcuts and update notifications
@@ -101,6 +102,9 @@ glyph serve ~/notes/
 glyph serve ~/notes/ --port 8080          # pick the port; 0 asks the OS
 glyph serve ~/notes/ --host 0.0.0.0       # let the local network read it
 glyph serve ~/notes/ --out ./site         # keep the build instead of a temp dir
+
+# give an MCP client (an AI agent) Glyph's view of a vault, over stdio
+glyph mcp --vault ~/notes/
 ```
 
 `serve` renders the folder, prints the URL, and keeps running: every change to the folder rebuilds the site, and pages open in a browser reload themselves. It binds `127.0.0.1` unless `--host` says otherwise, so nothing leaves the machine by default, and it answers only to its own hostnames so a web page cannot reach it through your browser. Everything in the output directory is served, so point `--out` at a directory of its own; without one, the site lives in a temporary directory removed when you interrupt the command. Like the exports above, it renders through a webview, so a Linux server without a display needs `xvfb-run`.

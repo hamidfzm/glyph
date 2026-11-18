@@ -24,29 +24,25 @@ const defaultProps = {
   onQuickAction: vi.fn(),
 };
 
-describe(
-  "lazyAIChatPanel",
-  () => {
-    it("renders nothing while the panel has never been opened", () => {
-      render(<AIChatPanel {...defaultProps} open={false} />);
-      expect(screen.queryByTestId("ai-chat-panel")).not.toBeInTheDocument();
-    });
+describe("lazyAIChatPanel", { timeout: CHUNK_LOAD_TIMEOUT_MS }, () => {
+  it("renders nothing while the panel has never been opened", () => {
+    render(<AIChatPanel {...defaultProps} open={false} />);
+    expect(screen.queryByTestId("ai-chat-panel")).not.toBeInTheDocument();
+  });
 
-    it("loads the panel on first open", async () => {
-      render(<AIChatPanel {...defaultProps} open />);
-      await waitFor(() => expect(screen.getByTestId("ai-chat-panel")).toHaveTextContent("open"), {
-        timeout: CHUNK_LOAD_TIMEOUT_MS,
-      });
+  it("loads the panel on first open", async () => {
+    render(<AIChatPanel {...defaultProps} open />);
+    await waitFor(() => expect(screen.getByTestId("ai-chat-panel")).toHaveTextContent("open"), {
+      timeout: CHUNK_LOAD_TIMEOUT_MS,
     });
+  });
 
-    it("keeps the panel mounted after it closes so composer draft and scroll survive", async () => {
-      const { rerender } = render(<AIChatPanel {...defaultProps} open />);
-      await waitFor(() => expect(screen.getByTestId("ai-chat-panel")).toBeInTheDocument(), {
-        timeout: CHUNK_LOAD_TIMEOUT_MS,
-      });
-      rerender(<AIChatPanel {...defaultProps} open={false} />);
-      expect(screen.getByTestId("ai-chat-panel")).toHaveTextContent("closed");
+  it("keeps the panel mounted after it closes so composer draft and scroll survive", async () => {
+    const { rerender } = render(<AIChatPanel {...defaultProps} open />);
+    await waitFor(() => expect(screen.getByTestId("ai-chat-panel")).toBeInTheDocument(), {
+      timeout: CHUNK_LOAD_TIMEOUT_MS,
     });
-  },
-  CHUNK_LOAD_TIMEOUT_MS,
-);
+    rerender(<AIChatPanel {...defaultProps} open={false} />);
+    expect(screen.getByTestId("ai-chat-panel")).toHaveTextContent("closed");
+  });
+});
