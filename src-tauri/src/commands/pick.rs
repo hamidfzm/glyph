@@ -22,9 +22,11 @@ fn to_path(picked: FilePath) -> Result<PathBuf, String> {
     picked.into_path().map_err(|e| e.to_string())
 }
 
-/// A dialog parented to `window`, the one Tauri injects for the calling
-/// webview: on Windows it owns the dialog and takes no input meanwhile, on
-/// macOS the dialog is a sheet on it. The GTK backend ignores the parent.
+/// A dialog for `window`, the one Tauri injects for the calling webview: on
+/// Windows it owns the dialog and takes no input meanwhile, on macOS the
+/// dialog is a sheet on it. Linux gets no parent: the GTK dialog backend never
+/// reads one, and on X11 reading the display handle opens a connection that
+/// is never closed.
 ///
 /// `start_dir` is the renderer's and a dialog resolves it as it opens (on
 /// Windows, connecting to a network path's host), so it must be a granted
@@ -36,7 +38,11 @@ fn dialog_for<R: Runtime>(
     if let Some(dir) = &start_dir {
         window.state::<GrantRegistry>().ensure_workspace(dir)?;
     }
-    let mut dialog = window.dialog().file().set_parent(window);
+    let mut dialog = window.dialog().file();
+    #[cfg(any(windows, target_os = "macos"))]
+    {
+        dialog = dialog.set_parent(window);
+    }
     if let Some(dir) = start_dir {
         dialog = dialog.set_directory(dir);
     }
@@ -220,7 +226,7 @@ mod tests {
     use super::*;
     use raw_window_handle::HasWindowHandle;
     use tauri::async_runtime::block_on;
-    use tauri::test::{mock_builder, mock_context, noop_assets, MockRuntime};
+    use tauri::test::{mock_app, MockRuntime};
     use tauri::WebviewWindowBuilder;
 
     const DENIED: &str = "path is outside the allowed workspaces and files:";
@@ -234,7 +240,7 @@ mod tests {
 
     struct Fixture {
         _tmp: tempfile::TempDir,
-        _app: tauri::App<MockRuntime>,
+        app: tauri::App<MockRuntime>,
         /// The window whose webview calls the commands.
         window: WebviewWindow<MockRuntime>,
         workspace: String,
@@ -246,10 +252,7 @@ mod tests {
         let tmp = tempfile::TempDir::new().unwrap();
         let workspace = tmp.path().join("ws");
         std::fs::create_dir_all(workspace.join("sub")).unwrap();
-        let app = mock_builder()
-            .plugin(tauri_plugin_dialog::init())
-            .build(mock_context(noop_assets()))
-            .unwrap();
+        let app = mock_app();
         app.manage(GrantRegistry::default());
         app.state::<GrantRegistry>()
             .grant_workspace(&workspace)
@@ -277,7 +280,7 @@ mod tests {
         Fixture {
             workspace: workspace.to_string_lossy().to_string(),
             _tmp: tmp,
-            _app: app,
+            app,
             window,
             refused,
         }
@@ -322,15 +325,19 @@ mod tests {
         }
     }
 
-    /// The plugin keeps the parent private; its `Debug` output is where it shows.
+    /// The plugin keeps the parent private; its `Debug` output is where it
+    /// shows. Every mock window has the same handle, so this tells a parent
+    /// from none, not one window from another. Only this test adds the plugin:
+    /// with it, a check that ran too late in a denial test would open a dialog.
     #[test]
-    fn a_dialog_is_parented_to_the_window_that_asked_for_it() {
+    fn a_dialog_is_parented_to_its_window_on_windows_and_macos_only() {
         let fx = fixture();
+        fx.app.handle().plugin(tauri_plugin_dialog::init()).unwrap();
         let handle = format!("{:?}", fx.window.window_handle().unwrap().as_raw());
+        let parented = cfg!(any(windows, target_os = "macos"));
         for start_dir in [None, Some(fx.workspace.clone())] {
-            let dialog = dialog_for(&fx.window, start_dir).unwrap();
-            let built = format!("{dialog:?}");
-            assert!(built.contains(&handle), "no parent: {built}");
+            let built = format!("{:?}", dialog_for(&fx.window, start_dir).unwrap());
+            assert_eq!(built.contains(&handle), parented, "{built}");
         }
     }
 }
