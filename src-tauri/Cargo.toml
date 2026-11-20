@@ -71,6 +71,9 @@ tempfile = "3"
 # `#[tokio::test]` macro for async unit tests. Tauri already pulls tokio
 # in transitively; we only need the macro / runtime entry points here.
 tokio = { version = "1", features = ["macros", "rt"] }
+# Reads a mock window's handle, to check a picker's dialog is parented to it
+# (commands/pick.rs). Already in the tree through Tauri.
+raw-window-handle = "0.6"
 
 [target."cfg(any(target_os = \"linux\", target_os = \"windows\"))".dependencies]
 tauri-plugin-single-instance = "2"
