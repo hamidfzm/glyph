@@ -1595,6 +1595,7 @@ dependencies = [
  "keyring",
  "notify",
  "percent-encoding",
+ "raw-window-handle",
  "regex",
  "same-file",
  "sentry",

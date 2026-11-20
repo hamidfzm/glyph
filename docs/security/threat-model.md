@@ -66,8 +66,11 @@ webview-supplied path:
 - macOS `RunEvent::Opened` and second-instance launches, under the same
   per-path rules as a cold start
 - Native pick dialogs run in Rust (`src-tauri/src/commands/pick.rs`): Open
-  Folder, Open File(s), a new document's Save As, export Save As, website
-  export destination
+  Folder, New Workspace, Open File(s), a new document's Save As, export Save
+  As, website export destination. On Windows and macOS each dialog is
+  parented to the window Tauri injects for the calling webview (modal to it
+  on Windows, a sheet on it on macOS); Linux sets no parent, which its dialog
+  backend would ignore. No picker takes a window from the renderer
 - Session restore: at startup the backend reads the persisted settings store
   itself and grants the previously open tabs and recent files
 - `glyph mcp`'s `--vault` roots, or without them the same settings seed,
