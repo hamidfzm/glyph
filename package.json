@@ -68,7 +68,7 @@
     "katex": "^0.19.1",
     "mermaid": "^11.17.2",
     "nspell": "^2.1.5",
-    "papaparse": "^5.7.0",
+    "papaparse": "^5.7.1",
     "pdfmake": "^0.3.14",
     "react": "^19",
     "react-dom": "^19",
